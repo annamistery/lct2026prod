@@ -7,6 +7,7 @@
 - PostgreSQL with pgvector is the only product and embedding store. FAISS is not used.
 - Product metadata belongs in `products`; reusable reference vectors belong in `product_embeddings`. A product may have multiple catalog, real, or customer embeddings. Search must select the nearest embedding per unique product before SIFT reranking.
 - Catalog images, crops, datasets, and legacy indexes are not stored in Git. They are loaded from the customer dataset into PostgreSQL and the configured media storage.
+- Large customer archives are uploaded to `imports/inbox`, safely extracted to `imports/staging/<batch_id>`, and imported through durable unversioned `/api/imports` jobs. API input may select only a validated batch ID and manifest filename, never an arbitrary server path.
 - Schema changes require SQLAlchemy declarative models and Alembic revisions. Never call `create_all` at runtime.
 - Resolve paths from configuration; never hard-code machine-specific absolute paths.
 - Models are read-only at runtime. Product media is written only below the configured media root. Docker API UID/GID must match the owner of the host media bind mount.

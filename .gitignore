@@ -12,6 +12,10 @@ htmlcov/
 media/*
 !media/.gitkeep
 postgres-data/
+imports/inbox/*
+!imports/inbox/.gitkeep
+imports/staging/*
+!imports/staging/.gitkeep
 logs/
 *.log
 model_inventory*.txt

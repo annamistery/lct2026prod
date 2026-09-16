@@ -4,8 +4,10 @@ from fastapi import HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.pipelines.search.v1.pipeline import SearchPipelineV1
+from app.services.batch_import import BatchImportService
 from app.services.detector import DetectorService
 from app.services.images import ImageService
+from app.services.product_ingestion import ProductIngestionService
 
 
 async def get_session(request: Request) -> AsyncIterator[AsyncSession]:
@@ -33,3 +35,17 @@ def get_pipeline_v1(request: Request) -> SearchPipelineV1:
     if pipeline is None:
         raise HTTPException(status_code=503, detail="Search pipeline is not ready")
     return pipeline
+
+
+def get_ingestion(request: Request) -> ProductIngestionService:
+    service = request.app.state.ingestion
+    if service is None:
+        raise HTTPException(status_code=503, detail="Product ingestion is not ready")
+    return service
+
+
+def get_batch_import(request: Request) -> BatchImportService:
+    service = request.app.state.batch_import
+    if service is None:
+        raise HTTPException(status_code=503, detail="Batch import is not ready")
+    return service

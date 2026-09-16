@@ -21,7 +21,7 @@ Search API версионируется: `/api/v1/search`, `/api/v1/search-from-
 5. Запустить `docker compose up --build`.
 6. Проверить `http://localhost:8030/api/ping`, затем `/api/ready`.
 
-Swagger: `/api/docs`. Web-каталог `web/` обслуживается внешним Apache по HTTPS.
+Swagger: `/api/docs`. Web-каталог `web/` обслуживается внешним Apache по HTTPS. Одиночная загрузка выполняется через `POST /api/products`, пакетная JSON/CSV загрузка — через фоновый `POST /api/imports`; формат описан в [`docs/BATCH_IMPORT.md`](docs/BATCH_IMPORT.md).
 
 ## Проверки
 

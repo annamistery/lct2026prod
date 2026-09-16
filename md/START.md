@@ -65,4 +65,20 @@ docker compose run --rm migrate alembic current
 20260916_0001 (head)
 ```
 
-На этом чистый проект развёрнут. БД и media пока пустые; следующим этапом они наполняются из датасета заказчика.
+На этом чистый проект развёрнут. БД и media пока пустые.
+
+## 6. Загрузить датасет заказчика
+
+```bash
+cp /путь/customer.zip imports/inbox/
+./scripts/prepare_dataset_import.sh imports/inbox/customer.zip customer-001
+curl -fsS -X POST http://127.0.0.1:8030/api/imports -H 'Content-Type: application/json' -d '{"batch_id":"customer-001","manifest_name":"manifest.json"}'
+```
+
+API вернёт `job_id`. Проверка прогресса:
+
+```bash
+curl -fsS http://127.0.0.1:8030/api/imports/<job_id>
+```
+
+Форматы JSON/CSV и структура архива: `docs/BATCH_IMPORT.md`.

@@ -49,6 +49,7 @@ exclude = ["sources", "md", "alembic/versions"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
+ignore = ["B008", "E501"]
 
 [tool.mypy]
 python_version = "3.11"

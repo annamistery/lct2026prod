@@ -32,6 +32,7 @@ services:
     volumes:
       - ./models:/models:ro
       - ./media:/media
+      - ./imports:/imports:ro
     depends_on:
       db:
         condition: service_healthy

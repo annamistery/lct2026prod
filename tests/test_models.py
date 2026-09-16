@@ -1,6 +1,6 @@
 from pgvector.sqlalchemy import Vector
 
-from app.db.models import Product, ProductEmbedding
+from app.db.models import ImportItem, ImportJob, Product, ProductEmbedding
 
 
 def test_embedding_is_separate_from_product_metadata():
@@ -20,3 +20,9 @@ def test_product_supports_multiple_embeddings():
     relationship = Product.__mapper__.relationships["embeddings"]
     assert relationship.uselist is True
     assert relationship.cascade.delete_orphan is True
+
+
+def test_import_jobs_have_durable_items():
+    assert ImportJob.__tablename__ == "import_jobs"
+    assert ImportItem.__tablename__ == "import_items"
+    assert next(iter(ImportItem.__table__.c.job_id.foreign_keys)).target_fullname == "import_jobs.id"

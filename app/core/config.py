@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     environment: str = "production"
     database_url: str = "postgresql+asyncpg://lct:lct@localhost:5432/lct2026"
     media_dir: Path = Path("media")
+    import_staging_dir: Path = Path("imports/staging")
+    max_import_items: int = Field(100_000, ge=1, le=1_000_000)
     dino_model_path: Path = Path("models/dinov2_label_finetuned")
     dino_base_model_path: Path = Path("models/dinov2-small")
     yolo_model_path: Path = Path("models/yolo_label.pt")
