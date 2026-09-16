@@ -15,8 +15,8 @@ Search API версионируется: `/api/v1/search`, `/api/v1/search-from-
 ## Запуск
 
 1. Установить Docker, NVIDIA Container Toolkit и Git LFS.
-2. Выполнить `git lfs pull`.
-3. Разместить локальную DINOv2 base model в `models/dinov2-small` и LoRA adapter/merged model в `models/dinov2_label_finetuned`.
+2. Выполнить `git lfs pull` — production YOLO, ONNX, базовая DINOv2 и финальный LoRA adapter поставляются из Git LFS.
+3. Проверить модели: `sha256sum --check models/MODEL_MANIFEST.sha256`.
 4. Скопировать `.env.example` в `.env` и заменить пароль БД и CORS origin.
 5. Запустить `docker compose up --build`.
 6. Проверить `http://localhost:8030/api/ping`, затем `/api/ready`.

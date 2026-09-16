@@ -64,51 +64,41 @@ grep -E '^(ENVIRONMENT|DATABASE_URL|CORS_ORIGINS|DINO_MODEL_PATH|DINO_BASE_MODEL
 
 Получаем: production-значения и пути внутри контейнера. Не публикуйте вывод с паролем.
 
-## 3a. Собрать сведения о моделях старого проекта
+## 3a. Один раз перенести полный комплект production-моделей в Git
 
-Если модели ещё не перенесены из `$HOME/LCT2026`, обновить репозиторий и запустить единый безопасный скрипт инвентаризации:
+Этот шаг выполняется на сервере, где существуют старый проект `$HOME/LCT2026` и Hugging Face cache. Скрипт переносит только модели; изображения, кропы, датасеты и старые индексы не копируются.
 
 ```bash
 git pull --ff-only
-chmod +x scripts/collect_model_inventory.sh
-./scripts/collect_model_inventory.sh "$HOME/LCT2026" model_inventory.txt
+./scripts/stage_production_models.sh "$HOME/LCT2026"
 ```
 
-Проверяем:
-
-```bash
-test -s model_inventory.txt && echo 'INVENTORY OK'
-wc -l model_inventory.txt
-```
-
-Получаем: файл `model_inventory.txt` со сведениями о DINO/LoRA, Hugging Face snapshot, старых индексах, каталогах и числе изображений. Скрипт не читает `.env`, process environment и секреты. Содержимое можно передать разработчику:
-
-```bash
-cat model_inventory.txt
-```
-
-Файл отчёта исключён из Git.
-
-## 4. Разместить модели
-
-Ожидаемая структура:
+Скрипт проверяет и копирует:
 
 ```text
-models/
-├── yolo_label.pt
-├── dinov2-small/
-└── dinov2_label_finetuned/
+models/yolo_label.pt
+web/models/yolov8_label.onnx
+models/dinov2-small/
+models/dinov2_label_finetuned/    # финальный dino_aug_116
+models/MODEL_MANIFEST.sha256
 ```
 
-Проверяем:
+После проверки checksum скрипт спрашивает подтверждение commit/push. Ответить `y`. Получаем отдельный Git commit со всеми production-моделями в Git LFS.
+
+Не добавлять в Git каталожные изображения и кропы: на следующем этапе PostgreSQL и файловое хранилище наполняются из датасета заказчика.
+
+## 4. Проверить модели после чистого clone
 
 ```bash
+git lfs pull
+sha256sum --check models/MODEL_MANIFEST.sha256
 test -f models/yolo_label.pt && echo 'YOLO OK'
-test -d models/dinov2-small && echo 'DINO base OK'
-test -d models/dinov2_label_finetuned && echo 'DINO adapter/model OK'
+test -f web/models/yolov8_label.onnx && echo 'ONNX OK'
+test -f models/dinov2-small/model.safetensors && echo 'DINO base OK'
+test -f models/dinov2_label_finetuned/adapter_model.bin && echo 'DINO adapter OK'
 ```
 
-Получаем: три строки `OK`. Runtime монтирует `models/` только для чтения.
+Получаем: все checksums имеют статус `OK` и четыре строки проверки моделей. Runtime монтирует `models/` только для чтения.
 
 ## 5. Проверить доступ Docker к GPU
 
