@@ -31,6 +31,6 @@ ruff check .
 pytest
 ```
 
-Пошаговые команды для production-сервера: [`md/SERVER_COMMANDS.md`](md/SERVER_COMMANDS.md).
+Короткий первый запуск: [`md/START.md`](md/START.md). Расширенные серверные команды: [`md/SERVER_COMMANDS.md`](md/SERVER_COMMANDS.md).
 
 После каждой завершённой и локально проверенной доработки изменения фиксируются отдельным commit и сразу отправляются в `origin`.
