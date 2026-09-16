@@ -15,4 +15,5 @@ postgres-data/
 logs/
 *.log
 sources/
-md/
+md/*
+!md/SERVER_COMMANDS.md

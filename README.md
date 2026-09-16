@@ -31,6 +31,6 @@ ruff check .
 pytest
 ```
 
-Пошаговые команды для production-сервера: [`docs/SERVER_COMMANDS.md`](docs/SERVER_COMMANDS.md).
+Пошаговые команды для production-сервера: [`md/SERVER_COMMANDS.md`](md/SERVER_COMMANDS.md).
 
 После каждой завершённой и локально проверенной доработки изменения фиксируются отдельным commit и сразу отправляются в `origin`.
