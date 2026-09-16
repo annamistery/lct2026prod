@@ -8,7 +8,7 @@ COPY pyproject.toml README.md ./
 COPY app ./app
 COPY alembic ./alembic
 COPY alembic.ini ./
-RUN python -m pip install --no-cache-dir . && groupadd --system app && useradd --system --gid app --home /srv/app app && mkdir -p /media /models && chown -R app:app /srv/app /media
+RUN python -m pip install --no-cache-dir . && python -c "import app.main" && groupadd --system app && useradd --system --gid app --home /srv/app app && mkdir -p /media /models && chown -R app:app /srv/app /media
 USER app
 EXPOSE 8030
 HEALTHCHECK --interval=20s --timeout=5s --start-period=90s --retries=5 CMD curl --fail http://localhost:8030/api/ping || exit 1

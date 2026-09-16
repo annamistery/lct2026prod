@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import uuid
 from dataclasses import dataclass
 
@@ -20,7 +22,7 @@ class ProductRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def list(self, limit: int = 100, offset: int = 0) -> list[Product]:
+    async def list_products(self, limit: int = 100, offset: int = 0) -> list[Product]:
         result = await self.session.scalars(select(Product).order_by(Product.created_at.desc()).limit(limit).offset(offset))
         return list(result)
 

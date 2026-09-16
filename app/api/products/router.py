@@ -24,7 +24,7 @@ def serialize(product: Product) -> ProductResponse:
 
 @router.get("/products", response_model=ProductListResponse)
 async def list_products(limit: Annotated[int, Query(ge=1, le=100)] = 50, offset: Annotated[int, Query(ge=0)] = 0, session: AsyncSession = Depends(get_session)) -> ProductListResponse:
-    products = await ProductRepository(session).list(limit, offset)
+    products = await ProductRepository(session).list_products(limit, offset)
     return ProductListResponse(products=[serialize(product) for product in products])
 
 
