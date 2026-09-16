@@ -183,7 +183,7 @@ curl -fsS -X POST http://127.0.0.1:8030/api/products \
   -F 'image=@/полный/путь/к/фото-бутылки.jpg'
 ```
 
-Проверяем: ответ HTTP 201 содержит UUID, `image_url`, `label_url` и имя embedding model.
+Проверяем: ответ HTTP 201 содержит UUID, текстовые поля товара, `image_url` и `label_url`. В БД создаются одна запись `products` и первый эталон в `product_embeddings` с типом `catalog`.
 
 Затем:
 

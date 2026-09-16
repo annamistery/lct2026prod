@@ -27,4 +27,4 @@ curl http://localhost:8030/api/ready
 - `POST /api/v1/search` — полный кадр (`image`, `k`).
 - `POST /api/v1/search-from-crop` — готовая этикетка (`image`, `k`).
 
-Pipeline поиска: YOLO для полного кадра → DINOv2 embedding → exact pgvector Top-20 → SIFT/RANSAC → Top-K.
+Pipeline поиска: YOLO для полного кадра → DINOv2 embedding → exact pgvector по `product_embeddings` → лучший embedding каждого уникального товара → SIFT/RANSAC → Top-K. Один товар может иметь несколько эталонных изображений (`catalog`, `real`, `customer`). Изображения и кропы не поставляются через Git: таблицы `products`/`product_embeddings` и media заполняются из датасета заказчика.

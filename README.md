@@ -5,12 +5,12 @@
 ## Архитектура
 
 - FastAPI: каталог и добавление товаров.
-- PostgreSQL 16 + pgvector: `vector(384)` и exact cosine candidate search.
-- DINOv2: глобальный embedding.
+- PostgreSQL 16 + pgvector: отдельные `products` и `product_embeddings`, несколько `vector(384)` на товар и exact cosine candidate search.
+- DINOv2: глобальный embedding каждого эталонного изображения.
 - SIFT/RANSAC: единственный финальный reranker.
 - YOLO: серверный crop полного кадра; браузерный ONNX используется при возможности.
 
-Search API версионируется: `/api/v1/search`, `/api/v1/search-from-crop`. Health, products и media не версионируются.
+Search API версионируется: `/api/v1/search`, `/api/v1/search-from-crop`. Health, products и media не версионируются. pgvector выбирает ближайший embedding каждого уникального товара, после чего SIFT формирует финальный порядок. Изображения и кропы в Git не поставляются: PostgreSQL и media наполняются из датасета заказчика.
 
 ## Запуск
 

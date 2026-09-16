@@ -5,6 +5,8 @@
 - Routes are declared in their feature section and included through `app/api/router.py`.
 - Shared core, database models, repositories, and ML services are not versioned.
 - PostgreSQL with pgvector is the only product and embedding store. FAISS is not used.
+- Product metadata belongs in `products`; reusable reference vectors belong in `product_embeddings`. A product may have multiple catalog, real, or customer embeddings. Search must select the nearest embedding per unique product before SIFT reranking.
+- Catalog images, crops, datasets, and legacy indexes are not stored in Git. They are loaded from the customer dataset into PostgreSQL and the configured media storage.
 - Schema changes require SQLAlchemy declarative models and Alembic revisions. Never call `create_all` at runtime.
 - Resolve paths from configuration; never hard-code machine-specific absolute paths.
 - Models are read-only at runtime. Product media is written only below the configured media root.

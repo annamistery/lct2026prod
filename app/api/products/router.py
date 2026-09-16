@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
 from app.core.dependencies import get_detector, get_images, get_pipeline_v1, get_session
-from app.db.models.product import Product
+from app.db.models.product import Product, ProductEmbedding
 from app.db.repositories.products import ProductRepository
 from app.pipelines.search.v1.pipeline import SearchPipelineV1
 from app.schemas.products import ProductListResponse, ProductResponse
@@ -19,7 +19,7 @@ router = APIRouter(tags=["products"])
 
 
 def serialize(product: Product) -> ProductResponse:
-    return ProductResponse(id=product.id, title=product.title, manufacturer=product.manufacturer, description=product.description, image_url=f"/api/media/{product.source_image_path}", label_url=f"/api/media/{product.label_image_path}", embedding_model=product.embedding_model, created_at=product.created_at)
+    return ProductResponse(id=product.id, title=product.title, manufacturer=product.manufacturer, description=product.description, image_url=f"/api/media/{product.source_image_path}", label_url=f"/api/media/{product.label_image_path}", created_at=product.created_at)
 
 
 @router.get("/products", response_model=ProductListResponse)
@@ -71,8 +71,9 @@ async def create_product(
     stored = None
     try:
         stored = await asyncio.to_thread(images.save_product, product_id, source, label)
-        product = Product(id=product_id, title=clean_title, manufacturer=clean_manufacturer, description=description.strip(), source_image_path=stored.source_path, label_image_path=stored.label_path, embedding=embedding, embedding_model=settings.embedding_model_name)
-        ProductRepository(session).add(product)
+        product = Product(id=product_id, title=clean_title, manufacturer=clean_manufacturer, description=description.strip(), source_image_path=stored.source_path, label_image_path=stored.label_path)
+        product_embedding = ProductEmbedding(image_path=stored.label_path, sample_type="catalog", embedding=embedding, embedding_model=settings.embedding_model_name)
+        ProductRepository(session).add(product, product_embedding)
         await session.commit()
         await session.refresh(product)
         return serialize(product)

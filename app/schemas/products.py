@@ -13,7 +13,6 @@ class ProductResponse(BaseModel):
     description: str
     image_url: str
     label_url: str
-    embedding_model: str
     created_at: datetime
 
 

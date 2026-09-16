@@ -33,19 +33,19 @@ class SearchPipelineV1:
 
         async def score(rank: int, candidate):
             try:
-                path = self.images.resolve(candidate.product.label_image_path)
+                path = self.images.resolve(candidate.image_path)
                 candidate_image = await asyncio.to_thread(self._open_image, path)
                 similarity = 1.0 - candidate.distance
                 async with self.sift_semaphore:
                     sift = await asyncio.to_thread(self.reranker.compare, image, candidate_image, similarity)
-                return rank, candidate.product, similarity, sift
+                return rank, candidate.product, similarity, sift, candidate.image_path
             except (FileNotFoundError, OSError):
                 return None
 
         scored = [item for item in await asyncio.gather(*(score(rank, candidate) for rank, candidate in enumerate(candidates, 1))) if item]
         scored.sort(key=lambda item: (-item[3].score, item[0]))
         sift_ms = self._elapsed(sift_started)
-        results = [SearchResult(product_id=item[1].id, title=item[1].title, manufacturer=item[1].manufacturer, description=item[1].description, image_url=f"/api/media/{item[1].label_image_path}", dino_similarity=item[2], sift_score=item[3].score, inliers=item[3].inliers, inlier_ratio=item[3].inlier_ratio, pgvector_rank=item[0], final_rank=rank) for rank, item in enumerate(scored[:k], 1)]
+        results = [SearchResult(product_id=item[1].id, title=item[1].title, manufacturer=item[1].manufacturer, description=item[1].description, image_url=f"/api/media/{item[4]}", dino_similarity=item[2], sift_score=item[3].score, inliers=item[3].inliers, inlier_ratio=item[3].inlier_ratio, pgvector_rank=item[0], final_rank=rank) for rank, item in enumerate(scored[:k], 1)]
         timings = SearchTimings(embedding_ms=embedding_ms, pgvector_ms=pgvector_ms, sift_ms=sift_ms, total_ms=self._elapsed(started))
         return SearchResponse(winner=results[0] if results else None, results=results, timings=timings)
 
