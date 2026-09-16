@@ -64,6 +64,31 @@ grep -E '^(ENVIRONMENT|DATABASE_URL|CORS_ORIGINS|DINO_MODEL_PATH|DINO_BASE_MODEL
 
 Получаем: production-значения и пути внутри контейнера. Не публикуйте вывод с паролем.
 
+## 3a. Собрать сведения о моделях старого проекта
+
+Если модели ещё не перенесены из `$HOME/LCT2026`, обновить репозиторий и запустить единый безопасный скрипт инвентаризации:
+
+```bash
+git pull --ff-only
+chmod +x scripts/collect_model_inventory.sh
+./scripts/collect_model_inventory.sh "$HOME/LCT2026" model_inventory.txt
+```
+
+Проверяем:
+
+```bash
+test -s model_inventory.txt && echo 'INVENTORY OK'
+wc -l model_inventory.txt
+```
+
+Получаем: файл `model_inventory.txt` со сведениями о DINO/LoRA, Hugging Face snapshot, старых индексах, каталогах и числе изображений. Скрипт не читает `.env`, process environment и секреты. Содержимое можно передать разработчику:
+
+```bash
+cat model_inventory.txt
+```
+
+Файл отчёта исключён из Git.
+
 ## 4. Разместить модели
 
 Ожидаемая структура:
