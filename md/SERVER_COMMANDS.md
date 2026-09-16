@@ -15,6 +15,19 @@ git lfs version
 
 Получаем: четыре команды завершаются без ошибок; `nvidia-smi` показывает GPU.
 
+Если `git lfs version` отвечает, что `lfs` не является командой Git, установить и активировать Git LFS:
+
+```bash
+sudo apt update
+sudo apt install -y git-lfs
+git lfs install
+git lfs version
+```
+
+Получаем: строку `git-lfs/3.x.x`. После этого продолжить со шага 2.
+
+Для RTX 5070 Ti драйвер с CUDA 13.0 подходит для запуска контейнера с CUDA 12.4: новый NVIDIA driver обратно совместим с более старым CUDA runtime внутри контейнера.
+
 ## 2. Скачать проект
 
 ```bash
