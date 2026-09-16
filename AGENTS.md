@@ -9,7 +9,7 @@
 - Catalog images, crops, datasets, and legacy indexes are not stored in Git. They are loaded from the customer dataset into PostgreSQL and the configured media storage.
 - Schema changes require SQLAlchemy declarative models and Alembic revisions. Never call `create_all` at runtime.
 - Resolve paths from configuration; never hard-code machine-specific absolute paths.
-- Models are read-only at runtime. Product media is written only below the configured media root.
+- Models are read-only at runtime. Product media is written only below the configured media root. Docker API UID/GID must match the owner of the host media bind mount.
 - Use bound SQLAlchemy expressions and validated typed inputs. Never interpolate request values into SQL, shell commands, paths, templates, or headers.
 
 ## Delivery workflow

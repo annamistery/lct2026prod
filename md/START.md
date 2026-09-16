@@ -21,7 +21,11 @@ cp .env.example .env
 nano .env
 ```
 
-Заменить `POSTGRES_PASSWORD` и тот же пароль внутри `DATABASE_URL`. Если Apache отдаёт web и `/api/` с одного адреса, оставить `CORS_ORIGINS=` пустым.
+Заменить `POSTGRES_PASSWORD` и тот же пароль внутри `DATABASE_URL`. Установить `APP_UID` и `APP_GID` по выводу `id -u` и `id -g`, чтобы API мог писать в host-каталог `media/`. Если Apache отдаёт web и `/api/` с одного адреса, оставить `CORS_ORIGINS=` пустым.
+
+```bash
+sed -i "s/^APP_UID=.*/APP_UID=$(id -u)/; s/^APP_GID=.*/APP_GID=$(id -g)/" .env
+```
 
 ## 3. Проверить GPU и Compose
 
