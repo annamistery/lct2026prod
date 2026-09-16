@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools==75.8.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lct2026prod"
+version = "1.0.0"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+  "alembic==1.14.1",
+  "asyncpg==0.30.0",
+  "fastapi==0.115.8",
+  "numpy==2.1.3",
+  "opencv-python-headless==4.11.0.86",
+  "peft==0.15.0",
+  "pgvector==0.3.6",
+  "pillow==11.1.0",
+  "psycopg[binary]==3.2.4",
+  "pydantic-settings==2.7.1",
+  "python-multipart==0.0.20",
+  "sqlalchemy[asyncio]==2.0.38",
+  "torch==2.6.0",
+  "torchvision==0.21.0",
+  "transformers==4.48.3",
+  "ultralytics==8.3.75",
+  "uvicorn[standard]==0.34.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "httpx==0.28.1",
+  "mypy==1.14.1",
+  "pytest==8.3.4",
+  "pytest-asyncio==0.25.3",
+  "ruff==0.9.4",
+]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 180
+exclude = ["sources", "md", "alembic/versions"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.mypy]
+python_version = "3.11"
+packages = ["app"]
+ignore_missing_imports = true
