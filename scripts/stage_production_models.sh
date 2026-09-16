@@ -11,9 +11,25 @@ MANIFEST="$REPO_ROOT/models/MODEL_MANIFEST.sha256"
 
 cd "$REPO_ROOT"
 
-if [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then
-  echo "ERROR: tracked working tree is not clean. Commit, discard, or stash existing changes first." >&2
+if [[ -z "$(git config user.name || true)" || -z "$(git config user.email || true)" ]]; then
+  echo "ERROR: Git author identity is not configured for this repository." >&2
+  echo 'Run: git config user.name "Your Name"' >&2
+  echo 'Run: git config user.email "you@example.com"' >&2
   exit 1
+fi
+
+MODE="copy"
+STATUS="$(git status --porcelain)"
+if [[ -n "$STATUS" ]]; then
+  MODE="resume"
+  while IFS= read -r line; do
+    path="${line:3}"
+    if [[ "$path" != models/* ]]; then
+      echo "ERROR: unrelated working-tree change prevents a safe resume: $path" >&2
+      exit 1
+    fi
+  done <<< "$STATUS"
+  echo "Resuming with an existing staged model bundle."
 fi
 
 if ! git lfs version >/dev/null 2>&1; then
@@ -21,36 +37,44 @@ if ! git lfs version >/dev/null 2>&1; then
   exit 1
 fi
 
-if [[ ! -f "$HF_DIR/refs/main" ]]; then
-  echo "ERROR: DINOv2 base revision is missing: $HF_DIR/refs/main" >&2
-  exit 1
+if [[ "$MODE" == "copy" && -e "$BASE_DESTINATION" && -e "$ADAPTER_DESTINATION" && -f "$MANIFEST" ]]; then
+  sha256sum --check "$MANIFEST"
+  echo "Production models are already bundled and verified."
+  exit 0
 fi
 
-REVISION="$(cat "$HF_DIR/refs/main")"
-BASE_SOURCE="$HF_DIR/snapshots/$REVISION"
-
-for file in config.json preprocessor_config.json model.safetensors; do
-  if [[ ! -e "$BASE_SOURCE/$file" ]]; then
-    echo "ERROR: base model file is missing: $BASE_SOURCE/$file" >&2
+if [[ "$MODE" == "copy" ]]; then
+  if [[ ! -f "$HF_DIR/refs/main" ]]; then
+    echo "ERROR: DINOv2 base revision is missing: $HF_DIR/refs/main" >&2
     exit 1
   fi
-done
 
-for file in adapter_config.json adapter_model.bin preprocessor_config.json; do
-  if [[ ! -f "$ADAPTER_SOURCE/$file" ]]; then
-    echo "ERROR: adapter file is missing: $ADAPTER_SOURCE/$file" >&2
+  REVISION="$(cat "$HF_DIR/refs/main")"
+  BASE_SOURCE="$HF_DIR/snapshots/$REVISION"
+
+  for file in config.json preprocessor_config.json model.safetensors; do
+    if [[ ! -e "$BASE_SOURCE/$file" ]]; then
+      echo "ERROR: base model file is missing: $BASE_SOURCE/$file" >&2
+      exit 1
+    fi
+  done
+
+  for file in adapter_config.json adapter_model.bin preprocessor_config.json; do
+    if [[ ! -f "$ADAPTER_SOURCE/$file" ]]; then
+      echo "ERROR: adapter file is missing: $ADAPTER_SOURCE/$file" >&2
+      exit 1
+    fi
+  done
+
+  if [[ -e "$BASE_DESTINATION" || -e "$ADAPTER_DESTINATION" ]]; then
+    echo "ERROR: destination model directories already exist without a valid manifest." >&2
     exit 1
   fi
-done
 
-if [[ -e "$BASE_DESTINATION" || -e "$ADAPTER_DESTINATION" ]]; then
-  echo "ERROR: destination model directories already exist. Refusing to overwrite them." >&2
-  exit 1
+  mkdir -p "$BASE_DESTINATION" "$ADAPTER_DESTINATION"
+  cp -aL "$BASE_SOURCE/." "$BASE_DESTINATION/"
+  cp -aL "$ADAPTER_SOURCE/." "$ADAPTER_DESTINATION/"
 fi
-
-mkdir -p "$BASE_DESTINATION" "$ADAPTER_DESTINATION"
-cp -aL "$BASE_SOURCE/." "$BASE_DESTINATION/"
-cp -aL "$ADAPTER_SOURCE/." "$ADAPTER_DESTINATION/"
 
 for file in \
   "$BASE_DESTINATION/config.json" \
