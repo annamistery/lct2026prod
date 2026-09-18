@@ -34,6 +34,8 @@ services:
       - ./media:/media
       - ./imports:/imports:ro
       - ./scripts:/srv/app/scripts:ro
+      - ./app:/srv/app/app:ro
+      - ./web:/srv/app/web:ro
     depends_on:
       db:
         condition: service_healthy
