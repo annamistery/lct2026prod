@@ -6,50 +6,72 @@
 <div class="page-header">
   <div>
     <h1>Тестирование детекции этикеток (YOLO)</h1>
-    <span style="color: var(--muted); font-size: 13px;">Инспекция реальных изображений из каталога импорта и отладка bounding box</span>
+    <span style="color: var(--muted); font-size: 13px;">Проверка реальных фото из каталога импорта и интерактивная подсветка Bounding Box</span>
+  </div>
+  <div style="display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--border); padding: 6px 14px; border-radius: var(--radius);">
+    <label for="conf-slider" style="font-size: 13px; color: var(--muted);">Порог уверенности (Conf):</label>
+    <input type="range" id="conf-slider" min="0.05" max="0.80" step="0.05" value="0.25" style="cursor: pointer;">
+    <span id="conf-val" style="font-weight: 700; color: #fff; min-width: 36px;">25%</span>
   </div>
 </div>
 
-<div style="display: flex; gap: 24px; height: calc(100vh - 120px);">
+<div style="display: flex; gap: 20px; height: calc(100vh - 130px);">
   <!-- Левая панель: выбор файла -->
-  <div style="width: 320px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; display: flex; flex-direction: column;">
+  <div style="width: 300px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; display: flex; flex-direction: column;">
     <input type="text" id="filter-input" placeholder="Поиск по имени файла..." 
-           style="width: 100%; padding: 8px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 13px; outline: none; margin-bottom: 12px;">
+           style="width: 100%; padding: 8px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 13px; outline: none; margin-bottom: 10px;">
     
     <div id="files-list" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;">
       <div style="color: var(--muted); padding: 8px;">Загрузка списка файлов...</div>
     </div>
   </div>
 
-  <!-- Правая панель: результат инференса -->
+  <!-- Правая панель: инспекция -->
   <div style="flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; overflow-y: auto; display: flex; flex-direction: column;">
     <div id="status-line" style="font-size: 15px; font-weight: 600; color: #fff; margin-bottom: 16px;">
       Выберите файл слева для инференса
     </div>
 
-    <div id="view-area" style="display: none; flex: 1;">
-      <div style="display: flex; gap: 24px; align-items: flex-start;">
-        <!-- Картинка с оверлеем бокса -->
-        <div style="position: relative; background: #000; border: 1px solid var(--border); border-radius: 6px; padding: 4px; display: inline-block;">
-          <img id="detect-img" style="max-height: 520px; max-width: 380px; display: block;" alt="Detect view">
-          <canvas id="detect-canvas" style="position: absolute; top: 4px; left: 4px; pointer-events: none;"></canvas>
+    <!-- Область отображения -->
+    <div id="view-area" style="display: none;">
+      <div style="display: flex; gap: 24px; align-items: flex-start; margin-bottom: 24px;">
+        
+        <!-- 1. Исходное фото с рамкой Bounding Box -->
+        <div style="flex-shrink: 0;">
+          <div style="font-size: 13px; font-weight: 600; color: #fff; margin-bottom: 8px;">Бутылка с детекцией YOLO:</div>
+          <div style="position: relative; background: #000; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; display: inline-block;">
+            <img id="detect-img" style="max-height: 520px; width: auto; display: block;" alt="Detection view">
+            <canvas id="detect-canvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;"></canvas>
+          </div>
         </div>
 
-        <!-- Информация о детекциях -->
+        <!-- 2. Вырезанный канонический кроп 256x256 -->
+        <div style="flex-shrink: 0;">
+          <div style="font-size: 13px; font-weight: 600; color: #fff; margin-bottom: 8px;">Вырезанный кроп (256×256):</div>
+          <div style="background: #000; border: 2px solid var(--accent); border-radius: 8px; width: 256px; height: 256px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+            <canvas id="crop-canvas" width="256" height="256" style="display: block; width: 256px; height: 256px;"></canvas>
+          </div>
+          <div style="font-size: 11px; color: var(--muted); margin-top: 6px; text-align: center;">
+            Это изображение идет в DINOv2 и SIFT
+          </div>
+        </div>
+
+        <!-- 3. Таблица метаданных файла -->
         <div style="flex: 1;">
-          <h2>Параметры изображения</h2>
-          <table class="detail-meta-table" style="margin-bottom: 20px;">
+          <div style="font-size: 13px; font-weight: 600; color: #fff; margin-bottom: 8px;">Параметры инференса:</div>
+          <table class="detail-meta-table">
             <tr><th>Файл</th><td id="info-file"></td></tr>
             <tr><th>Разрешение</th><td id="info-res"></td></tr>
             <tr><th>Цветовой режим</th><td id="info-mode"></td></tr>
-            <tr><th>Время инференса YOLO</th><td id="info-time"></td></tr>
-            <tr><th>Всего детекций (conf ≥ 5%)</th><td id="info-count"></td></tr>
+            <tr><th>Время на GPU</th><td id="info-time" style="color: var(--accent); font-weight: 700;"></td></tr>
+            <tr><th>Найдено этикеток</th><td id="info-count" style="font-weight: 700;"></td></tr>
           </table>
-
-          <h2>Список найденных Bounding Box</h2>
-          <div id="boxes-list" style="display: flex; flex-direction: column; gap: 8px; max-height: 250px; overflow-y: auto;"></div>
         </div>
       </div>
+
+      <!-- Список боксов с интерактивным выбором -->
+      <h2>Найденные Bounding Box (кликните для выбора кропа):</h2>
+      <div id="boxes-list" style="display: flex; flex-direction: column; gap: 8px;"></div>
     </div>
   </div>
 </div>
@@ -61,9 +83,23 @@ const statusLine = document.getElementById('status-line');
 const viewArea = document.getElementById('view-area');
 const detectImg = document.getElementById('detect-img');
 const detectCanvas = document.getElementById('detect-canvas');
+const cropCanvas = document.getElementById('crop-canvas');
+const cropCtx = cropCanvas.getContext('2d');
 const boxesList = document.getElementById('boxes-list');
+const confSlider = document.getElementById('conf-slider');
+const confVal = document.getElementById('conf-val');
 
 let allFiles = [];
+let currentFilename = null;
+let currentDetections = [];
+let selectedBoxIndex = 0;
+
+confSlider.addEventListener('input', () => {
+  confVal.textContent = Math.round(confSlider.value * 100) + '%';
+  if (currentFilename) {
+    runDetect(currentFilename);
+  }
+});
 
 async function loadFiles(query = '') {
   try {
@@ -81,7 +117,7 @@ function renderFileList() {
     return;
   }
   filesList.innerHTML = allFiles.map(f => `
-    <div class="menu-item file-item" data-file="${f}" style="font-size: 12px; cursor: pointer; word-break: break-all; padding: 6px 8px;">
+    <div class="menu-item file-item ${f === currentFilename ? 'active' : ''}" data-file="${f}" style="font-size: 12px; cursor: pointer; word-break: break-all; padding: 6px 8px;">
       ${f}
     </div>
   `).join('');
@@ -100,84 +136,119 @@ filterInput.addEventListener('input', () => {
 });
 
 async function runDetect(filename) {
-  statusLine.textContent = 'Инференс для ' + filename + '...';
-  viewArea.style.display = 'none';
+  currentFilename = filename;
+  statusLine.textContent = 'Инференс YOLO для ' + filename + '...';
 
   const fd = new FormData();
   fd.append('filename', filename);
+  fd.append('conf', confSlider.value);
 
   try {
     const res = await fetch('/api/detect/predict', { method: 'POST', body: fd });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'Ошибка инференса');
 
-    statusLine.textContent = data.filename + ' — ' + (data.detections.length ? 'Найдено боксов: ' + data.detections.length : 'ДЕТЕКЦИЙ НЕТ');
+    currentDetections = data.detections;
+    selectedBoxIndex = 0;
+
+    statusLine.textContent = data.filename + ' — ' + (data.detections.length ? 'Найдено этикеток: ' + data.detections.length : '⚠️ ЭТИКЕТКА НЕ НАЙДЕНА (порог ' + Math.round(confSlider.value * 100) + '%)');
     document.getElementById('info-file').textContent = data.filename;
     document.getElementById('info-res').textContent = `${data.width} × ${data.height} px`;
     document.getElementById('info-mode').textContent = data.mode;
-    document.getElementById('info-time').innerHTML = `<strong>${data.infer_ms} мс</strong>`;
+    document.getElementById('info-time').textContent = data.infer_ms + ' мс';
     document.getElementById('info-count').textContent = data.detections.length;
 
-    renderBoxes(data.detections);
-
     detectImg.onload = () => {
-      drawCanvas(data.detections);
       viewArea.style.display = 'block';
+      updateCanvasAndCrop();
     };
     detectImg.src = data.image_url;
+
+    renderBoxes();
 
   } catch (err) {
     statusLine.textContent = 'Ошибка: ' + err.message;
   }
 }
 
-function drawCanvas(detections) {
-  detectCanvas.width = detectImg.clientWidth;
-  detectCanvas.height = detectImg.clientHeight;
+function updateCanvasAndCrop() {
+  detectCanvas.width = detectImg.naturalWidth;
+  detectCanvas.height = detectImg.naturalHeight;
   const ctx = detectCanvas.getContext('2d');
   ctx.clearRect(0, 0, detectCanvas.width, detectCanvas.height);
 
-  const scaleX = detectImg.clientWidth / detectImg.naturalWidth;
-  const scaleY = detectImg.clientHeight / detectImg.naturalHeight;
-
-  detections.forEach((d, idx) => {
-    const isBest = idx === 0;
-    const x = d.xtl * scaleX;
-    const y = d.ytl * scaleY;
-    const w = (d.xbr - d.xtl) * scaleX;
-    const h = (d.ybr - d.ytl) * scaleY;
-
-    ctx.strokeStyle = isBest ? '#20d45a' : '#ff9800';
-    ctx.lineWidth = isBest ? 3 : 1.5;
-    ctx.strokeRect(x, y, w, h);
-
-    ctx.fillStyle = isBest ? '#20d45a' : '#ff9800';
-    ctx.font = 'bold 12px sans-serif';
-    ctx.fillText(`#${idx + 1}: ${(d.confidence * 100).toFixed(1)}%`, x + 4, y > 16 ? y - 4 : y + 14);
-  });
-}
-
-function renderBoxes(detections) {
-  if (!detections.length) {
-    boxesList.innerHTML = `<div style="background: #2a1818; color: #ff6b6b; padding: 10px; border-radius: 6px; font-size: 13px;">
-      ⚠️ YOLO не обнаружила ни одного бокса даже с порогом conf=0.05
-    </div>`;
+  if (!currentDetections.length) {
+    // No box: draw fallback full image in cropCanvas
+    cropCtx.clearRect(0, 0, 256, 256);
+    cropCtx.drawImage(detectImg, 0, 0, 256, 256);
     return;
   }
 
-  boxesList.innerHTML = detections.map((d, i) => `
-    <div style="background: var(--surface-2); border: 1px solid ${i === 0 ? 'var(--accent)' : 'var(--border)'}; border-radius: 6px; padding: 8px 12px; font-size: 12px; display: flex; justify-content: space-between; align-items: center;">
+  currentDetections.forEach((d, idx) => {
+    const isSelected = idx === selectedBoxIndex;
+    const isBest = idx === 0;
+    const w = d.xbr - d.xtl;
+    const h = d.ybr - d.ytl;
+
+    ctx.strokeStyle = isSelected ? '#20d45a' : '#ff9800';
+    ctx.lineWidth = isSelected ? 4 : 2;
+    ctx.strokeRect(d.xtl, d.ytl, w, h);
+
+    // Label tag
+    ctx.fillStyle = isSelected ? '#20d45a' : '#ff9800';
+    const tag = `#${idx + 1}: ${(d.confidence * 100).toFixed(1)}%`;
+    ctx.font = 'bold 16px sans-serif';
+    ctx.fillRect(d.xtl, d.ytl > 22 ? d.ytl - 22 : d.ytl, ctx.measureText(tag).width + 8, 22);
+    ctx.fillStyle = '#000';
+    ctx.fillText(tag, d.xtl + 4, d.ytl > 22 ? d.ytl - 5 : d.ytl + 16);
+  });
+
+  // Render crop for the selected box into cropCanvas (256x256)
+  const sel = currentDetections[selectedBoxIndex];
+  const sx = sel.xtl;
+  const sy = sel.ytl;
+  const sw = sel.xbr - sel.xtl;
+  const sh = sel.ybr - sel.ytl;
+  cropCtx.clearRect(0, 0, 256, 256);
+  cropCtx.drawImage(detectImg, sx, sy, sw, sh, 0, 0, 256, 256);
+}
+
+function renderBoxes() {
+  if (!currentDetections.length) {
+    boxesList.innerHTML = `
+      <div style="background: #2a1818; color: #ff6b6b; padding: 14px; border-radius: 6px; font-size: 13px;">
+        ⚠️ <strong>YOLO не обнаружила этикетку на этом изображении при пороге ${Math.round(confSlider.value * 100)}%.</strong><br>
+        <span style="color: #aaa; font-size: 12px; margin-top: 4px; display: inline-block;">
+          Попробуйте уменьшить ползунок порога вверху или проверить контрастность фона.
+        </span>
+      </div>
+    `;
+    return;
+  }
+
+  boxesList.innerHTML = currentDetections.map((d, i) => `
+    <div class="box-row" data-idx="${i}" style="background: var(--surface-2); border: 2px solid ${i === selectedBoxIndex ? 'var(--accent)' : 'var(--border)'}; border-radius: 6px; padding: 10px 14px; font-size: 13px; display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
       <div>
-        <strong style="color: ${i === 0 ? 'var(--accent)' : '#fff'};">#${i + 1} ${i === 0 ? '(Лучший / Best)' : ''}</strong>
-        <span style="color: var(--muted); margin-left: 8px;">Координаты: [${d.xtl.toFixed(0)}, ${d.ytl.toFixed(0)}, ${d.xbr.toFixed(0)}, ${d.ybr.toFixed(0)}]</span>
+        <strong style="color: ${i === 0 ? 'var(--accent)' : '#fff'};">#${i + 1} ${i === 0 ? '(Максимальная уверенность / Best)' : ''}</strong>
+        <div style="color: var(--muted); font-size: 12px; margin-top: 2px;">
+          Bbox: [x1=${d.xtl}, y1=${d.ytl}, x2=${d.xbr}, y2=${d.ybr}] · Размер: ${d.width}×${d.height} px
+        </div>
       </div>
       <div>
-        <span class="badge" style="background: ${d.confidence >= 0.25 ? '#18301c; color:#20d45a;' : '#362818; color:#ff9800;'} font-weight: 700; padding: 2px 8px; border-radius: 4px;">
+        <span style="background: ${d.confidence >= 0.25 ? '#18301c; color:#20d45a;' : '#362818; color:#ff9800;'} font-weight: 700; padding: 4px 10px; border-radius: 4px; font-size: 13px;">
           ${(d.confidence * 100).toFixed(1)}%
         </span>
       </div>
     </div>
   `).join('');
+
+  document.querySelectorAll('.box-row').forEach(row => {
+    row.addEventListener('click', () => {
+      selectedBoxIndex = parseInt(row.dataset.idx, 10);
+      renderBoxes();
+      updateCanvasAndCrop();
+    });
+  });
 }
 
 loadFiles();

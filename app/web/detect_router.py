@@ -43,7 +43,7 @@ async def list_import_files(q: Annotated[str, Query()] = ""):
     if q.strip():
         search = q.strip().lower()
         files = [f for f in files if search in f.lower()]
-    return files[:200]
+    return files[:300]
 
 
 @router.get("/api/detect/image/{filename:path}")
@@ -56,7 +56,11 @@ async def get_raw_import_image(filename: str):
 
 
 @router.post("/api/detect/predict")
-async def predict_import_image(request: Request, filename: Annotated[str, Form()]):
+async def predict_import_image(
+    request: Request,
+    filename: Annotated[str, Form()],
+    conf: Annotated[float, Form()] = 0.25,
+):
     images_dir = get_imports_images_dir()
     file_path = (images_dir / filename).resolve()
     if images_dir not in file_path.parents or not file_path.is_file():
@@ -65,7 +69,7 @@ async def predict_import_image(request: Request, filename: Annotated[str, Form()
     settings = get_settings()
     detector: DetectorService = request.app.state.detector
     if detector is None:
-        detector = DetectorService(settings.yolo_model_path, 0.10)  # low conf for debugging
+        detector = DetectorService(settings.yolo_model_path, conf)
 
     start_time = time.perf_counter()
     with Image.open(file_path) as img:
@@ -73,23 +77,25 @@ async def predict_import_image(request: Request, filename: Annotated[str, Form()
         orig_mode = img.mode
         rgb_img = img.convert("RGB")
 
-    # Run raw YOLO inference with low threshold to see ALL candidates
-    results = detector.model.predict(source=rgb_img, conf=0.05, verbose=False)
+    # Run YOLO with user-specified confidence threshold
+    results = detector.model.predict(source=rgb_img, conf=conf, verbose=False)
     infer_ms = round((time.perf_counter() - start_time) * 1000, 2)
 
     detections = []
     for result in results:
         for box in result.boxes:
             coords = box.xyxy[0].tolist()
-            conf = float(box.conf[0])
+            confidence = float(box.conf[0])
             cls_id = int(box.cls[0])
             detections.append(
                 {
-                    "xtl": coords[0],
-                    "ytl": coords[1],
-                    "xbr": coords[2],
-                    "ybr": coords[3],
-                    "confidence": conf,
+                    "xtl": round(coords[0], 1),
+                    "ytl": round(coords[1], 1),
+                    "xbr": round(coords[2], 1),
+                    "ybr": round(coords[3], 1),
+                    "width": round(coords[2] - coords[0], 1),
+                    "height": round(coords[3] - coords[1], 1),
+                    "confidence": round(confidence, 4),
                     "class_id": cls_id,
                 }
             )
@@ -103,5 +109,6 @@ async def predict_import_image(request: Request, filename: Annotated[str, Form()
         "height": orig_h,
         "mode": orig_mode,
         "infer_ms": infer_ms,
+        "threshold": conf,
         "detections": detections,
     }
