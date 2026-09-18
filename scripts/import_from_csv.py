@@ -18,7 +18,6 @@ from pathlib import Path
 os.environ.setdefault("MPLCONFIGDIR", "/tmp/matplotlib")
 os.environ.setdefault("YOLO_CONFIG_DIR", "/tmp/ultralytics")
 os.environ.setdefault("HF_HOME", "/tmp/huggingface")
-os.environ.setdefault("TRANSFORMERS_CACHE", "/tmp/huggingface")
 
 from PIL import Image
 
