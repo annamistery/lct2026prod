@@ -38,8 +38,8 @@
         
         <!-- 1. Исходное фото с рамкой Bounding Box -->
         <div style="flex-shrink: 0;">
-          <div style="font-size: 13px; font-weight: 600; color: #fff; margin-bottom: 8px;">Бутылка с детекцией YOLO:</div>
-          <div style="position: relative; background: #000; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; display: inline-block;">
+          <div style="font-size: 13px; font-weight: 600; color: #fff; margin-bottom: 8px;">Бутылка с детекцией YOLO (кликните по картинке чтобы скрыть/показать рамку):</div>
+          <div style="position: relative; background: #000; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; display: inline-block; cursor: pointer;" id="img-wrapper" title="Кликните, чтобы скрыть/показать рамку для сканирования телефоном">
             <img id="detect-img" style="max-height: 520px; width: auto; display: block;" alt="Detection view">
             <canvas id="detect-canvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;"></canvas>
           </div>
@@ -88,11 +88,25 @@ const cropCtx = cropCanvas.getContext('2d');
 const boxesList = document.getElementById('boxes-list');
 const confSlider = document.getElementById('conf-slider');
 const confVal = document.getElementById('conf-val');
+const imgWrapper = document.getElementById('img-wrapper');
 
 let allFiles = [];
 let currentFilename = null;
 let currentDetections = [];
 let selectedBoxIndex = 0;
+let lastSelectedIndex = 0;
+
+// Toggle box visibility on image click for clean camera scanning from phone
+imgWrapper.addEventListener('click', () => {
+  if (selectedBoxIndex === -1) {
+    selectedBoxIndex = lastSelectedIndex;
+  } else {
+    lastSelectedIndex = selectedBoxIndex;
+    selectedBoxIndex = -1;
+  }
+  renderBoxes();
+  updateCanvasAndCrop();
+});
 
 confSlider.addEventListener('input', () => {
   confVal.textContent = Math.round(confSlider.value * 100) + '%';
@@ -177,38 +191,35 @@ function updateCanvasAndCrop() {
   const ctx = detectCanvas.getContext('2d');
   ctx.clearRect(0, 0, detectCanvas.width, detectCanvas.height);
 
-  if (!currentDetections.length) {
-    // No box: draw fallback full image in cropCanvas
+  if (!currentDetections.length || selectedBoxIndex === -1) {
+    // No box or hidden: draw fallback full image in cropCanvas
     cropCtx.clearRect(0, 0, 256, 256);
     cropCtx.drawImage(detectImg, 0, 0, 256, 256);
     return;
   }
 
-  currentDetections.forEach((d, idx) => {
-    const isSelected = idx === selectedBoxIndex;
-    const isBest = idx === 0;
-    const w = d.xbr - d.xtl;
-    const h = d.ybr - d.ytl;
+  // Draw ONLY the selected/active bounding box
+  const d = currentDetections[selectedBoxIndex];
+  const w = d.xbr - d.xtl;
+  const h = d.ybr - d.ytl;
 
-    ctx.strokeStyle = isSelected ? '#20d45a' : '#ff9800';
-    ctx.lineWidth = isSelected ? 4 : 2;
-    ctx.strokeRect(d.xtl, d.ytl, w, h);
+  ctx.strokeStyle = '#20d45a';
+  ctx.lineWidth = 4;
+  ctx.strokeRect(d.xtl, d.ytl, w, h);
 
-    // Label tag
-    ctx.fillStyle = isSelected ? '#20d45a' : '#ff9800';
-    const tag = `#${idx + 1}: ${(d.confidence * 100).toFixed(1)}%`;
-    ctx.font = 'bold 16px sans-serif';
-    ctx.fillRect(d.xtl, d.ytl > 22 ? d.ytl - 22 : d.ytl, ctx.measureText(tag).width + 8, 22);
-    ctx.fillStyle = '#000';
-    ctx.fillText(tag, d.xtl + 4, d.ytl > 22 ? d.ytl - 5 : d.ytl + 16);
-  });
+  // Label tag
+  ctx.fillStyle = '#20d45a';
+  const tag = `#${selectedBoxIndex + 1}: ${(d.confidence * 100).toFixed(1)}%`;
+  ctx.font = 'bold 16px sans-serif';
+  ctx.fillRect(d.xtl, d.ytl > 24 ? d.ytl - 24 : d.ytl, ctx.measureText(tag).width + 12, 24);
+  ctx.fillStyle = '#000';
+  ctx.fillText(tag, d.xtl + 6, d.ytl > 24 ? d.ytl - 6 : d.ytl + 18);
 
   // Render crop for the selected box into cropCanvas (256x256)
-  const sel = currentDetections[selectedBoxIndex];
-  const sx = sel.xtl;
-  const sy = sel.ytl;
-  const sw = sel.xbr - sel.xtl;
-  const sh = sel.ybr - sel.ytl;
+  const sx = d.xtl;
+  const sy = d.ytl;
+  const sw = d.xbr - d.xtl;
+  const sh = d.ybr - d.ytl;
   cropCtx.clearRect(0, 0, 256, 256);
   cropCtx.drawImage(detectImg, sx, sy, sw, sh, 0, 0, 256, 256);
 }
