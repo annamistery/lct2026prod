@@ -1,26 +1,15 @@
 {% extends "base.html" %}
 
-{% block title %}Тест детекции YOLO — LCT2026{% endblock %}
+{% block title %}Тест детекции и сегментации — LCT2026{% endblock %}
 
 {% block content %}
 <div class="page-header">
   <div>
-    <h1>Тестирование детекции этикеток (YOLO)</h1>
-    <span style="color: var(--muted); font-size: 13px;">Проверка реальных фото из каталога импорта и интерактивная подсветка Bounding Box</span>
+    <h1>Тестирование детекции и сегментации (YOLO)</h1>
+    <span style="color: var(--muted); font-size: 13px;">Чистый оригинал фото: зеленый BBox детекции + красный пунктир полилинии сегментации</span>
   </div>
   
   <div style="display: flex; align-items: center; gap: 16px;">
-    <!-- Переключатель режима предобработки -->
-    <div style="display: flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--border); padding: 6px 12px; border-radius: var(--radius);">
-      <span style="font-size: 13px; color: var(--muted);">Режим входа:</span>
-      <label style="font-size: 13px; color: #fff; cursor: pointer; display: flex; align-items: center; gap: 4px;">
-        <input type="radio" name="prep-mode" value="raw" style="cursor: pointer;"> RAW (как есть)
-      </label>
-      <label style="font-size: 13px; color: #20d45a; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px; margin-left: 8px;">
-        <input type="radio" name="prep-mode" value="phone_frame" checked style="cursor: pointer;"> 📱 Телефонный кадр 3:4 (темный фон)
-      </label>
-    </div>
-
     <!-- Ползунок порога -->
     <div style="display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--border); padding: 6px 14px; border-radius: var(--radius);">
       <label for="conf-slider" style="font-size: 13px; color: var(--muted);">Порог (Conf):</label>
@@ -51,9 +40,9 @@
     <div id="view-area" style="display: none;">
       <div style="display: flex; gap: 24px; align-items: flex-start; margin-bottom: 24px;">
         
-        <!-- 1. Исходное фото с рамкой Bounding Box -->
+        <!-- 1. Исходное фото с оверлеями -->
         <div style="flex-shrink: 0;">
-          <div style="font-size: 13px; font-weight: 600; color: #fff; margin-bottom: 8px;">Кадр с детекцией YOLO (кликните по картинке чтобы скрыть/показать рамку):</div>
+          <div style="font-size: 13px; font-weight: 600; color: #fff; margin-bottom: 8px;">Оригинал бутылки (кликните для скрытия оверлея):</div>
           <div style="position: relative; background: #000; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; display: inline-block; cursor: pointer;" id="img-wrapper" title="Кликните, чтобы скрыть/показать рамку">
             <img id="detect-img" style="max-height: 520px; width: auto; display: block;" alt="Detection view">
             <canvas id="detect-canvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;"></canvas>
@@ -62,12 +51,12 @@
 
         <!-- 2. Вырезанный канонический кроп 256x256 -->
         <div style="flex-shrink: 0;">
-          <div style="font-size: 13px; font-weight: 600; color: #fff; margin-bottom: 8px;">Вырезанный кроп (256×256):</div>
+          <div style="font-size: 13px; font-weight: 600; color: #fff; margin-bottom: 8px;">Кроп по BBox (256×256):</div>
           <div style="background: #000; border: 2px solid var(--accent); border-radius: 8px; width: 256px; height: 256px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
             <canvas id="crop-canvas" width="256" height="256" style="display: block; width: 256px; height: 256px;"></canvas>
           </div>
           <div style="font-size: 11px; color: var(--muted); margin-top: 6px; text-align: center;">
-            Это изображение идет в DINOv2 и SIFT
+            Фрагмент для DINOv2 и SIFT
           </div>
         </div>
 
@@ -76,17 +65,24 @@
           <div style="font-size: 13px; font-weight: 600; color: #fff; margin-bottom: 8px;">Параметры инференса:</div>
           <table class="detail-meta-table">
             <tr><th>Файл</th><td id="info-file"></td></tr>
-            <tr><th>Разрешение на входе YOLO</th><td id="info-res"></td></tr>
-            <tr><th>Исходное разрешение</th><td id="info-orig-res"></td></tr>
-            <tr><th>Цветовой режим файла</th><td id="info-mode"></td></tr>
-            <tr><th>Время на GPU</th><td id="info-time" style="color: var(--accent); font-weight: 700;"></td></tr>
-            <tr><th>Найдено этикеток</th><td id="info-count" style="font-weight: 700;"></td></tr>
+            <tr><th>Разрешение</th><td id="info-res"></td></tr>
+            <tr><th>Цветовой режим</th><td id="info-mode"></td></tr>
+            <tr><th>Время BBox YOLO</th><td id="info-time" style="color: var(--accent); font-weight: 700;"></td></tr>
+            <tr><th>BBox детекций</th><td id="info-count" style="color: #20d45a; font-weight: 700;"></td></tr>
+            <tr><th>Масок сегментации</th><td id="info-seg-count" style="color: #ff4757; font-weight: 700;"></td></tr>
           </table>
+
+          <div style="margin-top: 16px; font-size: 12px; color: var(--muted); line-height: 1.6;">
+            <span style="display: inline-block; width: 12px; height: 12px; background: #20d45a; border-radius: 2px; vertical-align: middle; margin-right: 6px;"></span> 
+            <strong>Зеленый сплошной</strong>: Bounding Box (YOLO Detect v3)<br>
+            <span style="display: inline-block; width: 12px; height: 2px; background: #ff4757; vertical-align: middle; margin-right: 6px;"></span> 
+            <strong>Красный пунктир</strong>: Полилиния контура (YOLO Segment v1)
+          </div>
         </div>
       </div>
 
-      <!-- Список боксов с интерактивным выбором -->
-      <h2>Найденные Bounding Box (кликните для выбора кропа):</h2>
+      <!-- Список боксов -->
+      <h2>Найденные области (кликните для выбора):</h2>
       <div id="boxes-list" style="display: flex; flex-direction: column; gap: 8px;"></div>
     </div>
   </div>
@@ -105,26 +101,13 @@ const boxesList = document.getElementById('boxes-list');
 const confSlider = document.getElementById('conf-slider');
 const confVal = document.getElementById('conf-val');
 const imgWrapper = document.getElementById('img-wrapper');
-const prepRadios = document.querySelectorAll('input[name="prep-mode"]');
 
 let allFiles = [];
 let currentFilename = null;
 let currentDetections = [];
+let currentSegmentations = [];
 let selectedBoxIndex = 0;
 let lastSelectedIndex = 0;
-
-function getSelectedMode() {
-  for (const r of prepRadios) {
-    if (r.checked) return r.value;
-  }
-  return 'phone_frame';
-}
-
-prepRadios.forEach(r => {
-  r.addEventListener('change', () => {
-    if (currentFilename) runDetect(currentFilename);
-  });
-});
 
 imgWrapper.addEventListener('click', () => {
   if (selectedBoxIndex === -1) {
@@ -180,13 +163,11 @@ filterInput.addEventListener('input', () => {
 
 async function runDetect(filename) {
   currentFilename = filename;
-  const mode = getSelectedMode();
-  statusLine.textContent = `Инференс YOLO для ${filename} (${mode === 'phone_frame' ? 'Телефонный кадр' : 'RAW'})...`;
+  statusLine.textContent = `Инференс YOLO (Detect + Segment) для ${filename}...`;
 
   const fd = new FormData();
   fd.append('filename', filename);
   fd.append('conf', confSlider.value);
-  fd.append('mode', mode);
 
   try {
     const res = await fetch('/api/detect/predict', { method: 'POST', body: fd });
@@ -194,15 +175,16 @@ async function runDetect(filename) {
     if (!res.ok) throw new Error(data.detail || 'Ошибка инференса');
 
     currentDetections = data.detections;
+    currentSegmentations = data.segmentations || [];
     selectedBoxIndex = 0;
 
-    statusLine.textContent = data.filename + ' — ' + (data.detections.length ? 'Найдено этикеток: ' + data.detections.length : '⚠️ ЭТИКЕТКА НЕ НАЙДЕНА (порог ' + Math.round(confSlider.value * 100) + '%)');
+    statusLine.textContent = data.filename + ' — ' + (data.detections.length || data.segmentations.length ? `BBox: ${data.detections.length} | Seg: ${data.segmentations.length}` : '⚠️ НИЧЕГО НЕ НАЙДЕНО');
     document.getElementById('info-file').textContent = data.filename;
     document.getElementById('info-res').textContent = `${data.width} × ${data.height} px`;
-    document.getElementById('info-orig-res').textContent = `${data.orig_width} × ${data.orig_height} px`;
     document.getElementById('info-mode').textContent = data.mode;
     document.getElementById('info-time').textContent = data.infer_ms + ' мс';
     document.getElementById('info-count').textContent = data.detections.length;
+    document.getElementById('info-seg-count').textContent = data.segmentations.length;
 
     detectImg.onload = () => {
       viewArea.style.display = 'block';
@@ -223,67 +205,123 @@ function updateCanvasAndCrop() {
   const ctx = detectCanvas.getContext('2d');
   ctx.clearRect(0, 0, detectCanvas.width, detectCanvas.height);
 
-  if (!currentDetections.length || selectedBoxIndex === -1) {
-    // No box or hidden: draw fallback full image in cropCanvas
+  if (selectedBoxIndex === -1) {
+    // Hidden on click: draw full image in crop
     cropCtx.clearRect(0, 0, 256, 256);
     cropCtx.drawImage(detectImg, 0, 0, 256, 256);
     return;
   }
 
-  // Draw ONLY the selected/active bounding box
-  const d = currentDetections[selectedBoxIndex];
-  const w = d.xbr - d.xtl;
-  const h = d.ybr - d.ytl;
+  // 1. Draw Segmentation contour (red dashed polyline)
+  if (currentSegmentations.length) {
+    ctx.strokeStyle = '#ff4757';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([8, 6]);
 
-  ctx.strokeStyle = '#20d45a';
-  ctx.lineWidth = 4;
-  ctx.strokeRect(d.xtl, d.ytl, w, h);
+    currentSegmentations.forEach(seg => {
+      if (seg.points.length > 2) {
+        ctx.beginPath();
+        ctx.moveTo(seg.points[0][0], seg.points[0][1]);
+        for (let i = 1; i < seg.points.length; i++) {
+          ctx.lineTo(seg.points[i][0], seg.points[i][1]);
+        }
+        ctx.closePath();
+        ctx.stroke();
 
-  // Label tag
-  ctx.fillStyle = '#20d45a';
-  const tag = `#${selectedBoxIndex + 1}: ${(d.confidence * 100).toFixed(1)}%`;
-  ctx.font = 'bold 16px sans-serif';
-  ctx.fillRect(d.xtl, d.ytl > 24 ? d.ytl - 24 : d.ytl, ctx.measureText(tag).width + 12, 24);
-  ctx.fillStyle = '#000';
-  ctx.fillText(tag, d.xtl + 6, d.ytl > 24 ? d.ytl - 6 : d.ytl + 18);
+        // Optional fill
+        ctx.fillStyle = 'rgba(255, 71, 87, 0.15)';
+        ctx.fill();
+      }
+    });
+    ctx.setLineDash([]); // Reset dash
+  }
 
-  // Render crop for the selected box into cropCanvas (256x256)
-  const sx = d.xtl;
-  const sy = d.ytl;
-  const sw = d.xbr - d.xtl;
-  const sh = d.ybr - d.ytl;
-  cropCtx.clearRect(0, 0, 256, 256);
-  cropCtx.drawImage(detectImg, sx, sy, sw, sh, 0, 0, 256, 256);
+  // 2. Draw BBox (solid green)
+  if (currentDetections.length && selectedBoxIndex >= 0 && selectedBoxIndex < currentDetections.length) {
+    const d = currentDetections[selectedBoxIndex];
+    const w = d.xbr - d.xtl;
+    const h = d.ybr - d.ytl;
+
+    ctx.strokeStyle = '#20d45a';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(d.xtl, d.ytl, w, h);
+
+    // Label tag
+    ctx.fillStyle = '#20d45a';
+    const tag = `BBox #${selectedBoxIndex + 1}: ${(d.confidence * 100).toFixed(1)}%`;
+    ctx.font = 'bold 16px sans-serif';
+    ctx.fillRect(d.xtl, d.ytl > 24 ? d.ytl - 24 : d.ytl, ctx.measureText(tag).width + 12, 24);
+    ctx.fillStyle = '#000';
+    ctx.fillText(tag, d.xtl + 6, d.ytl > 24 ? d.ytl - 6 : d.ytl + 18);
+
+    // Render crop for the selected box into cropCanvas (256x256)
+    cropCtx.clearRect(0, 0, 256, 256);
+    cropCtx.drawImage(detectImg, d.xtl, d.ytl, w, h, 0, 0, 256, 256);
+  } else if (currentSegmentations.length && currentSegmentations[0].points.length > 2) {
+    // If bbox is missing but segmentation exists, calculate bbox from polygon
+    const pts = currentSegmentations[0].points;
+    const xs = pts.map(p => p[0]);
+    const ys = pts.map(p => p[1]);
+    const minX = Math.min(...xs);
+    const minY = Math.min(...ys);
+    const maxX = Math.max(...xs);
+    const maxY = Math.max(...ys);
+    cropCtx.clearRect(0, 0, 256, 256);
+    cropCtx.drawImage(detectImg, minX, minY, maxX - minX, maxY - minY, 0, 0, 256, 256);
+  } else {
+    cropCtx.clearRect(0, 0, 256, 256);
+    cropCtx.drawImage(detectImg, 0, 0, 256, 256);
+  }
 }
 
 function renderBoxes() {
-  if (!currentDetections.length) {
+  if (!currentDetections.length && !currentSegmentations.length) {
     boxesList.innerHTML = `
       <div style="background: #2a1818; color: #ff6b6b; padding: 14px; border-radius: 6px; font-size: 13px;">
-        ⚠️ <strong>YOLO не обнаружила этикетку на этом изображении при пороге ${Math.round(confSlider.value * 100)}%.</strong><br>
-        <span style="color: #aaa; font-size: 12px; margin-top: 4px; display: inline-block;">
-          Попробуйте переключить режим «Телефонный кадр» или уменьшить ползунок порога вверху.
-        </span>
+        ⚠️ <strong>Ни BBox детекция, ни сегментация не нашли этикетку при пороге ${Math.round(confSlider.value * 100)}%.</strong>
       </div>
     `;
     return;
   }
 
-  boxesList.innerHTML = currentDetections.map((d, i) => `
-    <div class="box-row" data-idx="${i}" style="background: var(--surface-2); border: 2px solid ${i === selectedBoxIndex ? 'var(--accent)' : 'var(--border)'}; border-radius: 6px; padding: 10px 14px; font-size: 13px; display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
-      <div>
-        <strong style="color: ${i === 0 ? 'var(--accent)' : '#fff'};">#${i + 1} ${i === 0 ? '(Максимальная уверенность / Best)' : ''}</strong>
-        <div style="color: var(--muted); font-size: 12px; margin-top: 2px;">
-          Bbox в кадре: [x1=${d.xtl}, y1=${d.ytl}, x2=${d.xbr}, y2=${d.ybr}] · На бутылке: [x1=${d.orig_xtl}, x2=${d.orig_xbr}]
+  let html = '';
+  if (currentDetections.length) {
+    html += currentDetections.map((d, i) => `
+      <div class="box-row" data-idx="${i}" style="background: var(--surface-2); border: 2px solid ${i === selectedBoxIndex ? 'var(--accent)' : 'var(--border)'}; border-radius: 6px; padding: 10px 14px; font-size: 13px; display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
+        <div>
+          <strong style="color: ${i === 0 ? 'var(--accent)' : '#fff'};">🟩 BBox #${i + 1} ${i === 0 ? '(Лучший / Best)' : ''}</strong>
+          <div style="color: var(--muted); font-size: 12px; margin-top: 2px;">
+            Координаты: [${d.xtl}, ${d.ytl}, ${d.xbr}, ${d.ybr}] · Размер: ${d.width}×${d.height} px
+          </div>
+        </div>
+        <div>
+          <span style="background: #18301c; color:#20d45a; font-weight: 700; padding: 4px 10px; border-radius: 4px; font-size: 13px;">
+            ${(d.confidence * 100).toFixed(1)}%
+          </span>
         </div>
       </div>
-      <div>
-        <span style="background: ${d.confidence >= 0.25 ? '#18301c; color:#20d45a;' : '#362818; color:#ff9800;'} font-weight: 700; padding: 4px 10px; border-radius: 4px; font-size: 13px;">
-          ${(d.confidence * 100).toFixed(1)}%
-        </span>
+    `).join('');
+  }
+
+  if (currentSegmentations.length) {
+    html += currentSegmentations.map((s, i) => `
+      <div style="background: var(--surface-2); border: 1px solid #ff4757; border-radius: 6px; padding: 10px 14px; font-size: 13px; display: flex; justify-content: space-between; align-items: center;">
+        <div>
+          <strong style="color: #ff4757;">🔴 Сегментация (Маска #${i + 1})</strong>
+          <div style="color: var(--muted); font-size: 12px; margin-top: 2px;">
+            Точек в полилинии: ${s.points.length}
+          </div>
+        </div>
+        <div>
+          <span style="background: #3a1818; color:#ff4757; font-weight: 700; padding: 4px 10px; border-radius: 4px; font-size: 13px;">
+            ${(s.confidence * 100).toFixed(1)}%
+          </span>
+        </div>
       </div>
-    </div>
-  `).join('');
+    `).join('');
+  }
+
+  boxesList.innerHTML = html;
 
   document.querySelectorAll('.box-row').forEach(row => {
     row.addEventListener('click', () => {
