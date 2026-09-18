@@ -16,6 +16,8 @@ imports/inbox/*
 !imports/inbox/.gitkeep
 imports/staging/*
 !imports/staging/.gitkeep
+imports/images/*
+!imports/images/.gitkeep
 logs/
 *.log
 model_inventory*.txt
