@@ -36,7 +36,7 @@ def upgrade() -> None:
         sa.Column("embedding", pgvector.sqlalchemy.Vector(dim=384), nullable=False),
         sa.Column("embedding_model", sa.String(length=200), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.CheckConstraint("sample_type IN ('catalog', 'real', 'customer')", name="ck_product_embeddings_sample_type"),
+        sa.CheckConstraint("sample_type IN ('catalog', 'augmented', 'real', 'customer')", name="ck_product_embeddings_sample_type"),
         sa.ForeignKeyConstraint(["product_id"], ["products.id"], name="fk_product_embeddings_product_id_products", ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id", name="pk_product_embeddings"),
     )

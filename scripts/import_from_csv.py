@@ -70,6 +70,7 @@ async def run_import(csv_path: Path, images_dir: Path, limit: int = 0) -> int:
     # Ensure constraint allows 'augmented'
     from sqlalchemy import text
     async with session_factory() as session:
+        await session.execute(text("ALTER TABLE product_embeddings DROP CONSTRAINT IF EXISTS ck_product_embeddings_ck_product_embeddings_sample_type;"))
         await session.execute(text("ALTER TABLE product_embeddings DROP CONSTRAINT IF EXISTS ck_product_embeddings_sample_type;"))
         await session.execute(text("ALTER TABLE product_embeddings ADD CONSTRAINT ck_product_embeddings_sample_type CHECK (sample_type IN ('catalog', 'augmented', 'real', 'customer'));"))
         await session.commit()
