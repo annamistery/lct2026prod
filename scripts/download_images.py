@@ -35,8 +35,18 @@ def resolve_image_target(row: dict[str, str], output_dir: Path) -> Path:
     return output_dir / filename
 
 
+def transform_to_high_res(url: str) -> str:
+    """Transform low-res preview URL (e.g. 864/576) to high-res full bottle URL (1600/1600)."""
+    if not url:
+        return ""
+    # Strapi resize endpoint pattern: /864/576/resize/ -> /1600/1600/resize/
+    import re
+    return re.sub(r"/\d+/\d+/resize/", "/1600/1600/resize/", url)
+
+
 def download_single(url: str, target: Path, timeout: int = 15) -> tuple[bool, str]:
     """Download a single image file if it does not already exist."""
+    url = transform_to_high_res(url)
     if not url:
         return False, "Empty URL"
 
