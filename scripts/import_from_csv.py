@@ -66,6 +66,13 @@ async def run_import(csv_path: Path, images_dir: Path, limit: int = 0) -> int:
     total = len(rows)
     print(f"Initializing ML pipeline and DB connection...")
     engine, session_factory = create_engine_and_session_factory(settings.database_url)
+
+    # Ensure constraint allows 'augmented'
+    from sqlalchemy import text
+    async with session_factory() as session:
+        await session.execute(text("ALTER TABLE product_embeddings DROP CONSTRAINT IF EXISTS ck_product_embeddings_sample_type;"))
+        await session.execute(text("ALTER TABLE product_embeddings ADD CONSTRAINT ck_product_embeddings_sample_type CHECK (sample_type IN ('catalog', 'augmented', 'real', 'customer'));"))
+        await session.commit()
     images_service = ImageService(settings.media_dir, settings.canonical_size, settings.max_upload_bytes, settings.max_image_pixels)
 
     detector = await asyncio.to_thread(DetectorService, settings.yolo_model_path, settings.yolo_confidence)

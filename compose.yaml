@@ -18,6 +18,8 @@ services:
     build: .
     command: ["alembic", "upgrade", "head"]
     env_file: .env
+    volumes:
+      - ./alembic:/srv/app/alembic:ro
     depends_on:
       db:
         condition: service_healthy
