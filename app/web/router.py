@@ -66,6 +66,17 @@ async def product_detail_page(
     )
 
 
+@router.get("/add", response_class=HTMLResponse)
+async def add_product_page(request: Request):
+    return templates.TemplateResponse(
+        "add_product.html",
+        {
+            "request": request,
+            "active": "add_product",
+        },
+    )
+
+
 @router.get("/search", response_class=HTMLResponse)
 async def search_page(request: Request):
     return templates.TemplateResponse(

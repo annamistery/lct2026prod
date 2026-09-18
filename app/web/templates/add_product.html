@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+
+{% block title %}Добавить товар — LCT2026{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Добавление нового товара</h1>
+    <span style="color: var(--muted); font-size: 13px;">Автоматическая нарезка этикетки YOLO и расчет 116 векторов DINOv2 на GPU</span>
+  </div>
+</div>
+
+<div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 28px; max-width: 720px;">
+  <form id="add-product-form">
+    <div style="margin-bottom: 20px;">
+      <label style="display: block; font-weight: 600; color: #fff; margin-bottom: 6px;">Наименование вина *</label>
+      <input type="text" id="title" required placeholder="Например: Автохтонное Вино Крыма белое сухое" 
+             style="width: 100%; padding: 10px 14px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 14px; outline: none;">
+    </div>
+
+    <div style="margin-bottom: 20px;">
+      <label style="display: block; font-weight: 600; color: #fff; margin-bottom: 6px;">Производитель / Винодельня *</label>
+      <input type="text" id="manufacturer" required placeholder="Например: Валерий Захарьин" 
+             style="width: 100%; padding: 10px 14px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 14px; outline: none;">
+    </div>
+
+    <div style="margin-bottom: 20px;">
+      <label style="display: block; font-weight: 600; color: #fff; margin-bottom: 6px;">Описание</label>
+      <textarea id="description" rows="4" placeholder="Аромат, вкусовые особенности, сорт винограда..." 
+                style="width: 100%; padding: 10px 14px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 14px; outline: none; resize: vertical;"></textarea>
+    </div>
+
+    <div style="margin-bottom: 24px;">
+      <label style="display: block; font-weight: 600; color: #fff; margin-bottom: 6px;">Фотография бутылки *</label>
+      <div class="dropzone" id="file-dropzone" style="padding: 24px; margin-bottom: 0;">
+        <div class="dropzone-icon" style="font-size: 28px;">📷</div>
+        <div class="dropzone-text" id="file-label">Выберите изображение или перетащите сюда</div>
+        <div class="dropzone-subtext">JPEG, PNG, WebP до 10 МБ</div>
+        <input type="file" id="image-file" accept="image/jpeg,image/png,image/webp" style="display: none;">
+      </div>
+      <div id="image-preview-wrap" style="display: none; margin-top: 12px; text-align: center;">
+        <img id="image-preview" style="max-height: 180px; border-radius: 6px; border: 1px solid var(--border);" alt="Preview">
+      </div>
+    </div>
+
+    <div id="submit-status" style="display: none; margin-bottom: 16px; padding: 12px; border-radius: 6px; font-size: 13px;"></div>
+
+    <div style="display: flex; gap: 12px; align-items: center;">
+      <button type="submit" id="submit-btn" class="btn">
+        <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/></svg>
+        Добавить товар в базу
+      </button>
+      <a href="/products" class="btn btn-secondary">Отмена</a>
+    </div>
+  </form>
+</div>
+
+<script>
+const dropzone = document.getElementById('file-dropzone');
+const fileInput = document.getElementById('image-file');
+const fileLabel = document.getElementById('file-label');
+const previewWrap = document.getElementById('image-preview-wrap');
+const previewImg = document.getElementById('image-preview');
+const form = document.getElementById('add-product-form');
+const submitBtn = document.getElementById('submit-btn');
+const statusBox = document.getElementById('submit-status');
+
+dropzone.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('dragover'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+dropzone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropzone.classList.remove('dragover');
+  if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', () => {
+  if (fileInput.files.length) handleFile(fileInput.files[0]);
+});
+
+let selectedFile = null;
+function handleFile(file) {
+  selectedFile = file;
+  fileLabel.textContent = file.name + ' (' + (file.size / 1024).toFixed(0) + ' КБ)';
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    previewImg.src = e.target.result;
+    previewWrap.style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+}
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!selectedFile) {
+    alert('Пожалуйста, выберите фотографию бутылки.');
+    return;
+  }
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Обработка (YOLO + 116 векторов)...';
+  statusBox.style.display = 'block';
+  statusBox.style.background = 'var(--surface-2)';
+  statusBox.style.color = '#fff';
+  statusBox.textContent = 'Локализация этикетки и вычисление 116 векторов DINOv2 на GPU...';
+
+  const formData = new FormData();
+  formData.append('title', document.getElementById('title').value.trim());
+  formData.append('manufacturer', document.getElementById('manufacturer').value.trim());
+  formData.append('description', document.getElementById('description').value.trim());
+  formData.append('image', selectedFile);
+
+  try {
+    const res = await fetch('/api/products', {
+      method: 'POST',
+      body: formData
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Ошибка добавления товара');
+
+    statusBox.style.background = '#18301c';
+    statusBox.style.color = '#20d45a';
+    statusBox.textContent = 'Товар успешно создан! Перенаправление...';
+    setTimeout(() => {
+      window.location.href = '/products/' + data.id;
+    }, 1000);
+  } catch (err) {
+    statusBox.style.background = '#361818';
+    statusBox.style.color = '#ff6b6b';
+    statusBox.textContent = 'Ошибка: ' + err.message;
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Добавить товар в базу';
+  }
+});
+</script>
+{% endblock %}
