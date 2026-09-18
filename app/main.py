@@ -10,6 +10,7 @@ from app.core.config import get_settings
 from app.core.lifespan import lifespan
 from app.core.logging import configure_logging
 from app.web.router import router as web_router
+from app.web.detect_router import router as detect_router
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
@@ -29,6 +30,7 @@ app.mount("/mobi", StaticFiles(directory=str(BASE_DIR.parent / "web"), html=True
 
 app.include_router(router)
 app.include_router(web_router)
+app.include_router(detect_router)
 
 
 @app.middleware("http")

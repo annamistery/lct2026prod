@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+
+{% block title %}Тест детекции YOLO — LCT2026{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Тестирование детекции этикеток (YOLO)</h1>
+    <span style="color: var(--muted); font-size: 13px;">Инспекция реальных изображений из каталога импорта и отладка bounding box</span>
+  </div>
+</div>
+
+<div style="display: flex; gap: 24px; height: calc(100vh - 120px);">
+  <!-- Левая панель: выбор файла -->
+  <div style="width: 320px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; display: flex; flex-direction: column;">
+    <input type="text" id="filter-input" placeholder="Поиск по имени файла..." 
+           style="width: 100%; padding: 8px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 13px; outline: none; margin-bottom: 12px;">
+    
+    <div id="files-list" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;">
+      <div style="color: var(--muted); padding: 8px;">Загрузка списка файлов...</div>
+    </div>
+  </div>
+
+  <!-- Правая панель: результат инференса -->
+  <div style="flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; overflow-y: auto; display: flex; flex-direction: column;">
+    <div id="status-line" style="font-size: 15px; font-weight: 600; color: #fff; margin-bottom: 16px;">
+      Выберите файл слева для инференса
+    </div>
+
+    <div id="view-area" style="display: none; flex: 1;">
+      <div style="display: flex; gap: 24px; align-items: flex-start;">
+        <!-- Картинка с оверлеем бокса -->
+        <div style="position: relative; background: #000; border: 1px solid var(--border); border-radius: 6px; padding: 4px; display: inline-block;">
+          <img id="detect-img" style="max-height: 520px; max-width: 380px; display: block;" alt="Detect view">
+          <canvas id="detect-canvas" style="position: absolute; top: 4px; left: 4px; pointer-events: none;"></canvas>
+        </div>
+
+        <!-- Информация о детекциях -->
+        <div style="flex: 1;">
+          <h2>Параметры изображения</h2>
+          <table class="detail-meta-table" style="margin-bottom: 20px;">
+            <tr><th>Файл</th><td id="info-file"></td></tr>
+            <tr><th>Разрешение</th><td id="info-res"></td></tr>
+            <tr><th>Цветовой режим</th><td id="info-mode"></td></tr>
+            <tr><th>Время инференса YOLO</th><td id="info-time"></td></tr>
+            <tr><th>Всего детекций (conf ≥ 5%)</th><td id="info-count"></td></tr>
+          </table>
+
+          <h2>Список найденных Bounding Box</h2>
+          <div id="boxes-list" style="display: flex; flex-direction: column; gap: 8px; max-height: 250px; overflow-y: auto;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const filterInput = document.getElementById('filter-input');
+const filesList = document.getElementById('files-list');
+const statusLine = document.getElementById('status-line');
+const viewArea = document.getElementById('view-area');
+const detectImg = document.getElementById('detect-img');
+const detectCanvas = document.getElementById('detect-canvas');
+const boxesList = document.getElementById('boxes-list');
+
+let allFiles = [];
+
+async function loadFiles(query = '') {
+  try {
+    const res = await fetch('/api/detect/files?q=' + encodeURIComponent(query));
+    allFiles = await res.json();
+    renderFileList();
+  } catch (e) {
+    filesList.innerHTML = `<div style="color:#ff6b6b; padding:8px;">Ошибка: ${e.message}</div>`;
+  }
+}
+
+function renderFileList() {
+  if (!allFiles.length) {
+    filesList.innerHTML = '<div style="color:var(--muted); padding:8px;">Файлы не найдены</div>';
+    return;
+  }
+  filesList.innerHTML = allFiles.map(f => `
+    <div class="menu-item file-item" data-file="${f}" style="font-size: 12px; cursor: pointer; word-break: break-all; padding: 6px 8px;">
+      ${f}
+    </div>
+  `).join('');
+
+  document.querySelectorAll('.file-item').forEach(el => {
+    el.addEventListener('click', () => {
+      document.querySelectorAll('.file-item').forEach(x => x.classList.remove('active'));
+      el.classList.add('active');
+      runDetect(el.dataset.file);
+    });
+  });
+}
+
+filterInput.addEventListener('input', () => {
+  loadFiles(filterInput.value);
+});
+
+async function runDetect(filename) {
+  statusLine.textContent = 'Инференс для ' + filename + '...';
+  viewArea.style.display = 'none';
+
+  const fd = new FormData();
+  fd.append('filename', filename);
+
+  try {
+    const res = await fetch('/api/detect/predict', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Ошибка инференса');
+
+    statusLine.textContent = data.filename + ' — ' + (data.detections.length ? 'Найдено боксов: ' + data.detections.length : 'ДЕТЕКЦИЙ НЕТ');
+    document.getElementById('info-file').textContent = data.filename;
+    document.getElementById('info-res').textContent = `${data.width} × ${data.height} px`;
+    document.getElementById('info-mode').textContent = data.mode;
+    document.getElementById('info-time').innerHTML = `<strong>${data.infer_ms} мс</strong>`;
+    document.getElementById('info-count').textContent = data.detections.length;
+
+    renderBoxes(data.detections);
+
+    detectImg.onload = () => {
+      drawCanvas(data.detections);
+      viewArea.style.display = 'block';
+    };
+    detectImg.src = data.image_url;
+
+  } catch (err) {
+    statusLine.textContent = 'Ошибка: ' + err.message;
+  }
+}
+
+function drawCanvas(detections) {
+  detectCanvas.width = detectImg.clientWidth;
+  detectCanvas.height = detectImg.clientHeight;
+  const ctx = detectCanvas.getContext('2d');
+  ctx.clearRect(0, 0, detectCanvas.width, detectCanvas.height);
+
+  const scaleX = detectImg.clientWidth / detectImg.naturalWidth;
+  const scaleY = detectImg.clientHeight / detectImg.naturalHeight;
+
+  detections.forEach((d, idx) => {
+    const isBest = idx === 0;
+    const x = d.xtl * scaleX;
+    const y = d.ytl * scaleY;
+    const w = (d.xbr - d.xtl) * scaleX;
+    const h = (d.ybr - d.ytl) * scaleY;
+
+    ctx.strokeStyle = isBest ? '#20d45a' : '#ff9800';
+    ctx.lineWidth = isBest ? 3 : 1.5;
+    ctx.strokeRect(x, y, w, h);
+
+    ctx.fillStyle = isBest ? '#20d45a' : '#ff9800';
+    ctx.font = 'bold 12px sans-serif';
+    ctx.fillText(`#${idx + 1}: ${(d.confidence * 100).toFixed(1)}%`, x + 4, y > 16 ? y - 4 : y + 14);
+  });
+}
+
+function renderBoxes(detections) {
+  if (!detections.length) {
+    boxesList.innerHTML = `<div style="background: #2a1818; color: #ff6b6b; padding: 10px; border-radius: 6px; font-size: 13px;">
+      ⚠️ YOLO не обнаружила ни одного бокса даже с порогом conf=0.05
+    </div>`;
+    return;
+  }
+
+  boxesList.innerHTML = detections.map((d, i) => `
+    <div style="background: var(--surface-2); border: 1px solid ${i === 0 ? 'var(--accent)' : 'var(--border)'}; border-radius: 6px; padding: 8px 12px; font-size: 12px; display: flex; justify-content: space-between; align-items: center;">
+      <div>
+        <strong style="color: ${i === 0 ? 'var(--accent)' : '#fff'};">#${i + 1} ${i === 0 ? '(Лучший / Best)' : ''}</strong>
+        <span style="color: var(--muted); margin-left: 8px;">Координаты: [${d.xtl.toFixed(0)}, ${d.ytl.toFixed(0)}, ${d.xbr.toFixed(0)}, ${d.ybr.toFixed(0)}]</span>
+      </div>
+      <div>
+        <span class="badge" style="background: ${d.confidence >= 0.25 ? '#18301c; color:#20d45a;' : '#362818; color:#ff9800;'} font-weight: 700; padding: 2px 8px; border-radius: 4px;">
+          ${(d.confidence * 100).toFixed(1)}%
+        </span>
+      </div>
+    </div>
+  `).join('');
+}
+
+loadFiles();
+</script>
+{% endblock %}
