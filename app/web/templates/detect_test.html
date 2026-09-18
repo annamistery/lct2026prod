@@ -8,10 +8,25 @@
     <h1>Тестирование детекции этикеток (YOLO)</h1>
     <span style="color: var(--muted); font-size: 13px;">Проверка реальных фото из каталога импорта и интерактивная подсветка Bounding Box</span>
   </div>
-  <div style="display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--border); padding: 6px 14px; border-radius: var(--radius);">
-    <label for="conf-slider" style="font-size: 13px; color: var(--muted);">Порог уверенности (Conf):</label>
-    <input type="range" id="conf-slider" min="0.05" max="0.80" step="0.05" value="0.25" style="cursor: pointer;">
-    <span id="conf-val" style="font-weight: 700; color: #fff; min-width: 36px;">25%</span>
+  
+  <div style="display: flex; align-items: center; gap: 16px;">
+    <!-- Переключатель режима предобработки -->
+    <div style="display: flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--border); padding: 6px 12px; border-radius: var(--radius);">
+      <span style="font-size: 13px; color: var(--muted);">Режим входа:</span>
+      <label style="font-size: 13px; color: #fff; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+        <input type="radio" name="prep-mode" value="raw" style="cursor: pointer;"> RAW (как есть)
+      </label>
+      <label style="font-size: 13px; color: #20d45a; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px; margin-left: 8px;">
+        <input type="radio" name="prep-mode" value="phone_frame" checked style="cursor: pointer;"> 📱 Телефонный кадр 3:4 (темный фон)
+      </label>
+    </div>
+
+    <!-- Ползунок порога -->
+    <div style="display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--border); padding: 6px 14px; border-radius: var(--radius);">
+      <label for="conf-slider" style="font-size: 13px; color: var(--muted);">Порог (Conf):</label>
+      <input type="range" id="conf-slider" min="0.05" max="0.80" step="0.05" value="0.25" style="cursor: pointer;">
+      <span id="conf-val" style="font-weight: 700; color: #fff; min-width: 36px;">25%</span>
+    </div>
   </div>
 </div>
 
@@ -38,8 +53,8 @@
         
         <!-- 1. Исходное фото с рамкой Bounding Box -->
         <div style="flex-shrink: 0;">
-          <div style="font-size: 13px; font-weight: 600; color: #fff; margin-bottom: 8px;">Бутылка с детекцией YOLO (кликните по картинке чтобы скрыть/показать рамку):</div>
-          <div style="position: relative; background: #000; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; display: inline-block; cursor: pointer;" id="img-wrapper" title="Кликните, чтобы скрыть/показать рамку для сканирования телефоном">
+          <div style="font-size: 13px; font-weight: 600; color: #fff; margin-bottom: 8px;">Кадр с детекцией YOLO (кликните по картинке чтобы скрыть/показать рамку):</div>
+          <div style="position: relative; background: #000; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; display: inline-block; cursor: pointer;" id="img-wrapper" title="Кликните, чтобы скрыть/показать рамку">
             <img id="detect-img" style="max-height: 520px; width: auto; display: block;" alt="Detection view">
             <canvas id="detect-canvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;"></canvas>
           </div>
@@ -61,8 +76,9 @@
           <div style="font-size: 13px; font-weight: 600; color: #fff; margin-bottom: 8px;">Параметры инференса:</div>
           <table class="detail-meta-table">
             <tr><th>Файл</th><td id="info-file"></td></tr>
-            <tr><th>Разрешение</th><td id="info-res"></td></tr>
-            <tr><th>Цветовой режим</th><td id="info-mode"></td></tr>
+            <tr><th>Разрешение на входе YOLO</th><td id="info-res"></td></tr>
+            <tr><th>Исходное разрешение</th><td id="info-orig-res"></td></tr>
+            <tr><th>Цветовой режим файла</th><td id="info-mode"></td></tr>
             <tr><th>Время на GPU</th><td id="info-time" style="color: var(--accent); font-weight: 700;"></td></tr>
             <tr><th>Найдено этикеток</th><td id="info-count" style="font-weight: 700;"></td></tr>
           </table>
@@ -89,6 +105,7 @@ const boxesList = document.getElementById('boxes-list');
 const confSlider = document.getElementById('conf-slider');
 const confVal = document.getElementById('conf-val');
 const imgWrapper = document.getElementById('img-wrapper');
+const prepRadios = document.querySelectorAll('input[name="prep-mode"]');
 
 let allFiles = [];
 let currentFilename = null;
@@ -96,7 +113,19 @@ let currentDetections = [];
 let selectedBoxIndex = 0;
 let lastSelectedIndex = 0;
 
-// Toggle box visibility on image click for clean camera scanning from phone
+function getSelectedMode() {
+  for (const r of prepRadios) {
+    if (r.checked) return r.value;
+  }
+  return 'phone_frame';
+}
+
+prepRadios.forEach(r => {
+  r.addEventListener('change', () => {
+    if (currentFilename) runDetect(currentFilename);
+  });
+});
+
 imgWrapper.addEventListener('click', () => {
   if (selectedBoxIndex === -1) {
     selectedBoxIndex = lastSelectedIndex;
@@ -151,11 +180,13 @@ filterInput.addEventListener('input', () => {
 
 async function runDetect(filename) {
   currentFilename = filename;
-  statusLine.textContent = 'Инференс YOLO для ' + filename + '...';
+  const mode = getSelectedMode();
+  statusLine.textContent = `Инференс YOLO для ${filename} (${mode === 'phone_frame' ? 'Телефонный кадр' : 'RAW'})...`;
 
   const fd = new FormData();
   fd.append('filename', filename);
   fd.append('conf', confSlider.value);
+  fd.append('mode', mode);
 
   try {
     const res = await fetch('/api/detect/predict', { method: 'POST', body: fd });
@@ -168,6 +199,7 @@ async function runDetect(filename) {
     statusLine.textContent = data.filename + ' — ' + (data.detections.length ? 'Найдено этикеток: ' + data.detections.length : '⚠️ ЭТИКЕТКА НЕ НАЙДЕНА (порог ' + Math.round(confSlider.value * 100) + '%)');
     document.getElementById('info-file').textContent = data.filename;
     document.getElementById('info-res').textContent = `${data.width} × ${data.height} px`;
+    document.getElementById('info-orig-res').textContent = `${data.orig_width} × ${data.orig_height} px`;
     document.getElementById('info-mode').textContent = data.mode;
     document.getElementById('info-time').textContent = data.infer_ms + ' мс';
     document.getElementById('info-count').textContent = data.detections.length;
@@ -230,7 +262,7 @@ function renderBoxes() {
       <div style="background: #2a1818; color: #ff6b6b; padding: 14px; border-radius: 6px; font-size: 13px;">
         ⚠️ <strong>YOLO не обнаружила этикетку на этом изображении при пороге ${Math.round(confSlider.value * 100)}%.</strong><br>
         <span style="color: #aaa; font-size: 12px; margin-top: 4px; display: inline-block;">
-          Попробуйте уменьшить ползунок порога вверху или проверить контрастность фона.
+          Попробуйте переключить режим «Телефонный кадр» или уменьшить ползунок порога вверху.
         </span>
       </div>
     `;
@@ -242,7 +274,7 @@ function renderBoxes() {
       <div>
         <strong style="color: ${i === 0 ? 'var(--accent)' : '#fff'};">#${i + 1} ${i === 0 ? '(Максимальная уверенность / Best)' : ''}</strong>
         <div style="color: var(--muted); font-size: 12px; margin-top: 2px;">
-          Bbox: [x1=${d.xtl}, y1=${d.ytl}, x2=${d.xbr}, y2=${d.ybr}] · Размер: ${d.width}×${d.height} px
+          Bbox в кадре: [x1=${d.xtl}, y1=${d.ytl}, x2=${d.xbr}, y2=${d.ybr}] · На бутылке: [x1=${d.orig_xtl}, x2=${d.orig_xbr}]
         </div>
       </div>
       <div>
