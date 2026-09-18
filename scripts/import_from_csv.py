@@ -10,9 +10,15 @@ from __future__ import annotations
 import argparse
 import asyncio
 import csv
+import os
 import sys
-import uuid
 from pathlib import Path
+
+# Ensure writable cache directories for container execution
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/matplotlib")
+os.environ.setdefault("YOLO_CONFIG_DIR", "/tmp/ultralytics")
+os.environ.setdefault("HF_HOME", "/tmp/huggingface")
+os.environ.setdefault("TRANSFORMERS_CACHE", "/tmp/huggingface")
 
 from PIL import Image
 
@@ -30,13 +36,16 @@ def resolve_image_filename(row: dict[str, str]) -> str:
 
 async def run_import(csv_path: Path, images_dir: Path, limit: int = 0) -> int:
     from app.core.config import get_settings
-    from app.core.dependencies import get_images, get_ingestion, get_session_factory
     from app.db.models import Product
+    from app.db.session import create_engine_and_session_factory
+    from app.pipelines.search.v1.pipeline import SearchPipelineV1
+    from app.pipelines.search.v1.reranking import SiftReranker
+    from app.services.detector import DetectorService
+    from app.services.embeddings import EmbeddingService
+    from app.services.images import ImageService
+    from app.services.product_ingestion import ProductIngestionService
 
     settings = get_settings()
-    session_factory = get_session_factory(settings)
-    images_service = get_images(settings)
-    ingestion_service = get_ingestion(settings)
 
     if not csv_path.is_file():
         print(f"Error: CSV file not found: {csv_path}", file=sys.stderr)
@@ -56,41 +65,53 @@ async def run_import(csv_path: Path, images_dir: Path, limit: int = 0) -> int:
         rows = rows[:limit]
 
     total = len(rows)
+    print(f"Initializing ML pipeline and DB connection...")
+    engine, session_factory = create_engine_and_session_factory(settings.database_url)
+    images_service = ImageService(settings.media_dir, settings.canonical_size, settings.max_upload_bytes, settings.max_image_pixels)
+
+    detector = await asyncio.to_thread(DetectorService, settings.yolo_model_path, settings.yolo_confidence)
+    embeddings = await asyncio.to_thread(EmbeddingService, settings.dino_model_path, settings.dino_base_model_path, settings.embedding_dimension)
+    pipeline = SearchPipelineV1(embeddings, images_service, SiftReranker(), asyncio.Semaphore(settings.gpu_concurrency), asyncio.Semaphore(settings.sift_concurrency), settings.candidate_pool_size)
+    ingestion_service = ProductIngestionService(images_service, detector, pipeline, settings.embedding_model_name)
+
     print(f"Starting direct CSV import of {total} items from {csv_path} (images: {images_dir})...")
 
     success = 0
     failed = 0
 
-    for idx, row in enumerate(rows, 1):
-        title = (row.get("title") or row.get("Название вина") or "").strip()
-        manufacturer = (row.get("manufacturer") or row.get("Винодельня") or "").strip()
-        description = (row.get("description") or row.get("Описание") or "").strip()
-        filename = resolve_image_filename(row)
-        image_path = images_dir / filename
+    try:
+        for idx, row in enumerate(rows, 1):
+            title = (row.get("title") or row.get("Название вина") or "").strip()
+            manufacturer = (row.get("manufacturer") or row.get("Винодельня") or "").strip()
+            description = (row.get("description") or row.get("Описание") or "").strip()
+            filename = resolve_image_filename(row)
+            image_path = images_dir / filename
 
-        if not image_path.is_file():
-            print(f"[{idx}/{total}] SKIP/FAIL {title}: image not found at {image_path}")
-            failed += 1
-            continue
+            if not image_path.is_file():
+                print(f"[{idx}/{total}] SKIP/FAIL {title}: image not found at {image_path}")
+                failed += 1
+                continue
 
-        try:
-            with image_path.open("rb") as img_file:
-                raw_bytes = img_file.read(settings.max_upload_bytes + 1)
-            source_img: Image.Image = images_service.decode(raw_bytes)
+            try:
+                with image_path.open("rb") as img_file:
+                    raw_bytes = img_file.read(settings.max_upload_bytes + 1)
+                source_img: Image.Image = images_service.decode(raw_bytes)
 
-            async with session_factory() as session:
-                product: Product = await ingestion_service.create(
-                    session=session,
-                    title=title,
-                    manufacturer=manufacturer,
-                    description=description,
-                    source=source_img,
-                )
-                print(f"[{idx}/{total}] OK: id={product.id} | {product.title} ({product.manufacturer})")
-                success += 1
-        except Exception as exc:
-            print(f"[{idx}/{total}] ERROR {title}: {exc}")
-            failed += 1
+                async with session_factory() as session:
+                    product: Product = await ingestion_service.create(
+                        session=session,
+                        title=title,
+                        manufacturer=manufacturer,
+                        description=description,
+                        source=source_img,
+                    )
+                    print(f"[{idx}/{total}] OK: id={product.id} | {product.title} ({product.manufacturer})")
+                    success += 1
+            except Exception as exc:
+                print(f"[{idx}/{total}] ERROR {title}: {exc}")
+                failed += 1
+    finally:
+        await engine.dispose()
 
     print(f"\nImport finished! Success: {success}, Failed: {failed}")
     return 0 if failed == 0 else 1
