@@ -18,7 +18,16 @@ router = APIRouter(tags=["products"])
 
 
 def serialize(product: Product) -> ProductResponse:
-    return ProductResponse(id=product.id, title=product.title, manufacturer=product.manufacturer, description=product.description, image_url=f"/api/media/{product.source_image_path}", label_url=f"/api/media/{product.label_image_path}", created_at=product.created_at)
+    return ProductResponse(
+        id=product.id,
+        slug=product.slug,
+        title=product.title,
+        manufacturer=product.manufacturer,
+        description=product.description,
+        image_url=f"/api/media/{product.source_image_path}",
+        label_url=f"/api/media/{product.label_image_path}",
+        created_at=product.created_at,
+    )
 
 
 @router.get("/products", response_model=ProductListResponse)

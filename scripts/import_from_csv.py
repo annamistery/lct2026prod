@@ -68,13 +68,24 @@ async def run_import(csv_path: Path, images_dir: Path, limit: int = 0) -> int:
     print("Initializing ML pipeline and DB connection...")
     engine, session_factory = create_engine_and_session_factory(settings.database_url)
 
-    # Ensure constraint allows 'augmented'
-    from sqlalchemy import text
+    # Ensure constraint allows 'augmented' and slug column exists if migration wasn't run
+    from sqlalchemy import select, text
     async with session_factory() as session:
         await session.execute(text("ALTER TABLE product_embeddings DROP CONSTRAINT IF EXISTS ck_product_embeddings_ck_product_embeddings_sample_type;"))
         await session.execute(text("ALTER TABLE product_embeddings DROP CONSTRAINT IF EXISTS ck_product_embeddings_sample_type;"))
         await session.execute(text("ALTER TABLE product_embeddings ADD CONSTRAINT ck_product_embeddings_sample_type CHECK (sample_type IN ('catalog', 'augmented', 'real', 'customer'));"))
+        await session.execute(text("ALTER TABLE products ADD COLUMN IF NOT EXISTS slug VARCHAR(300);"))
+        await session.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_products_slug ON products (slug);"))
         await session.commit()
+
+        # Load existing products to prevent duplicates
+        res_slugs = await session.scalars(select(Product.slug).where(Product.slug.is_not(None)))
+        existing_slugs: set[str] = set(res_slugs)
+
+        res_tm = await session.execute(select(Product.title, Product.manufacturer))
+        existing_tm: set[tuple[str, str]] = {(r[0].strip().lower(), r[1].strip().lower()) for r in res_tm}
+    print(f"Database ready: found {len(existing_slugs)} existing slugs and {len(existing_tm)} products.")
+
     images_service = ImageService(settings.media_dir, settings.canonical_size, settings.max_upload_bytes, settings.max_image_pixels)
 
     detector = await asyncio.to_thread(DetectorService, settings.yolo_model_path, settings.yolo_confidence)
@@ -85,15 +96,33 @@ async def run_import(csv_path: Path, images_dir: Path, limit: int = 0) -> int:
     print(f"Starting direct CSV import of {total} items from {csv_path} (images: {images_dir})...")
 
     success = 0
+    skipped = 0
     failed = 0
     import_start_time = time.perf_counter()
 
     try:
         for idx, row in enumerate(rows, 1):
             t0 = time.perf_counter()
+            slug = (row.get("Slug") or "").strip()
             title = (row.get("title") or row.get("Название вина") or "").strip()
             manufacturer = (row.get("manufacturer") or row.get("Винодельня") or "").strip()
             description = (row.get("description") or row.get("Описание") or "").strip()
+
+            is_dup = False
+            dup_reason = ""
+            if slug and slug in existing_slugs:
+                is_dup = True
+                dup_reason = f"slug={slug}"
+            elif not slug and (title.lower(), manufacturer.lower()) in existing_tm:
+                is_dup = True
+                dup_reason = f"'{title}' / '{manufacturer}'"
+
+            if is_dup:
+                elapsed = time.perf_counter() - t0
+                print(f"[{idx}/{total}] SKIP ({elapsed:.3f}s): {title} ({dup_reason}) already exists")
+                skipped += 1
+                continue
+
             filename = resolve_image_filename(row)
             image_path = images_dir / filename
 
@@ -115,7 +144,11 @@ async def run_import(csv_path: Path, images_dir: Path, limit: int = 0) -> int:
                         manufacturer=manufacturer,
                         description=description,
                         source=source_img,
+                        slug=slug,
                     )
+                    if slug:
+                        existing_slugs.add(slug)
+                    existing_tm.add((title.lower(), manufacturer.lower()))
                     elapsed = time.perf_counter() - t0
                     print(f"[{idx}/{total}] OK ({elapsed:.2f}s): id={product.id} | {product.title} ({product.manufacturer})")
                     success += 1
@@ -128,7 +161,7 @@ async def run_import(csv_path: Path, images_dir: Path, limit: int = 0) -> int:
 
     total_elapsed = time.perf_counter() - import_start_time
     avg_str = f", avg: {total_elapsed / total:.2f}s/item" if total > 0 else ""
-    print(f"\nImport finished! Success: {success}, Failed: {failed} (Total time: {total_elapsed:.1f}s{avg_str})")
+    print(f"\nImport finished! Success: {success}, Skipped: {skipped}, Failed: {failed} (Total time: {total_elapsed:.1f}s{avg_str})")
     return 0 if failed == 0 else 1
 
 

@@ -8,6 +8,7 @@ class ProductResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
+    slug: str | None = None
     title: str
     manufacturer: str
     description: str

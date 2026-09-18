@@ -29,6 +29,10 @@ class ProductRepository:
     async def get(self, product_id: uuid.UUID) -> Product | None:
         return await self.session.get(Product, product_id)
 
+    async def get_by_slug(self, slug: str) -> Product | None:
+        result = await self.session.scalars(select(Product).where(Product.slug == slug).limit(1))
+        return result.first()
+
     def add(self, product: Product, embedding: ProductEmbedding) -> None:
         product.embeddings.append(embedding)
         self.session.add(product)

@@ -19,7 +19,7 @@ class ProductIngestionService:
         self.pipeline = pipeline
         self.embedding_model_name = embedding_model_name
 
-    async def create(self, session: AsyncSession, title: str, manufacturer: str, description: str, source: Image.Image) -> Product:
+    async def create(self, session: AsyncSession, title: str, manufacturer: str, description: str, source: Image.Image, slug: str | None = None) -> Product:
         clean_title = title.strip()
         clean_manufacturer = manufacturer.strip()
         if not clean_title or not clean_manufacturer:
@@ -50,6 +50,7 @@ class ProductIngestionService:
             stored = await asyncio.to_thread(self.images.save_product, product_id, source, label)
             product = Product(
                 id=product_id,
+                slug=slug.strip() if slug and slug.strip() else None,
                 title=clean_title,
                 manufacturer=clean_manufacturer,
                 description=description.strip(),

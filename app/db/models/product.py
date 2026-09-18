@@ -10,9 +10,15 @@ from app.db.base import Base
 
 class Product(Base):
     __tablename__ = "products"
-    __table_args__ = (Index("ix_products_title", "title"), Index("ix_products_manufacturer", "manufacturer"), Index("ix_products_created_at", "created_at"))
+    __table_args__ = (
+        Index("ix_products_title", "title"),
+        Index("ix_products_manufacturer", "manufacturer"),
+        Index("ix_products_created_at", "created_at"),
+        Index("ix_products_slug", "slug", unique=True),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    slug: Mapped[str | None] = mapped_column(String(300), nullable=True)
     title: Mapped[str] = mapped_column(String(300), nullable=False)
     manufacturer: Mapped[str] = mapped_column(String(300), nullable=False)
     description: Mapped[str] = mapped_column(Text, default="", nullable=False)
