@@ -8,9 +8,9 @@ COPY pyproject.toml README.md ./
 COPY app ./app
 COPY alembic ./alembic
 COPY alembic.ini ./
-RUN python -m pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cu128 "torch>=2.6.0" "torchvision>=0.21.0" && \
+RUN python -m pip install --no-cache-dir --upgrade --extra-index-url https://download.pytorch.org/whl/cu128 "torch==2.9.0+cu128" "torchvision==0.24.0+cu128" && \
     python -m pip install --no-cache-dir . && \
-    python -c "import app.main; import torch; print('PyTorch CUDA available:', torch.cuda.is_available(), 'PyTorch version:', torch.__version__)" && \
+    python -c "import app.main; import torch; print('PyTorch version:', torch.__version__, 'CUDA available:', torch.cuda.is_available(), 'Archs:', torch.cuda.get_arch_list())" && \
     groupadd --system app && useradd --system --gid app --home /srv/app app && mkdir -p /media /models && chown -R app:app /srv/app /media
 USER app
 EXPOSE 8030
