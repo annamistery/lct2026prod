@@ -12,6 +12,7 @@ import asyncio
 import csv
 import os
 import sys
+import time
 from pathlib import Path
 
 # Ensure writable cache directories for container execution
@@ -64,7 +65,7 @@ async def run_import(csv_path: Path, images_dir: Path, limit: int = 0) -> int:
         rows = rows[:limit]
 
     total = len(rows)
-    print(f"Initializing ML pipeline and DB connection...")
+    print("Initializing ML pipeline and DB connection...")
     engine, session_factory = create_engine_and_session_factory(settings.database_url)
 
     # Ensure constraint allows 'augmented'
@@ -85,9 +86,11 @@ async def run_import(csv_path: Path, images_dir: Path, limit: int = 0) -> int:
 
     success = 0
     failed = 0
+    import_start_time = time.perf_counter()
 
     try:
         for idx, row in enumerate(rows, 1):
+            t0 = time.perf_counter()
             title = (row.get("title") or row.get("Название вина") or "").strip()
             manufacturer = (row.get("manufacturer") or row.get("Винодельня") or "").strip()
             description = (row.get("description") or row.get("Описание") or "").strip()
@@ -95,7 +98,8 @@ async def run_import(csv_path: Path, images_dir: Path, limit: int = 0) -> int:
             image_path = images_dir / filename
 
             if not image_path.is_file():
-                print(f"[{idx}/{total}] SKIP/FAIL {title}: image not found at {image_path}")
+                elapsed = time.perf_counter() - t0
+                print(f"[{idx}/{total}] SKIP/FAIL ({elapsed:.2f}s) {title}: image not found at {image_path}")
                 failed += 1
                 continue
 
@@ -112,15 +116,19 @@ async def run_import(csv_path: Path, images_dir: Path, limit: int = 0) -> int:
                         description=description,
                         source=source_img,
                     )
-                    print(f"[{idx}/{total}] OK: id={product.id} | {product.title} ({product.manufacturer})")
+                    elapsed = time.perf_counter() - t0
+                    print(f"[{idx}/{total}] OK ({elapsed:.2f}s): id={product.id} | {product.title} ({product.manufacturer})")
                     success += 1
             except Exception as exc:
-                print(f"[{idx}/{total}] ERROR {title}: {exc}")
+                elapsed = time.perf_counter() - t0
+                print(f"[{idx}/{total}] ERROR ({elapsed:.2f}s) {title}: {exc}")
                 failed += 1
     finally:
         await engine.dispose()
 
-    print(f"\nImport finished! Success: {success}, Failed: {failed}")
+    total_elapsed = time.perf_counter() - import_start_time
+    avg_str = f", avg: {total_elapsed / total:.2f}s/item" if total > 0 else ""
+    print(f"\nImport finished! Success: {success}, Failed: {failed} (Total time: {total_elapsed:.1f}s{avg_str})")
     return 0 if failed == 0 else 1
 
 
