@@ -33,6 +33,7 @@ services:
       - ./models:/models:ro
       - ./media:/media
       - ./imports:/imports:ro
+      - ./scripts:/srv/app/scripts:ro
     depends_on:
       db:
         condition: service_healthy

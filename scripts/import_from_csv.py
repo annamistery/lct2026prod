@@ -96,10 +96,23 @@ async def run_import(csv_path: Path, images_dir: Path, limit: int = 0) -> int:
     return 0 if failed == 0 else 1
 
 
+def get_default_paths() -> tuple[Path, Path]:
+    if Path("/imports").is_dir():
+        return (
+            Path("/imports/merged_strapi_vines - merged_strapi_wines.csv"),
+            Path("/imports/images"),
+        )
+    return (
+        Path("imports/merged_strapi_vines - merged_strapi_wines.csv"),
+        Path("imports/images"),
+    )
+
+
 def main() -> int:
+    default_csv, default_images = get_default_paths()
     parser = argparse.ArgumentParser(description="Import products directly from CSV and downloaded images.")
-    parser.add_argument("--csv", type=Path, default=Path("imports/merged_strapi_vines - merged_strapi_wines.csv"), help="Path to catalog CSV")
-    parser.add_argument("--images-dir", type=Path, default=Path("imports/images"), help="Path to downloaded images directory")
+    parser.add_argument("--csv", type=Path, default=default_csv, help="Path to catalog CSV")
+    parser.add_argument("--images-dir", type=Path, default=default_images, help="Path to downloaded images directory")
     parser.add_argument("--limit", type=int, default=0, help="Number of records to import (0 = all)")
     args = parser.parse_args()
 
