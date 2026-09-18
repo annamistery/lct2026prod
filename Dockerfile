@@ -1,11 +1,12 @@
 # syntax=docker/dockerfile:1.7
 FROM pytorch/pytorch:2.6.0-cuda12.4-cudnn9-runtime
 
-ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 LANG=C.UTF-8 LC_ALL=C.UTF-8
 WORKDIR /srv/app
 RUN apt-get update && apt-get install -y --no-install-recommends curl libgl1 libglib2.0-0 && rm -rf /var/lib/apt/lists/*
 COPY pyproject.toml README.md ./
 COPY app ./app
+COPY web ./web
 COPY alembic ./alembic
 COPY alembic.ini ./
 RUN python -m pip install --no-cache-dir --upgrade --extra-index-url https://download.pytorch.org/whl/cu128 "torch==2.9.0+cu128" "torchvision==0.24.0+cu128" && \

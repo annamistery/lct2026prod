@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block title %}Импорт данных — LCT2026{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Импорт каталога товаров</h1>
+    <span style="color: var(--muted); font-size: 13px;">Управление пакетной загрузкой позиций из CSV и локальных фото</span>
+  </div>
+</div>
+
+<div class="detail-layout" style="margin-bottom: 24px;">
+  <div class="detail-info">
+    <h2>Состояние базы данных</h2>
+    <table class="detail-meta-table" style="max-width: 600px;">
+      <tr>
+        <th>Товаров в каталоге</th>
+        <td><strong style="font-size: 16px; color: var(--accent);">{{ total_products }}</strong></td>
+      </tr>
+      <tr>
+        <th>Каталожных векторов (pgvector)</th>
+        <td><strong style="font-size: 16px; color: var(--accent);">{{ total_embeddings }}</strong></td>
+      </tr>
+      <tr>
+        <th>Файл каталога CSV</th>
+        <td><code>imports/merged_strapi_vines - merged_strapi_wines.csv</code></td>
+      </tr>
+      <tr>
+        <th>Папка скачанных фото</th>
+        <td><code>imports/images/</code> (все 1932 изображения скачаны)</td>
+      </tr>
+    </table>
+  </div>
+</div>
+
+<div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px;">
+  <h2>Запуск прямого импорта</h2>
+  <p style="color: var(--muted); max-width: 650px; line-height: 1.5; margin-bottom: 20px;">
+    Импорт запускается на сервере внутри контейнера через консольную команду. Каждый товар проходит полную нарезку YOLO, расчет 384-мерного вектора DINOv2 на GPU и сохранение в базу.
+  </p>
+
+  <div style="background: #000; border: 1px solid var(--border); border-radius: 6px; padding: 16px; margin-bottom: 20px;">
+    <div style="color: var(--muted); font-size: 12px; margin-bottom: 8px;">Команда для полного импорта всех 1932 товаров в фоне:</div>
+    <code style="color: #20d45a; font-size: 13px; font-family: monospace;">
+      docker compose exec -d api python3 scripts/import_from_csv.py
+    </code>
+  </div>
+
+  <div style="background: #000; border: 1px solid var(--border); border-radius: 6px; padding: 16px; margin-bottom: 20px;">
+    <div style="color: var(--muted); font-size: 12px; margin-bottom: 8px;">Команда для импорта первых 50 товаров для быстрой проверки:</div>
+    <code style="color: #6c8cff; font-size: 13px; font-family: monospace;">
+      docker compose exec api python3 scripts/import_from_csv.py --limit 50
+    </code>
+  </div>
+
+  <div>
+    <button onclick="location.reload()" class="btn btn-secondary">Обновить статистику базы</button>
+    <a href="/products" class="btn" style="margin-left: 12px;">Посмотреть добавленные товары</a>
+  </div>
+</div>
+{% endblock %}

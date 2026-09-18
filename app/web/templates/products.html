@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block title %}Товары — LCT2026{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Каталог товаров</h1>
+    <span style="color: var(--muted); font-size: 13px;">Всего товаров в базе: {{ total_count }}</span>
+  </div>
+  <a href="/import" class="btn">Импортировать</a>
+</div>
+
+{% if products %}
+<div class="grid">
+  {% for product in products %}
+  <a href="/products/{{ product.id }}" class="card">
+    <div class="card-img-wrap">
+      <img src="/api/media/{{ product.source_image_path }}" alt="{{ product.title }}" loading="lazy">
+      <img src="/api/media/{{ product.label_image_path }}" class="card-crop-thumb" alt="Crop" title="Канонический кроп YOLO">
+    </div>
+    <div class="card-body">
+      <div class="card-title">{{ product.title }}</div>
+      <div class="card-meta">{{ product.manufacturer }}</div>
+      <div class="card-desc">{{ product.description or "Описание отсутствует" }}</div>
+      <div style="font-size: 11px; color: var(--muted); margin-top: auto;">ID: {{ product.id }}</div>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 48px; text-align: center;">
+  <div style="font-size: 32px; margin-bottom: 12px;">🍷</div>
+  <h2>В базе данных пока нет товаров</h2>
+  <p style="color: var(--muted); max-width: 400px; margin: 0 auto 20px;">
+    Вы можете запустить пакетный импорт из CSV и скачанных изображений в разделе «Импорт данных».
+  </p>
+  <a href="/import" class="btn">Перейти к импорту</a>
+</div>
+{% endif %}
+{% endblock %}

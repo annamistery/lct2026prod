@@ -9,6 +9,11 @@ from app.api.router import router
 from app.core.config import get_settings
 from app.core.lifespan import lifespan
 from app.core.logging import configure_logging
+from app.web.router import router as web_router
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent
 
 settings = get_settings()
 configure_logging(settings.log_level)
@@ -17,7 +22,13 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title=settings.app_name, version="1.0.0", docs_url="/api/docs", openapi_url="/api/openapi.json", lifespan=lifespan)
 if settings.allowed_origins:
     app.add_middleware(CORSMiddleware, allow_origins=settings.allowed_origins, allow_credentials=False, allow_methods=["GET", "POST"], allow_headers=["Content-Type", "X-Request-ID"])
+
+# Mount static and mobile client
+app.mount("/static", StaticFiles(directory=str(BASE_DIR / "web" / "static")), name="static")
+app.mount("/mobi", StaticFiles(directory=str(BASE_DIR.parent / "web"), html=True), name="mobi")
+
 app.include_router(router)
+app.include_router(web_router)
 
 
 @app.middleware("http")
