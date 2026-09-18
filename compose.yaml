@@ -36,6 +36,7 @@ services:
       - ./scripts:/srv/app/scripts:ro
       - ./app:/srv/app/app:ro
       - ./web:/srv/app/web:ro
+      - ./alembic:/srv/app/alembic:ro
     depends_on:
       db:
         condition: service_healthy

@@ -26,7 +26,7 @@ class Product(Base):
 class ProductEmbedding(Base):
     __tablename__ = "product_embeddings"
     __table_args__ = (
-        CheckConstraint("sample_type IN ('catalog', 'real', 'customer')", name="sample_type"),
+        CheckConstraint("sample_type IN ('catalog', 'augmented', 'real', 'customer')", name="ck_product_embeddings_sample_type"),
         Index("ix_product_embeddings_product_id", "product_id"),
         Index("ix_product_embeddings_sample_type", "sample_type"),
     )
