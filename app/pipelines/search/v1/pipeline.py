@@ -52,7 +52,23 @@ class SearchPipelineV1:
         scored = [item for item in await asyncio.gather(*(score(rank, candidate) for rank, candidate in enumerate(candidates, 1))) if item]
         scored.sort(key=lambda item: (-item[3].score, item[0]))
         sift_ms = self._elapsed(sift_started)
-        results = [SearchResult(product_id=item[1].id, title=item[1].title, manufacturer=item[1].manufacturer, description=item[1].description, image_url=f"/api/media/{item[4]}", dino_similarity=item[2], sift_score=item[3].score, inliers=item[3].inliers, inlier_ratio=item[3].inlier_ratio, pgvector_rank=item[0], final_rank=rank) for rank, item in enumerate(scored[:k], 1)]
+        results = [
+            SearchResult(
+                product_id=item[1].id,
+                slug=item[1].slug,
+                title=item[1].title,
+                manufacturer=item[1].manufacturer,
+                description=item[1].description,
+                image_url=f"/api/media/{item[4]}",
+                dino_similarity=item[2],
+                sift_score=item[3].score,
+                inliers=item[3].inliers,
+                inlier_ratio=item[3].inlier_ratio,
+                pgvector_rank=item[0],
+                final_rank=rank,
+            )
+            for rank, item in enumerate(scored[:k], 1)
+        ]
         timings = SearchTimings(embedding_ms=embedding_ms, pgvector_ms=pgvector_ms, sift_ms=sift_ms, total_ms=self._elapsed(started))
         return SearchResponse(
             winner=results[0] if results else None,

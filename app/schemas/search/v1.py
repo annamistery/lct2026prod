@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 class SearchResult(BaseModel):
     product_id: uuid.UUID
+    slug: str | None = None
     title: str
     manufacturer: str
     description: str
@@ -30,3 +31,7 @@ class SearchResponse(BaseModel):
     timings: SearchTimings
     query_crop: str | None = None
     augmentation_applied: list[str] | None = None
+
+
+class PredictResponse(BaseModel):
+    slug: str | None = None

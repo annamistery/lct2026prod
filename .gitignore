@@ -28,3 +28,6 @@ md/*
 !md/START.md
 !md/DEVELOPMENT_LOG.md
 !md/ROADMAP.md
+!md/ИНСТРУКЦИЯ_ПРОВЕРКИ.md
+!md/participant_test.sh
+!md/Проверка сканера винных этикеток.md
