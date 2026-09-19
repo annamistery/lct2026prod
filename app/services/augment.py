@@ -284,7 +284,58 @@ def combined_5(image: Image.Image, rng: random.Random | None = None) -> Image.Im
     return image
 
 
-AUGMENTATION_NAMES: list[str] = [name for name in _AUG_REGISTRY.keys() if name != "orig"]
+@register("cylinder_warp")
+def cylinder_warp(image: Image.Image, rng: random.Random | None = None) -> Image.Image:
+    """Simulate the cylindrical curvature of a wine bottle."""
+    r = _rng(rng)
+    img = _to_array(image)
+    h, w = img.shape[:2]
+
+    # Arc angle for bottle curvature: 0.45 to 0.85 rad (approx 25 to 50 degrees)
+    alpha = r.uniform(0.45, 0.85)
+    sin_alpha = np.sin(alpha)
+
+    # Normalized x coordinates across width [-1, 1]
+    x_norm = np.linspace(-1.0, 1.0, w, dtype=np.float32)
+
+    # Inverse cylindrical mapping to sample from the flat image
+    x_src = np.arcsin(np.clip(x_norm * sin_alpha, -0.999, 0.999)) / alpha
+    map_x = ((x_src + 1.0) * 0.5 * (w - 1)).astype(np.float32)
+
+    # Create 2D coordinate maps
+    map_x_grid = np.tile(map_x, (h, 1))
+    map_y_grid = np.tile(np.arange(h, dtype=np.float32)[:, None], (1, w))
+
+    out = cv2.remap(img, map_x_grid, map_y_grid, interpolation=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
+    return _to_pil(out)
+
+
+@register("shadow")
+def shadow(image: Image.Image, rng: random.Random | None = None) -> Image.Image:
+    """Simulate directional bottle shadow across the label."""
+    r = _rng(rng)
+    img = _to_array(image).astype(np.float32)
+    h, w = img.shape[:2]
+
+    direction = r.choice(["left", "right"])
+    min_factor = r.uniform(0.35, 0.65)
+    gradient = np.linspace(1.0, min_factor, w, dtype=np.float32)
+    if direction == "right":
+        gradient = gradient[::-1]
+
+    img *= gradient[None, :, None]
+    return _to_pil(img)
+
+
+# Base 23 augmentations used for catalog ingestion (exact 116 images cloud)
+BASE_CATALOG_AUG_NAMES: list[str] = [
+    "perspective", "rotate", "brightness_up", "brightness_down", "contrast_up", "contrast_down",
+    "jpeg_low", "gaussian_blur", "motion_blur", "noise", "color_jitter", "wb_warm", "wb_cool",
+    "glare", "local_overexposure", "gamma_low", "gamma_high", "saturation_down", "saturation_up",
+    "combined_1", "combined_2", "combined_4", "combined_5",
+]
+
+AUGMENTATION_NAMES: list[str] = BASE_CATALOG_AUG_NAMES
 
 
 def generate_augmented_cloud(canonical_label: Image.Image, variants_per_aug: int = 5, seed: int = 42) -> list[tuple[str, Image.Image]]:
@@ -339,24 +390,27 @@ def apply_random_hard_augmentation(image: Image.Image, rng: random.Random | None
     out = image.copy()
     applied: list[str] = []
 
-    # 1. Geometric distortion
-    geo_pool = ["perspective", "rotate", "cylinder_warp"]
-    geo_choice = r.choice(geo_pool)
-    out = _AUG_REGISTRY[geo_choice](out, r)
-    applied.append(AUGMENTATION_LABELS_RU.get(geo_choice, geo_choice))
+    # 1. Geometric distortion (cylinder bottle curve, perspective tilt, or rotation)
+    geo_pool = [k for k in ["cylinder_warp", "perspective", "rotate"] if k in _AUG_REGISTRY]
+    if geo_pool:
+        geo_choice = r.choice(geo_pool)
+        out = _AUG_REGISTRY[geo_choice](out, r)
+        applied.append(AUGMENTATION_LABELS_RU.get(geo_choice, geo_choice))
 
-    # 2. Lighting / Exposure distortion
-    light_pool = ["glare", "shadow", "local_overexposure", "brightness_down", "contrast_down"]
-    light_choice = r.choice(light_pool)
-    out = _AUG_REGISTRY[light_choice](out, r)
-    applied.append(AUGMENTATION_LABELS_RU.get(light_choice, light_choice))
+    # 2. Lighting / Exposure distortion (shadow, glare, overexposure, dim light)
+    light_pool = [k for k in ["shadow", "glare", "local_overexposure", "brightness_down", "contrast_down"] if k in _AUG_REGISTRY]
+    if light_pool:
+        light_choice = r.choice(light_pool)
+        out = _AUG_REGISTRY[light_choice](out, r)
+        applied.append(AUGMENTATION_LABELS_RU.get(light_choice, light_choice))
 
-    # 3. Camera sensor optics & noise (1 or 2 effects)
-    sensor_pool = ["motion_blur", "gaussian_blur", "noise", "jpeg_low", "color_jitter"]
-    sensor_count = r.choice([1, 2])
-    sensor_choices = r.sample(sensor_pool, k=sensor_count)
-    for sc in sensor_choices:
-        out = _AUG_REGISTRY[sc](out, r)
-        applied.append(AUGMENTATION_LABELS_RU.get(sc, sc))
+    # 3. Camera sensor optics & noise (motion blur, defocus, sensor noise, compression)
+    sensor_pool = [k for k in ["motion_blur", "gaussian_blur", "noise", "jpeg_low", "color_jitter"] if k in _AUG_REGISTRY]
+    if sensor_pool:
+        sensor_count = min(len(sensor_pool), r.choice([1, 2]))
+        sensor_choices = r.sample(sensor_pool, k=sensor_count)
+        for sc in sensor_choices:
+            out = _AUG_REGISTRY[sc](out, r)
+            applied.append(AUGMENTATION_LABELS_RU.get(sc, sc))
 
     return out, applied
