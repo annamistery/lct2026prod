@@ -3,6 +3,179 @@
 {% block title %}Поиск по фото — LCT2026{% endblock %}
 
 {% block content %}
+<style>
+/* Сетка сравнения 3 изображений */
+.compare-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 18px;
+  margin-bottom: 24px;
+}
+
+.compare-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transition: border-color 0.2s;
+}
+
+.compare-card.winner-border {
+  border-color: var(--accent);
+  background: linear-gradient(180deg, rgba(74, 222, 128, 0.06), var(--surface));
+}
+
+.compare-header {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  margin-bottom: 10px;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.compare-header .badge-tag {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.compare-header .badge-tag.accent {
+  background: var(--accent);
+  color: #000;
+  font-weight: 700;
+}
+
+.compare-img-wrap {
+  width: 100%;
+  height: 240px;
+  background: #000;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.compare-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.zoomable {
+  cursor: zoom-in;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.zoomable:hover {
+  transform: scale(1.03);
+}
+
+.compare-hint {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Модальное окно (Lightbox) */
+.lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.88);
+  backdrop-filter: blur(4px);
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 20px;
+  animation: fadeIn 0.15s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.lightbox-content {
+  position: relative;
+  max-width: 92vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: default;
+}
+
+.lightbox-img {
+  max-width: 90vw;
+  max-height: 82vh;
+  object-fit: contain;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.85);
+  cursor: pointer;
+  background: #000;
+}
+
+.lightbox-caption {
+  margin-top: 12px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: center;
+  background: rgba(0, 0, 0, 0.6);
+  padding: 6px 16px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.lightbox-close {
+  position: absolute;
+  top: -36px;
+  right: 0;
+  color: #fff;
+  font-size: 28px;
+  font-weight: 300;
+  cursor: pointer;
+  line-height: 1;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: color 0.2s;
+}
+
+.lightbox-close:hover {
+  color: var(--accent);
+}
+
+.section-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+  margin-top: 28px;
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+</style>
+
 <div class="page-header">
   <div>
     <h1>Визуальный поиск по фото</h1>
@@ -23,12 +196,32 @@
 </div>
 
 <div id="results-area" style="display: none;">
-  <h2>Результат поиска</h2>
-  
+  <div class="section-title">
+    <span>Сопоставление изображений</span>
+    <span style="font-size: 12px; color: var(--muted); font-weight: normal;">(кликните на любую картинку для зума в полный размер)</span>
+  </div>
+
+  <!-- Триптих: Загруженный оригинал | Кроп оригинала | Кроп Топ-1 -->
+  <div class="compare-grid" id="compare-grid"></div>
+
+  <!-- Карточка победителя Top-1 -->
   <div id="winner-box"></div>
 
-  <h2>Кандидаты Top-K</h2>
+  <!-- Кандидаты Top-5 -->
+  <div class="section-title">
+    <span>Кандидаты Top-5 (SIFT Re-ranking)</span>
+    <span style="font-size: 12px; color: var(--muted); font-weight: normal;">(ранжирование по геометрическим инлаерам)</span>
+  </div>
   <div id="candidates-grid" class="grid"></div>
+</div>
+
+<!-- Модальное окно Lightbox -->
+<div id="lightbox" class="lightbox-overlay" style="display: none;">
+  <div class="lightbox-content" id="lightbox-content">
+    <span class="lightbox-close" id="lightbox-close" title="Закрыть (Esc)">&times;</span>
+    <img id="lightbox-img" class="lightbox-img" src="" alt="Zoom view" title="Кликните, чтобы закрыть">
+    <div id="lightbox-caption" class="lightbox-caption"></div>
+  </div>
 </div>
 
 <script>
@@ -36,8 +229,55 @@ const dropzone = document.getElementById('dropzone');
 const fileInput = document.getElementById('file-input');
 const loading = document.getElementById('loading');
 const resultsArea = document.getElementById('results-area');
+const compareGrid = document.getElementById('compare-grid');
 const winnerBox = document.getElementById('winner-box');
 const candidatesGrid = document.getElementById('candidates-grid');
+
+// Lightbox элементы
+const lightbox = document.getElementById('lightbox');
+const lightboxImg = document.getElementById('lightbox-img');
+const lightboxCaption = document.getElementById('lightbox-caption');
+const lightboxClose = document.getElementById('lightbox-close');
+
+let currentOriginalUrl = null;
+
+// Обработчики Lightbox
+function openLightbox(src, caption) {
+  if (!src) return;
+  lightboxImg.src = src;
+  lightboxCaption.textContent = caption || '';
+  lightbox.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+
+function closeLightbox() {
+  lightbox.style.display = 'none';
+  lightboxImg.src = '';
+  document.body.style.overflow = '';
+}
+
+lightbox.addEventListener('click', (e) => {
+  // Закрываем при клике на оверлей, изображение или кнопку закрытия
+  if (e.target === lightbox || e.target === lightboxImg || e.target === lightboxClose) {
+    closeLightbox();
+  }
+});
+
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && lightbox.style.display !== 'none') {
+    closeLightbox();
+  }
+});
+
+// Делегирование кликов для всех зумируемых картинок
+document.addEventListener('click', (e) => {
+  const zoomable = e.target.closest('.zoomable');
+  if (zoomable) {
+    const src = zoomable.getAttribute('data-full-src') || zoomable.src;
+    const caption = zoomable.getAttribute('data-caption') || zoomable.alt || '';
+    openLightbox(src, caption);
+  }
+});
 
 dropzone.addEventListener('click', () => fileInput.click());
 dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('dragover'); });
@@ -52,8 +292,14 @@ fileInput.addEventListener('change', () => {
 });
 
 async function handleFile(file) {
+  if (currentOriginalUrl) {
+    URL.revokeObjectURL(currentOriginalUrl);
+  }
+  currentOriginalUrl = URL.createObjectURL(file);
+
   loading.style.display = 'block';
   resultsArea.style.display = 'none';
+  compareGrid.innerHTML = '';
   winnerBox.innerHTML = '';
   candidatesGrid.innerHTML = '';
 
@@ -69,7 +315,7 @@ async function handleFile(file) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'Ошибка поиска');
 
-    renderResults(data);
+    renderResults(data, currentOriginalUrl);
   } catch (err) {
     alert('Ошибка: ' + err.message);
   } finally {
@@ -77,14 +323,75 @@ async function handleFile(file) {
   }
 }
 
-function renderResults(data) {
+function renderResults(data, originalUrl) {
   resultsArea.style.display = 'block';
+  const winner = data.winner;
+  const queryCrop = data.query_crop || originalUrl;
 
-  if (data.winner) {
-    const w = data.winner;
+  // 1. Формируем триптих сравнения
+  const winnerImgUrl = winner ? winner.image_url : '';
+  const winnerTitle = winner ? winner.title : 'Не найдено';
+
+  compareGrid.innerHTML = `
+    <!-- Карточка 1: Загруженный оригинал -->
+    <div class="compare-card">
+      <div class="compare-header">
+        <span>Загруженный оригинал</span>
+        <span class="badge-tag">Фото</span>
+      </div>
+      <div class="compare-img-wrap">
+        <img class="compare-img zoomable" 
+             src="${originalUrl}" 
+             alt="Загруженный оригинал" 
+             data-caption="Загруженный оригинал (полное фото)">
+      </div>
+      <div class="compare-hint"><svg width="12" height="12" fill="currentColor" viewBox="0 0 16 16"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/></svg> Кликните для зума</div>
+    </div>
+
+    <!-- Карточка 2: Кроп этикетки из оригинала -->
+    <div class="compare-card">
+      <div class="compare-header">
+        <span>Кроп этикетки</span>
+        <span class="badge-tag">Query YOLO</span>
+      </div>
+      <div class="compare-img-wrap">
+        <img class="compare-img zoomable" 
+             src="${queryCrop}" 
+             alt="Кроп этикетки (Query)" 
+             data-caption="Кроп этикетки, вырезанный детектором (Query)">
+      </div>
+      <div class="compare-hint"><svg width="12" height="12" fill="currentColor" viewBox="0 0 16 16"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/></svg> Кликните для зума</div>
+    </div>
+
+    <!-- Карточка 3: Кроп Топ-1 из базы -->
+    <div class="compare-card ${winner ? 'winner-border' : ''}">
+      <div class="compare-header">
+        <span>Кроп эталона Топ-1</span>
+        <span class="badge-tag accent">Каталог</span>
+      </div>
+      <div class="compare-img-wrap">
+        ${winner ? `
+          <img class="compare-img zoomable" 
+               src="${winnerImgUrl}" 
+               alt="${winnerTitle}" 
+               data-caption="Эталон Топ-1: ${winnerTitle} (${winner.manufacturer})">
+        ` : `
+          <div style="color: var(--muted); font-size: 13px; text-align: center; padding: 20px;">Совпадений нет</div>
+        `}
+      </div>
+      <div class="compare-hint"><svg width="12" height="12" fill="currentColor" viewBox="0 0 16 16"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/></svg> Кликните для зума</div>
+    </div>
+  `;
+
+  // 2. Карточка победителя Top-1
+  if (winner) {
+    const w = winner;
     winnerBox.innerHTML = `
       <div class="winner-card">
-        <img class="winner-img" src="${w.image_url}" alt="${w.title}">
+        <img class="winner-img zoomable" 
+             src="${w.image_url}" 
+             alt="${w.title}" 
+             data-caption="Победитель (Top-1): ${w.title}">
         <div style="flex: 1;">
           <span class="winner-badge">Победитель (Top-1 Match)</span>
           <div style="font-size: 18px; font-weight: 700; color: #fff; margin-bottom: 4px;">
@@ -92,11 +399,12 @@ function renderResults(data) {
           </div>
           <div style="color: var(--muted); font-size: 13px; margin-bottom: 8px;">${w.manufacturer}</div>
           <div style="font-size: 12px; color: #aaa; margin-bottom: 12px;">${w.description || ''}</div>
-          <div class="scores-row">
+          <div class="scores-row" style="flex-wrap: wrap;">
             <div class="score-badge">DINO Similarity: <strong>${(w.dino_similarity * 100).toFixed(1)}%</strong></div>
             <div class="score-badge">SIFT Score: <strong>${w.sift_score.toFixed(3)}</strong></div>
             <div class="score-badge">SIFT Inliers: <strong>${w.inliers}</strong></div>
-            <div class="score-badge">Время: <strong>${data.timings.total_ms} мс</strong></div>
+            <div class="score-badge">Inlier Ratio: <strong>${(w.inlier_ratio * 100).toFixed(1)}%</strong></div>
+            <div class="score-badge">Общее время: <strong>${data.timings.total_ms} мс</strong> (DINO: ${data.timings.embedding_ms}мс, DB: ${data.timings.pgvector_ms}мс, SIFT: ${data.timings.sift_ms}мс)</div>
           </div>
         </div>
       </div>
@@ -105,10 +413,15 @@ function renderResults(data) {
     winnerBox.innerHTML = `<div style="padding: 20px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 24px; color: var(--muted);">Совпадений не найдено.</div>`;
   }
 
+  // 3. Сетка кандидатов Top-5
   candidatesGrid.innerHTML = data.results.map((r, i) => `
     <div class="card">
-      <div class="card-img-wrap" style="height: 160px;">
-        <img src="${r.image_url}" alt="${r.title}">
+      <div class="card-img-wrap" style="height: 160px; background: #000; overflow: hidden; display: flex; align-items: center; justify-content: center;">
+        <img class="zoomable" 
+             src="${r.image_url}" 
+             alt="${r.title}" 
+             data-caption="#${i + 1} Кандидат: ${r.title} (${r.manufacturer}) | SIFT: ${r.sift_score.toFixed(2)}, Inliers: ${r.inliers}" 
+             style="max-width: 100%; max-height: 100%; object-fit: contain;">
       </div>
       <div class="card-body">
         <div style="font-size: 11px; color: var(--accent); font-weight: 600; margin-bottom: 4px;">#${i + 1} КАНДИДАТ</div>
@@ -116,7 +429,7 @@ function renderResults(data) {
           <a href="/products/${r.product_id}">${r.title}</a>
         </div>
         <div class="card-meta" style="font-size: 12px; margin-bottom: 8px;">${r.manufacturer}</div>
-        <div style="display: flex; gap: 8px; font-size: 11px; color: var(--muted); margin-top: auto;">
+        <div style="display: flex; gap: 8px; font-size: 11px; color: var(--muted); margin-top: auto; flex-wrap: wrap;">
           <span>DINO: <strong>${(r.dino_similarity * 100).toFixed(0)}%</strong></span>
           <span>SIFT: <strong>${r.sift_score.toFixed(2)}</strong></span>
           <span>Inliers: <strong>${r.inliers}</strong></span>

@@ -1,7 +1,10 @@
 import asyncio
+import base64
+import io
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from PIL import Image
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
@@ -13,6 +16,12 @@ from app.services.detector import DetectorService
 from app.services.images import ImageService, InvalidImage
 
 router = APIRouter(prefix="/v1", tags=["search-v1"])
+
+
+def encode_crop_data_url(image: Image.Image) -> str:
+    buf = io.BytesIO()
+    image.save(buf, format="WEBP", quality=90)
+    return f"data:image/webp;base64,{base64.b64encode(buf.getvalue()).decode('ascii')}"
 
 
 async def decode_upload(upload: UploadFile, images: ImageService, settings: Settings):
@@ -44,7 +53,8 @@ async def search(
         crop = images.crop(source, box)
     except InvalidImage as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return await pipeline.run(crop, ProductRepository(session), k)
+    query_crop_b64 = await asyncio.to_thread(encode_crop_data_url, crop)
+    return await pipeline.run(crop, ProductRepository(session), k, query_crop=query_crop_b64)
 
 
 @router.post("/search-from-crop", response_model=SearchResponse)
@@ -59,4 +69,5 @@ async def search_from_crop(
     if k > settings.max_top_k:
         raise HTTPException(status_code=422, detail=f"k must not exceed {settings.max_top_k}")
     crop = images.canonical(await decode_upload(image, images, settings))
-    return await pipeline.run(crop, ProductRepository(session), k)
+    query_crop_b64 = await asyncio.to_thread(encode_crop_data_url, crop)
+    return await pipeline.run(crop, ProductRepository(session), k, query_crop=query_crop_b64)

@@ -28,3 +28,4 @@ class SearchResponse(BaseModel):
     winner: SearchResult | None
     results: list[SearchResult]
     timings: SearchTimings
+    query_crop: str | None = None
