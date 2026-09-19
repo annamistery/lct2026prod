@@ -12,6 +12,7 @@ from app.core.dependencies import get_detector, get_images, get_pipeline_v1, get
 from app.db.repositories.products import ProductRepository
 from app.pipelines.search.v1.pipeline import SearchPipelineV1
 from app.schemas.search.v1 import SearchResponse
+from app.services.augment import apply_random_hard_augmentation
 from app.services.detector import DetectorService
 from app.services.images import ImageService, InvalidImage
 
@@ -61,6 +62,7 @@ async def search(
 async def search_from_crop(
     image: Annotated[UploadFile, File()],
     k: Annotated[int, Form(ge=1)] = 5,
+    augment: Annotated[bool, Form()] = False,
     session: AsyncSession = Depends(get_session),
     images: ImageService = Depends(get_images),
     pipeline: SearchPipelineV1 = Depends(get_pipeline_v1),
@@ -69,5 +71,14 @@ async def search_from_crop(
     if k > settings.max_top_k:
         raise HTTPException(status_code=422, detail=f"k must not exceed {settings.max_top_k}")
     crop = images.canonical(await decode_upload(image, images, settings))
+    applied_effects: list[str] | None = None
+    if augment:
+        crop, applied_effects = await asyncio.to_thread(apply_random_hard_augmentation, crop)
     query_crop_b64 = await asyncio.to_thread(encode_crop_data_url, crop)
-    return await pipeline.run(crop, ProductRepository(session), k, query_crop=query_crop_b64)
+    return await pipeline.run(
+        crop,
+        ProductRepository(session),
+        k,
+        query_crop=query_crop_b64,
+        augmentation_applied=applied_effects,
+    )

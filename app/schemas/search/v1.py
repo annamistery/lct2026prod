@@ -29,3 +29,4 @@ class SearchResponse(BaseModel):
     results: list[SearchResult]
     timings: SearchTimings
     query_crop: str | None = None
+    augmentation_applied: list[str] | None = None

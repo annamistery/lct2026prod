@@ -306,3 +306,57 @@ def generate_augmented_cloud(canonical_label: Image.Image, variants_per_aug: int
             results.append((aug_name, aug_img))
 
     return results
+
+
+AUGMENTATION_LABELS_RU: dict[str, str] = {
+    "perspective": "3D-перспектива (наклон камеры)",
+    "rotate": "Поворот ракурса",
+    "cylinder_warp": "Цилиндрический изгиб бутылки",
+    "glare": "Световой блик",
+    "shadow": "Падающая тень",
+    "local_overexposure": "Локальный засвет",
+    "brightness_down": "Приглушённый свет",
+    "brightness_up": "Яркое освещение",
+    "contrast_down": "Сниженный контраст",
+    "contrast_up": "Повышенный контраст",
+    "motion_blur": "Смаз движения руки",
+    "gaussian_blur": "Нечёткий фокус",
+    "noise": "Шум матрицы",
+    "jpeg_low": "Артефакты сжатия камеры",
+    "color_jitter": "Цветовое смещение",
+    "wb_warm": "Тёплый баланс белого",
+    "wb_cool": "Холодный баланс белого",
+    "gamma_low": "Затемнение гаммы",
+    "gamma_high": "Осветление гаммы",
+    "saturation_down": "Приглушённая цветность",
+    "saturation_up": "Насыщенные цвета",
+}
+
+
+def apply_random_hard_augmentation(image: Image.Image, rng: random.Random | None = None) -> tuple[Image.Image, list[str]]:
+    """Apply a realistic random combination of hard distortions to simulate real-world mobile camera capture."""
+    r = _rng(rng)
+    out = image.copy()
+    applied: list[str] = []
+
+    # 1. Geometric distortion
+    geo_pool = ["perspective", "rotate", "cylinder_warp"]
+    geo_choice = r.choice(geo_pool)
+    out = _AUG_REGISTRY[geo_choice](out, r)
+    applied.append(AUGMENTATION_LABELS_RU.get(geo_choice, geo_choice))
+
+    # 2. Lighting / Exposure distortion
+    light_pool = ["glare", "shadow", "local_overexposure", "brightness_down", "contrast_down"]
+    light_choice = r.choice(light_pool)
+    out = _AUG_REGISTRY[light_choice](out, r)
+    applied.append(AUGMENTATION_LABELS_RU.get(light_choice, light_choice))
+
+    # 3. Camera sensor optics & noise (1 or 2 effects)
+    sensor_pool = ["motion_blur", "gaussian_blur", "noise", "jpeg_low", "color_jitter"]
+    sensor_count = r.choice([1, 2])
+    sensor_choices = r.sample(sensor_pool, k=sensor_count)
+    for sc in sensor_choices:
+        out = _AUG_REGISTRY[sc](out, r)
+        applied.append(AUGMENTATION_LABELS_RU.get(sc, sc))
+
+    return out, applied

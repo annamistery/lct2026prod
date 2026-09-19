@@ -397,7 +397,13 @@
     <span style="color: var(--muted); font-size: 13px;">Кластеризация близких векторов DINOv2 каталога и проверка разделения через SIFT Re-ranking</span>
   </div>
   
-  <div style="display: flex; align-items: center; gap: 14px;">
+  <div style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap;">
+    <!-- Переключатель сложной аугментации -->
+    <label style="display: flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--border); padding: 6px 12px; border-radius: var(--radius); cursor: pointer; user-select: none;">
+      <input type="checkbox" id="check-augment" checked style="cursor: pointer; accent-color: var(--accent);">
+      <span style="font-size: 12px; color: #fff; font-weight: 500;">Случайная сложная аугментация</span>
+    </label>
+
     <!-- Порог схожести -->
     <div style="display: flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--border); padding: 6px 12px; border-radius: var(--radius);">
       <label for="sim-threshold" style="font-size: 12px; color: var(--muted);">Порог DINO:</label>
@@ -471,12 +477,15 @@
     <div class="results-modal-body">
       <!-- Лоадер во время поиска -->
       <div id="inference-loading" style="display: none; text-align: center; padding: 40px 20px;">
-        <div style="font-size: 16px; color: var(--accent); margin-bottom: 8px;">Выполняется поиск и геометрический реранкинг...</div>
-        <span style="font-size: 12px; color: var(--muted);">DINOv2 Embed ➔ pgvector Top-5 ➔ SIFT RANSAC inliers</span>
+        <div style="font-size: 16px; color: var(--accent); margin-bottom: 8px;">Выполняется стресс-тест поиска и геометрический реранкинг...</div>
+        <span style="font-size: 12px; color: var(--muted);">Аугментация ➔ DINOv2 Embed ➔ pgvector Top-5 ➔ SIFT RANSAC inliers</span>
       </div>
 
       <!-- Контент с результатами -->
       <div id="inference-content" style="display: none;">
+        <!-- Сравнение эталона и аугментированного кропа -->
+        <div id="crops-compare-box"></div>
+
         <div id="correction-banner"></div>
 
         <div class="pipeline-compare-row">
@@ -522,6 +531,7 @@ const clustersList = document.getElementById('clusters-list');
 const sidebarStatus = document.getElementById('sidebar-status');
 const filterInput = document.getElementById('filter-input');
 const simThreshold = document.getElementById('sim-threshold');
+const checkAugment = document.getElementById('check-augment');
 const btnReload = document.getElementById('btn-reload');
 
 const emptyState = document.getElementById('empty-state');
@@ -536,6 +546,7 @@ const inferenceModalClose = document.getElementById('inference-modal-close');
 const inferenceLoading = document.getElementById('inference-loading');
 const inferenceContent = document.getElementById('inference-content');
 const inferenceQueryTitle = document.getElementById('inference-query-title');
+const cropsCompareBox = document.getElementById('crops-compare-box');
 const correctionBanner = document.getElementById('correction-banner');
 const stageDinoList = document.getElementById('stage-dino-list');
 const stageSiftList = document.getElementById('stage-sift-list');
@@ -710,9 +721,12 @@ async function runCropInference(productId, cropUrl, title) {
     const imgRes = await fetch(cropUrl);
     const blob = await imgRes.blob();
 
+    const useAugment = checkAugment ? checkAugment.checked : true;
+
     const formData = new FormData();
     formData.append('image', blob, 'crop.webp');
     formData.append('k', '5');
+    formData.append('augment', useAugment ? 'true' : 'false');
 
     const searchRes = await fetch('/api/v1/search-from-crop', {
       method: 'POST',
@@ -721,21 +735,68 @@ async function runCropInference(productId, cropUrl, title) {
     const data = await searchRes.json();
     if (!searchRes.ok) throw new Error(data.detail || 'Ошибка поиска');
 
-    renderPipelineComparison(data, productId, title);
+    renderPipelineComparison(data, productId, title, cropUrl);
   } catch (err) {
     alert('Ошибка инференса: ' + err.message);
     closeInferenceModal();
   }
 }
 
-function renderPipelineComparison(data, queryProductId, queryTitle) {
+function renderPipelineComparison(data, queryProductId, queryTitle, originalCropUrl) {
   inferenceLoading.style.display = 'none';
   inferenceContent.style.display = 'block';
 
-  // 1. Порядок До реранкера (сортировка по pgvector_rank)
+  // 1. Отображение сравнения эталона и аугментированного запроса
+  const queryCrop = data.query_crop || originalCropUrl;
+  const effects = data.augmentation_applied || [];
+
+  cropsCompareBox.innerHTML = `
+    <div style="background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 16px;">
+      <div style="display: flex; gap: 20px; align-items: center; flex-wrap: wrap;">
+        <div style="display: flex; gap: 14px; align-items: center;">
+          <!-- Исходный кроп каталога -->
+          <div style="display: flex; flex-direction: column; align-items: center;">
+            <span style="font-size: 11px; color: var(--muted); margin-bottom: 4px;">Эталон каталога</span>
+            <img class="zoomable" 
+                 src="${originalCropUrl}" 
+                 alt="Эталон каталога" 
+                 data-caption="Эталон каталога: ${queryTitle}" 
+                 style="width: 90px; height: 90px; object-fit: contain; background: #000; border: 1px solid var(--border); border-radius: 6px;">
+          </div>
+
+          <div style="font-size: 22px; color: var(--accent); font-weight: 700;">➔</div>
+
+          <!-- Аугментированный тестовый кроп -->
+          <div style="display: flex; flex-direction: column; align-items: center;">
+            <span style="font-size: 11px; color: var(--accent); margin-bottom: 4px; font-weight: 600;">Тестовый запрос</span>
+            <img class="zoomable" 
+                 src="${queryCrop}" 
+                 alt="Тестовый запрос" 
+                 data-caption="Сложно-аугментированный тестовый запрос: ${queryTitle}" 
+                 style="width: 90px; height: 90px; object-fit: contain; background: #000; border: 2px solid var(--accent); border-radius: 6px;">
+          </div>
+        </div>
+
+        <!-- Применённые искажения -->
+        <div style="flex: 1; min-width: 260px;">
+          <div style="font-size: 13px; font-weight: 600; color: #fff; margin-bottom: 6px;">
+            ${effects.length ? 'Случайные искажения съёмки (стресс-тест):' : 'Чистый запрос без искажений:'}
+          </div>
+          <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+            ${effects.length ? effects.map(eff => `<span style="background: rgba(74, 222, 128, 0.15); color: #4ade80; border: 1px solid rgba(74, 222, 128, 0.3); font-size: 11px; padding: 3px 8px; border-radius: 4px; font-weight: 500;">⚡ ${eff}</span>`).join('') : '<span style="color: var(--muted); font-size: 12px;">Аугментация выключена</span>'}
+          </div>
+          <div style="font-size: 11px; color: var(--muted); margin-top: 6px;">
+            ${effects.length ? 'Поиск и реранкинг производились по искажённому изображению справа.' : 'Поиск производился по чистому эталону каталога.'}
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // 2. Порядок До реранкера (сортировка по pgvector_rank)
   const dinoSorted = [...data.results].sort((a, b) => a.pgvector_rank - b.pgvector_rank);
 
-  // 2. Порядок После реранкера (сортировка по final_rank)
+  // 3. Порядок После реранкера (сортировка по final_rank)
   const siftSorted = [...data.results].sort((a, b) => a.final_rank - b.final_rank);
 
   const dinoWinner = dinoSorted[0];
