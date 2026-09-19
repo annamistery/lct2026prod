@@ -104,3 +104,14 @@ async def import_page(
             "total_embeddings": total_embeddings,
         },
     )
+
+
+@router.get("/twins", response_class=HTMLResponse)
+async def twins_page(request: Request):
+    return templates.TemplateResponse(
+        "twins.html",
+        {
+            "request": request,
+            "active": "twins",
+        },
+    )

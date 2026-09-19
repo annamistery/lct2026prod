@@ -1,0 +1,730 @@
+{% extends "base.html" %}
+
+{% block title %}Сложные пары («Близнецы») — LCT2026{% endblock %}
+
+{% block content %}
+<style>
+.twins-container {
+  display: flex;
+  gap: 20px;
+  height: calc(100vh - 130px);
+}
+
+.twins-sidebar {
+  width: 360px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.twins-main {
+  flex: 1;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.cluster-item {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cluster-item:hover {
+  border-color: var(--accent);
+  background: rgba(74, 222, 128, 0.04);
+}
+
+.cluster-item.active {
+  border-color: var(--accent);
+  background: linear-gradient(135deg, rgba(74, 222, 128, 0.12), var(--surface-2));
+}
+
+.cluster-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  line-height: 1.3;
+}
+
+.cluster-badges {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.badge-count {
+  background: var(--accent);
+  color: #000;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+
+.badge-sim {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ddd;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+
+.cluster-preview-text {
+  font-size: 11px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Сетка кропов группы */
+.group-crops-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+.crop-card {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  transition: transform 0.15s, border-color 0.15s;
+}
+
+.crop-card:hover {
+  border-color: var(--accent);
+}
+
+.crop-card.selected-query {
+  border-color: var(--accent);
+  box-shadow: 0 0 12px rgba(74, 222, 128, 0.35);
+  background: rgba(74, 222, 128, 0.08);
+}
+
+.crop-card-img-wrap {
+  width: 100%;
+  height: 160px;
+  background: #000;
+  border-radius: 6px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8px;
+  cursor: pointer;
+}
+
+.crop-card-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  text-align: center;
+  line-height: 1.3;
+  margin-bottom: 8px;
+  min-height: 32px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.btn-search-crop {
+  width: 100%;
+  padding: 6px 10px;
+  font-size: 12px;
+  background: var(--accent);
+  color: #000;
+  font-weight: 600;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.btn-search-crop:hover {
+  opacity: 0.9;
+}
+
+/* Сравнительная таблица этапов */
+.pipeline-compare-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-top: 16px;
+}
+
+.stage-box {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.stage-header {
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.stage-header .tag {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--muted);
+}
+
+.candidate-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-bottom: 8px;
+  transition: border-color 0.15s;
+}
+
+.candidate-row.is-winner {
+  border-color: var(--accent);
+  background: rgba(74, 222, 128, 0.07);
+}
+
+.candidate-row-img {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  background: #000;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.alert-rerank-correction {
+  padding: 12px 16px;
+  background: linear-gradient(90deg, rgba(74, 222, 128, 0.18), rgba(74, 222, 128, 0.05));
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  color: #fff;
+  font-size: 13px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Lightbox Modal */
+.lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.88);
+  backdrop-filter: blur(4px);
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 20px;
+  animation: fadeIn 0.15s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.lightbox-content {
+  position: relative;
+  max-width: 92vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: default;
+}
+
+.lightbox-img {
+  max-width: 90vw;
+  max-height: 82vh;
+  object-fit: contain;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.85);
+  cursor: pointer;
+  background: #000;
+}
+
+.lightbox-caption {
+  margin-top: 12px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: center;
+  background: rgba(0, 0, 0, 0.6);
+  padding: 6px 16px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.lightbox-close {
+  position: absolute;
+  top: -36px;
+  right: 0;
+  color: #fff;
+  font-size: 28px;
+  font-weight: 300;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.lightbox-close:hover {
+  color: var(--accent);
+}
+
+.zoomable {
+  cursor: zoom-in;
+  transition: transform 0.15s;
+}
+
+.zoomable:hover {
+  transform: scale(1.04);
+}
+</style>
+
+<div class="page-header">
+  <div>
+    <h1>Тестирование сложных групп этикеток («Близнецы»)</h1>
+    <span style="color: var(--muted); font-size: 13px;">Кластеризация близких векторов DINOv2 каталога и проверка разделения через SIFT Re-ranking</span>
+  </div>
+  
+  <div style="display: flex; align-items: center; gap: 14px;">
+    <!-- Порог схожести -->
+    <div style="display: flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--border); padding: 6px 12px; border-radius: var(--radius);">
+      <label for="sim-threshold" style="font-size: 12px; color: var(--muted);">Порог DINO:</label>
+      <select id="sim-threshold" style="background: var(--surface-2); color: #fff; border: 1px solid var(--border); border-radius: 4px; padding: 4px 8px; font-size: 12px; cursor: pointer;">
+        <option value="0.85">≥ 85% (Все подобия)</option>
+        <option value="0.88" selected>≥ 88% (Рекомендуемый)</option>
+        <option value="0.90">≥ 90% (Очень близкие)</option>
+        <option value="0.93">≥ 93% (Почти идентичные)</option>
+        <option value="0.95">≥ 95% (Жесткие близнецы)</option>
+      </select>
+    </div>
+    <button id="btn-reload" class="btn" style="padding: 6px 14px; font-size: 13px;">Обновить</button>
+  </div>
+</div>
+
+<div class="twins-container">
+  <!-- Левая колонка: Список сложных групп -->
+  <div class="twins-sidebar">
+    <input type="text" id="filter-input" placeholder="Поиск по винодельне..." 
+           style="width: 100%; padding: 8px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 13px; outline: none; margin-bottom: 10px;">
+    
+    <div id="sidebar-status" style="font-size: 11px; color: var(--muted); margin-bottom: 8px;">Загрузка кластеров...</div>
+    
+    <div id="clusters-list" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;">
+      <!-- Заполняется JS -->
+    </div>
+  </div>
+
+  <!-- Правая колонка: Содержимое выбранной группы и результаты поиска -->
+  <div class="twins-main" id="twins-main">
+    <div id="empty-state" style="margin: auto; text-align: center; color: var(--muted);">
+      <div style="font-size: 32px; margin-bottom: 10px;">🏷️</div>
+      <div style="font-size: 15px; color: #fff; margin-bottom: 4px;">Выберите сложную группу этикеток слева</div>
+      <div style="font-size: 12px;">Система загрузит все кропы группы и позволит запустить инференс по любому из них</div>
+    </div>
+
+    <div id="cluster-detail" style="display: none;">
+      <!-- Заголовок выбранной группы -->
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 14px;">
+        <div>
+          <div id="detail-mfg" style="font-size: 18px; font-weight: 700; color: #fff; margin-bottom: 4px;"></div>
+          <div style="font-size: 12px; color: var(--muted);">
+            Кликните на карточку или кнопку <strong>«Проверить поиск»</strong> под любым кропом, чтобы оценить разделение близнецов
+          </div>
+        </div>
+        <div id="detail-stats" style="display: flex; gap: 8px;"></div>
+      </div>
+
+      <!-- Галерея кропов группы -->
+      <div class="group-crops-grid" id="crops-grid"></div>
+
+      <!-- Зона результатов поиска -->
+      <div id="inference-results-area" style="display: none;">
+        <div style="font-size: 15px; font-weight: 700; color: #fff; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+          <span>Сравнение этапов инференса</span>
+          <span id="inference-query-title" style="font-size: 12px; color: var(--accent); font-weight: normal;"></span>
+        </div>
+
+        <div id="correction-banner"></div>
+
+        <div class="pipeline-compare-row">
+          <!-- Этап 1: До реранкера (DINO) -->
+          <div class="stage-box">
+            <div class="stage-header">
+              <span>Этап 1: До реранкера (DINOv2)</span>
+              <span class="tag">pgvector Cosine</span>
+            </div>
+            <div id="stage-dino-list"></div>
+          </div>
+
+          <!-- Этап 2: После реранкера (SIFT) -->
+          <div class="stage-box" style="border-color: var(--accent);">
+            <div class="stage-header">
+              <span style="color: var(--accent);">Этап 2: После реранкера (SIFT)</span>
+              <span class="tag" style="background: rgba(74, 222, 128, 0.15); color: var(--accent);">RANSAC Inliers</span>
+            </div>
+            <div id="stage-sift-list"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="inference-loading" style="display: none; text-align: center; padding: 30px;">
+        <div style="font-size: 15px; color: var(--accent); margin-bottom: 6px;">Выполняется поиск и геометрический реранкинг...</div>
+        <span style="font-size: 12px; color: var(--muted);">DINOv2 Embed ➔ pgvector Top-5 ➔ SIFT RANSAC inliers</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Модальное окно Lightbox -->
+<div id="lightbox" class="lightbox-overlay" style="display: none;">
+  <div class="lightbox-content">
+    <span class="lightbox-close" id="lightbox-close">&times;</span>
+    <img id="lightbox-img" class="lightbox-img" src="" alt="Zoom view" title="Кликните, чтобы закрыть">
+    <div id="lightbox-caption" class="lightbox-caption"></div>
+  </div>
+</div>
+
+<script>
+let allClusters = [];
+let selectedCluster = null;
+let currentQueryProductId = null;
+
+// Элементы
+const clustersList = document.getElementById('clusters-list');
+const sidebarStatus = document.getElementById('sidebar-status');
+const filterInput = document.getElementById('filter-input');
+const simThreshold = document.getElementById('sim-threshold');
+const btnReload = document.getElementById('btn-reload');
+
+const emptyState = document.getElementById('empty-state');
+const clusterDetail = document.getElementById('cluster-detail');
+const detailMfg = document.getElementById('detail-mfg');
+const detailStats = document.getElementById('detail-stats');
+const cropsGrid = document.getElementById('crops-grid');
+
+const inferenceResultsArea = document.getElementById('inference-results-area');
+const inferenceLoading = document.getElementById('inference-loading');
+const inferenceQueryTitle = document.getElementById('inference-query-title');
+const correctionBanner = document.getElementById('correction-banner');
+const stageDinoList = document.getElementById('stage-dino-list');
+const stageSiftList = document.getElementById('stage-sift-list');
+
+// Lightbox
+const lightbox = document.getElementById('lightbox');
+const lightboxImg = document.getElementById('lightbox-img');
+const lightboxCaption = document.getElementById('lightbox-caption');
+const lightboxClose = document.getElementById('lightbox-close');
+
+function openLightbox(src, caption) {
+  if (!src) return;
+  lightboxImg.src = src;
+  lightboxCaption.textContent = caption || '';
+  lightbox.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+
+function closeLightbox() {
+  lightbox.style.display = 'none';
+  lightboxImg.src = '';
+  document.body.style.overflow = '';
+}
+
+lightbox.addEventListener('click', (e) => {
+  if (e.target === lightbox || e.target === lightboxImg || e.target === lightboxClose) {
+    closeLightbox();
+  }
+});
+
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && lightbox.style.display !== 'none') {
+    closeLightbox();
+  }
+});
+
+document.addEventListener('click', (e) => {
+  const zoomable = e.target.closest('.zoomable');
+  if (zoomable) {
+    e.stopPropagation();
+    const src = zoomable.getAttribute('data-full-src') || zoomable.src;
+    const caption = zoomable.getAttribute('data-caption') || zoomable.alt || '';
+    openLightbox(src, caption);
+  }
+});
+
+// Загрузка списка кластеров с сервера
+async function loadClusters() {
+  sidebarStatus.textContent = 'Вычисление кластеров в pgvector...';
+  clustersList.innerHTML = '<div style="color: var(--muted); padding: 10px; font-size: 12px;">Выполняется запрос...</div>';
+
+  try {
+    const thresh = simThreshold.value;
+    const res = await fetch(`/api/twins/clusters?min_similarity=${thresh}`);
+    if (!res.ok) throw new Error('Ошибка получения кластеров');
+    const data = await res.json();
+    allClusters = data.clusters;
+
+    sidebarStatus.textContent = `Найдено групп: ${data.total_clusters} (всего товаров: ${data.total_products})`;
+    renderClustersList();
+  } catch (err) {
+    sidebarStatus.textContent = 'Ошибка загрузки кластеров';
+    clustersList.innerHTML = `<div style="color: #ef4444; font-size: 12px; padding: 10px;">${err.message}</div>`;
+  }
+}
+
+function renderClustersList() {
+  const query = filterInput.value.toLowerCase().trim();
+  const filtered = allClusters.filter(c => 
+    c.manufacturer.toLowerCase().includes(query) || 
+    c.products.some(p => p.title.toLowerCase().includes(query))
+  );
+
+  if (filtered.length === 0) {
+    clustersList.innerHTML = '<div style="color: var(--muted); font-size: 12px; padding: 10px;">Группы не найдены</div>';
+    return;
+  }
+
+  clustersList.innerHTML = filtered.map(c => {
+    const titlesPreview = c.products.map(p => p.title).join(', ');
+    const isActive = selectedCluster && selectedCluster.cluster_id === c.cluster_id;
+    return `
+      <div class="cluster-item ${isActive ? 'active' : ''}" data-id="${c.cluster_id}">
+        <div class="cluster-title">${c.manufacturer}</div>
+        <div class="cluster-badges">
+          <span class="badge-count">${c.size} шт.</span>
+          <span class="badge-sim">Сходство ~${(c.max_similarity * 100).toFixed(1)}%</span>
+        </div>
+        <div class="cluster-preview-text" title="${titlesPreview}">${titlesPreview}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+// Выбор кластера
+clustersList.addEventListener('click', (e) => {
+  const item = e.target.closest('.cluster-item');
+  if (!item) return;
+  const clusterId = item.getAttribute('data-id');
+  const cluster = allClusters.find(c => c.cluster_id === clusterId);
+  if (!cluster) return;
+
+  selectCluster(cluster);
+});
+
+function selectCluster(cluster) {
+  selectedCluster = cluster;
+  renderClustersList();
+
+  emptyState.style.display = 'none';
+  clusterDetail.style.display = 'flex';
+  inferenceResultsArea.style.display = 'none';
+
+  detailMfg.textContent = cluster.manufacturer;
+  detailStats.innerHTML = `
+    <span class="badge-count" style="font-size: 13px; padding: 4px 10px;">${cluster.size} вариантов</span>
+    <span class="badge-sim" style="font-size: 13px; padding: 4px 10px;">Взаимное DINO: ${(cluster.max_similarity * 100).toFixed(1)}%</span>
+  `;
+
+  cropsGrid.innerHTML = cluster.products.map(p => `
+    <div class="crop-card" id="card-${p.product_id}">
+      <div class="crop-card-img-wrap" title="Кликните для зума">
+        <img class="zoomable" 
+             src="${p.crop_url}" 
+             alt="${p.title}" 
+             data-caption="${p.title} (${p.manufacturer})" 
+             style="max-width: 100%; max-height: 100%; object-fit: contain;">
+      </div>
+      <div class="crop-card-title" title="${p.title}">${p.title}</div>
+      <button class="btn-search-crop" onclick="runCropInference('${p.product_id}', '${p.crop_url}', '${p.title.replace(/'/g, "\\'")}')">
+        <svg width="12" height="12" fill="currentColor" viewBox="0 0 16 16"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/></svg>
+        Проверить поиск
+      </button>
+    </div>
+  `).join('');
+}
+
+// Запуск инференса по выбранному кропу
+async function runCropInference(productId, cropUrl, title) {
+  currentQueryProductId = productId;
+
+  // Выделяем активную карточку
+  document.querySelectorAll('.crop-card').forEach(c => c.classList.remove('selected-query'));
+  const card = document.getElementById(`card-${productId}`);
+  if (card) card.classList.add('selected-query');
+
+  inferenceLoading.style.display = 'block';
+  inferenceResultsArea.style.display = 'none';
+  inferenceQueryTitle.textContent = `Запрос: ${title}`;
+
+  try {
+    // Получаем blob кропа и отправляем в /api/v1/search-from-crop
+    const imgRes = await fetch(cropUrl);
+    const blob = await imgRes.blob();
+
+    const formData = new FormData();
+    formData.append('image', blob, 'crop.webp');
+    formData.append('k', '5');
+
+    const searchRes = await fetch('/api/v1/search-from-crop', {
+      method: 'POST',
+      body: formData
+    });
+    const data = await searchRes.json();
+    if (!searchRes.ok) throw new Error(data.detail || 'Ошибка поиска');
+
+    renderPipelineComparison(data, productId, title);
+  } catch (err) {
+    alert('Ошибка инференса: ' + err.message);
+  } finally {
+    inferenceLoading.style.display = 'none';
+  }
+}
+
+function renderPipelineComparison(data, queryProductId, queryTitle) {
+  inferenceResultsArea.style.display = 'block';
+
+  // 1. Порядок До реранкера (сортировка по pgvector_rank)
+  const dinoSorted = [...data.results].sort((a, b) => a.pgvector_rank - b.pgvector_rank);
+
+  // 2. Порядок После реранкера (сортировка по final_rank)
+  const siftSorted = [...data.results].sort((a, b) => a.final_rank - b.final_rank);
+
+  const dinoWinner = dinoSorted[0];
+  const siftWinner = siftSorted[0];
+
+  // Проверяем, изменил ли реранкер лидера
+  const isCorrected = dinoWinner && siftWinner && dinoWinner.product_id !== siftWinner.product_id;
+  const isQueryMatched = siftWinner && siftWinner.product_id === queryProductId;
+
+  if (isCorrected) {
+    correctionBanner.innerHTML = `
+      <div class="alert-rerank-correction">
+        <div style="font-size: 24px;">🎯</div>
+        <div>
+          <div style="font-weight: 700; font-size: 14px; margin-bottom: 2px;">SIFT Re-ranking исправил Top-1!</div>
+          <div>До реранкера лидировал: <strong>${dinoWinner.title}</strong> (DINO: ${(dinoWinner.dino_similarity * 100).toFixed(1)}%).</div>
+          <div>Благодаря геометрическим засечкам на 1 место вышел: <strong style="color: var(--accent);">${siftWinner.title}</strong> (SIFT: ${siftWinner.sift_score.toFixed(3)}, Inliers: ${siftWinner.inliers}).</div>
+        </div>
+      </div>
+    `;
+  } else if (isQueryMatched) {
+    correctionBanner.innerHTML = `
+      <div style="padding: 10px 14px; background: rgba(74, 222, 128, 0.08); border: 1px solid var(--accent); border-radius: 6px; font-size: 12px; margin-bottom: 14px; color: #fff;">
+        ✅ Идеальное попадание: исходное вино <strong>${queryTitle}</strong> подтверждено на обоих этапах пайплайна.
+      </div>
+    `;
+  } else {
+    correctionBanner.innerHTML = `
+      <div style="padding: 10px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; font-size: 12px; margin-bottom: 14px; color: var(--muted);">
+        Лидер совпадает на обоих этапах: <strong>${siftWinner ? siftWinner.title : 'Не определен'}</strong>.
+      </div>
+    `;
+  }
+
+  // Рендер Этапа 1 (DINO)
+  stageDinoList.innerHTML = dinoSorted.map(r => {
+    const isTarget = r.product_id === queryProductId;
+    return `
+      <div class="candidate-row ${r.pgvector_rank === 1 ? 'is-winner' : ''}">
+        <div style="font-size: 12px; font-weight: 700; color: ${r.pgvector_rank === 1 ? 'var(--accent)' : 'var(--muted)'}; min-width: 24px;">
+          #${r.pgvector_rank}
+        </div>
+        <img class="candidate-row-img zoomable" src="${r.image_url}" alt="${r.title}" data-caption="${r.title}">
+        <div style="flex: 1; min-width: 0;">
+          <div style="font-size: 12px; font-weight: 600; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            ${r.title} ${isTarget ? '<span style="color: var(--accent); font-size: 10px;">(Запрос)</span>' : ''}
+          </div>
+          <div style="font-size: 11px; color: var(--muted);">${r.manufacturer}</div>
+        </div>
+        <div style="font-size: 12px; font-weight: 700; color: #fff;">
+          ${(r.dino_similarity * 100).toFixed(1)}%
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  // Рендер Этапа 2 (SIFT)
+  stageSiftList.innerHTML = siftSorted.map(r => {
+    const isTarget = r.product_id === queryProductId;
+    const diff = r.pgvector_rank - r.final_rank;
+    let rankBadge = '';
+    if (diff > 0) {
+      rankBadge = `<span style="color: var(--accent); font-size: 10px; font-weight: 700;">+${diff} ▲</span>`;
+    } else if (diff < 0) {
+      rankBadge = `<span style="color: #ef4444; font-size: 10px; font-weight: 700;">${diff} ▼</span>`;
+    }
+
+    return `
+      <div class="candidate-row ${r.final_rank === 1 ? 'is-winner' : ''}">
+        <div style="font-size: 12px; font-weight: 700; color: ${r.final_rank === 1 ? 'var(--accent)' : 'var(--muted)'}; min-width: 24px; display: flex; flex-direction: column; align-items: center;">
+          <span>#${r.final_rank}</span>
+          ${rankBadge}
+        </div>
+        <img class="candidate-row-img zoomable" src="${r.image_url}" alt="${r.title}" data-caption="${r.title}">
+        <div style="flex: 1; min-width: 0;">
+          <div style="font-size: 12px; font-weight: 600; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            ${r.title} ${isTarget ? '<span style="color: var(--accent); font-size: 10px;">(Запрос)</span>' : ''}
+          </div>
+          <div style="font-size: 11px; color: var(--muted); display: flex; gap: 8px;">
+            <span>Inliers: <strong style="color: #fff;">${r.inliers}</strong></span>
+            <span>SIFT: <strong style="color: #fff;">${r.sift_score.toFixed(2)}</strong></span>
+          </div>
+        </div>
+        <div style="font-size: 11px; color: var(--muted); text-align: right;">
+          <div>DINO: ${(r.dino_similarity * 100).toFixed(0)}%</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+filterInput.addEventListener('input', renderClustersList);
+btnReload.addEventListener('click', loadClusters);
+simThreshold.addEventListener('change', loadClusters);
+
+// Начальная загрузка при открытии страницы
+loadClusters();
+</script>
+{% endblock %}
