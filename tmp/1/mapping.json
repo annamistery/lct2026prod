@@ -1,0 +1,252 @@
+{
+  "source_dir": "data/test_dataset/full",
+  "ground_truth": "data/eval/ground_truth_set48.json",
+  "catalog_json": "data/catalog/wines.json",
+  "positive_count": 27,
+  "negative_count": 0,
+  "cases": [
+    {
+      "query_id": "q-000001",
+      "image_path": "26ddb066.jpg",
+      "source_path": "data/test_dataset/full/1033_20260825_192710.jpg",
+      "label": "positive",
+      "expected_external_id": 1033,
+      "expected_slug": "agora-muskat-chernyj",
+      "image_sha256": "26ddb066cb40c88571ccd0703e892a0fd86eef140b215f91e3adbe0179e55107"
+    },
+    {
+      "query_id": "q-000002",
+      "image_path": "90020e08.jpeg",
+      "source_path": "data/test_dataset/full/1063_winemakers-selection-saperavi-krasnoe-polusladkoe.jpeg",
+      "label": "positive",
+      "expected_external_id": 1063,
+      "expected_slug": "inkermanskiy-zmv-winemakers-selection-saperavi-krasnoe-polusladkoe-12",
+      "image_sha256": "90020e081060d8cb3d14fd29d2a61458405510f5a00ab83888902472df6419ab"
+    },
+    {
+      "query_id": "q-000003",
+      "image_path": "2039dd8a.jpg",
+      "source_path": "data/test_dataset/full/1231_photo_5467512004131100559_w.jpg",
+      "label": "positive",
+      "expected_external_id": 1231,
+      "expected_slug": "alma-valley-alma-graviti-pino-nuar-merlo-kaberne-sovinon-krasnoe-suhoe-14",
+      "image_sha256": "2039dd8a179635751c9ed4aaf68bd6a0cdc476e0699492ee5cc406fa79fd77a2"
+    },
+    {
+      "query_id": "q-000004",
+      "image_path": "6bb419b6.jpg",
+      "source_path": "data/test_dataset/full/1234_photo_5467512004131100563_w.jpg",
+      "label": "positive",
+      "expected_external_id": 1234,
+      "expected_slug": "tsimlyanskie-vina-krepost-sarkel-krasnostop-zolotovskiy-krasnoe-suhoe-145",
+      "image_sha256": "6bb419b6790a4932556b70a81e9c5f2832d716830039068f6a455ab1f96fa535"
+    },
+    {
+      "query_id": "q-000005",
+      "image_path": "ef930b69.jpg",
+      "source_path": "data/test_dataset/full/1300_photo_5467512004131100551_w.jpg",
+      "label": "positive",
+      "expected_external_id": 1300,
+      "expected_slug": "vinodelnya-krinitsa-arena-sira-krasnoe-suhoe-13",
+      "image_sha256": "ef930b694f5b95ec0c077d1ef2e7b35624bedc6434796aee23f6800a82a846bf"
+    },
+    {
+      "query_id": "q-000006",
+      "image_path": "8a8ad5d7.jpeg",
+      "source_path": "data/test_dataset/full/1319_byurne-lyublyu-krasnoe-kaberne-fran-suhoe.jpeg",
+      "label": "positive",
+      "expected_external_id": 1319,
+      "expected_slug": "vinodelnya-byurne-lyublyu-krasnoe-kaberne-fran-suhoe-135",
+      "image_sha256": "8a8ad5d7478d8318d1c43aa1d33e874d12950c492b8f840695662c9d2b80a4d3"
+    },
+    {
+      "query_id": "q-000007",
+      "image_path": "e3f116c0.jpeg",
+      "source_path": "data/test_dataset/full/1320_byurne-merlo-krasnoe-suhoe-14.jpeg",
+      "label": "positive",
+      "expected_external_id": 1320,
+      "expected_slug": "vinodelnya-byurne-merlo-krasnoe-suhoe-14",
+      "image_sha256": "e3f116c0a0fc5767e7a03f41cbfe0163e613e4a87669bc17cb9f8b6e791508ce"
+    },
+    {
+      "query_id": "q-000008",
+      "image_path": "4679856e.jpg",
+      "source_path": "data/test_dataset/full/1571_photo_5467512004131100552_w.jpg",
+      "label": "positive",
+      "expected_external_id": 1571,
+      "expected_slug": "chateau-de-talu-klere-sira-rozovoe-suhoe-136",
+      "image_sha256": "4679856e80796ce1bf240d9ce180f5dfb2457c72fb58f73c84b74bee7a13231b"
+    },
+    {
+      "query_id": "q-000009",
+      "image_path": "04f3ce15.jpg",
+      "source_path": "data/test_dataset/full/1586_photo_5467512004131100553_w.jpg",
+      "label": "positive",
+      "expected_external_id": 1586,
+      "expected_slug": "chateau-de-talu-ruzh-kaberne-sovinon-krasnoe-suhoe-14",
+      "image_sha256": "04f3ce159b1c2e9b081952083bebb0a7b092d154d639c46870f09afa2b376933"
+    },
+    {
+      "query_id": "q-000010",
+      "image_path": "10967716.jpg",
+      "source_path": "data/test_dataset/full/1646_photo_5467512004131100558_w.jpg",
+      "label": "positive",
+      "expected_external_id": 1646,
+      "expected_slug": "aya-organic-wine-vineyards-purity-in-syrah-sira-rozovoe-suhoe-132",
+      "image_sha256": "10967716d98a2106c32547b9eff86fb7e70508dbb127c47f7ad902d3d22bc468"
+    },
+    {
+      "query_id": "q-000011",
+      "image_path": "f780a956.jpg",
+      "source_path": "data/test_dataset/full/1659_photo_5467512004131100565_w.jpg",
+      "label": "positive",
+      "expected_external_id": 1659,
+      "expected_slug": "esse-shardone-otbornoe-beloe-suhoe-12",
+      "image_sha256": "f780a956aa0f99e2370e55e4ca19630099e019cf526f48a4a57878795588ec7a"
+    },
+    {
+      "query_id": "q-000012",
+      "image_path": "170d9123.jpeg",
+      "source_path": "data/test_dataset/full/1660_esse-kaberne-otbornoe.jpeg",
+      "label": "positive",
+      "expected_external_id": 1660,
+      "expected_slug": "esse-kaberne-otbornoe-kaberne-sovinon-krasnoe-suhoe-12",
+      "image_sha256": "170d9123e938d9bf501301a5ce6b948b44a9976b9dcbf091e8e19922ed89528c"
+    },
+    {
+      "query_id": "q-000013",
+      "image_path": "4ea254fd.jpg",
+      "source_path": "data/test_dataset/full/1697_photo_5467512004131100562_w.jpg",
+      "label": "positive",
+      "expected_external_id": 1697,
+      "expected_slug": "esse-saperavi-heaven-krasnoe-suhoe-13",
+      "image_sha256": "4ea254fdb882257173aec85bbeac963950dabaad3c172f91c08fc0cd0684a86b"
+    },
+    {
+      "query_id": "q-000014",
+      "image_path": "db42a74e.jpeg",
+      "source_path": "data/test_dataset/full/239_vysokiy-bereg-merlo-krasnoe-suhoe.jpeg",
+      "label": "positive",
+      "expected_external_id": 239,
+      "expected_slug": "kuban-vino-vysokiy-bereg-merlo-krasnoe-suhoe-135",
+      "image_sha256": "db42a74e3f6d647358358e3059d869574452af6fe0843037d0c4b3f2c29b9601"
+    },
+    {
+      "query_id": "q-000015",
+      "image_path": "b50cf052.jpg",
+      "source_path": "data/test_dataset/full/246_20260822_191122.jpg",
+      "label": "positive",
+      "expected_external_id": 246,
+      "expected_slug": "soyuz-vino-kanonicheskie-traditsii-krasnoe-sladkoe-kaberne-sovinon-115",
+      "image_sha256": "b50cf052ab42afcf74fc7947659da7a4b881a31fe516b8318523be56ac770c88"
+    },
+    {
+      "query_id": "q-000016",
+      "image_path": "3c11e5b0.jpeg",
+      "source_path": "data/test_dataset/full/268_massandra-muskatel-rozovyy.jpeg",
+      "label": "positive",
+      "expected_external_id": 268,
+      "expected_slug": "massandra-muskatel-rozovyy-belye-sorta-vinograda-rozovoe-sladkoe-16",
+      "image_sha256": "3c11e5b02a1ad15133d081bb30a5b273050ef58bfb3d56a5871510b3196d2d0a"
+    },
+    {
+      "query_id": "q-000017",
+      "image_path": "7bf0507b.jpg",
+      "source_path": "data/test_dataset/full/304_photo_5467512004131100567_w.jpg",
+      "label": "positive",
+      "expected_external_id": 304,
+      "expected_slug": "belbek-belbek-muskat-beloe-suhoe-128",
+      "image_sha256": "7bf0507bac0a9d7df721d9108fc2176066d9f95a4b5abb01ab4a8735a0e8f65e"
+    },
+    {
+      "query_id": "q-000018",
+      "image_path": "f212df5b.jpeg",
+      "source_path": "data/test_dataset/full/324_portveyn-belyy-krymskiy.jpeg",
+      "label": "positive",
+      "expected_external_id": 324,
+      "expected_slug": "massandra-portveyn-belyy-krymskiy-kokur-beloe-sladkoe-18",
+      "image_sha256": "f212df5bb1bb7d97ca7ba1b23bbb077f8bced5029617d23c5b6dcd27baf304fe"
+    },
+    {
+      "query_id": "q-000019",
+      "image_path": "a263fc7c.jpeg",
+      "source_path": "data/test_dataset/full/643_abrau-estates-krasnoe-kaberne-sovinon-suhoe.jpeg",
+      "label": "positive",
+      "expected_external_id": 643,
+      "expected_slug": "abrau-dyurso-abrau-estates-krasnoe-kaberne-sovinon-suhoe-13",
+      "image_sha256": "a263fc7c8d4109c76d26e967f2c0589805956917f930fe1eafdb0e45fe8bdacf"
+    },
+    {
+      "query_id": "q-000020",
+      "image_path": "e2591aad.jpg",
+      "source_path": "data/test_dataset/full/677_photo_5467512004131100569_w.jpg",
+      "label": "positive",
+      "expected_external_id": 677,
+      "expected_slug": "alma-valley-tempranilo-krasnoe-suhoe-13",
+      "image_sha256": "e2591aad7ad171e74c06b14728541fe6f5446e30ba7de34f8c9ee56beb778e78"
+    },
+    {
+      "query_id": "q-000021",
+      "image_path": "98ea37d3.jpg",
+      "source_path": "data/test_dataset/full/710_photo_5467512004131100570_w.jpg",
+      "label": "positive",
+      "expected_external_id": 710,
+      "expected_slug": "alma-valley-kaberne-sovinon-rezerv-krasnoe-suhoe-15",
+      "image_sha256": "98ea37d3be8b8f34304d49dcac4bb77841995d4a119645bc285f621fde85c483"
+    },
+    {
+      "query_id": "q-000022",
+      "image_path": "bd78e0f6.jpg",
+      "source_path": "data/test_dataset/full/712_photo_5467512004131100560_w.jpg",
+      "label": "positive",
+      "expected_external_id": 712,
+      "expected_slug": "alma-valley-graviti-pino-blan-beloe-suhoe-135",
+      "image_sha256": "bd78e0f65987d3e8141283af7b2b6e684306f476d5dbf7089d1ee2260b0d588f"
+    },
+    {
+      "query_id": "q-000023",
+      "image_path": "35f764ae.jpg",
+      "source_path": "data/test_dataset/full/717_photo_5467512004131100568_w.jpg",
+      "label": "positive",
+      "expected_external_id": 717,
+      "expected_slug": "alma-valley-shardone-rezerv-beloe-suhoe-14",
+      "image_sha256": "35f764ae9e4924d6b82beff2c11847b8f73ce971caf547073d054e17d7c92996"
+    },
+    {
+      "query_id": "q-000024",
+      "image_path": "9b04cb8d.jpeg",
+      "source_path": "data/test_dataset/full/757_chteau-le-grand-vostock-le-chene-royal-reserve.jpeg",
+      "label": "positive",
+      "expected_external_id": 757,
+      "expected_slug": "chteau-le-grand-vostock-le-chene-royal-reserve-merlo-krasnoe-suhoe-145",
+      "image_sha256": "9b04cb8d4338f1704a9357887fd156aae1990291390e67db53e7c15ee0b9dcf7"
+    },
+    {
+      "query_id": "q-000025",
+      "image_path": "ee3e3334.jpeg",
+      "source_path": "data/test_dataset/full/809_derbent-vino-desono-kaberne-sovinon-krasnoe-suhoe.jpeg",
+      "label": "positive",
+      "expected_external_id": 809,
+      "expected_slug": "derbent-vino-desono-kaberne-sovinon-krasnoe-suhoe-125",
+      "image_sha256": "ee3e33347bfcec249206d81cfbcfd7c20866c77279e1cbc99917aba952eff66a"
+    },
+    {
+      "query_id": "q-000026",
+      "image_path": "2343a532.jpg",
+      "source_path": "data/test_dataset/full/935_20260825_192848.jpg",
+      "label": "positive",
+      "expected_external_id": 935,
+      "expected_slug": "aristov-kyuve-aleksandr-blan-de-blan",
+      "image_sha256": "2343a5326abd278dffd0ac2a19a2be9e0ae59cbc9b5ca4cf01d969000aa3ab50"
+    },
+    {
+      "query_id": "q-000027",
+      "image_path": "72ce740a.jpg",
+      "source_path": "data/test_dataset/full/954_20260825_192625.jpg",
+      "label": "positive",
+      "expected_external_id": 954,
+      "expected_slug": "shato-taman-kaberne-sovinon",
+      "image_sha256": "72ce740aef4bf655c3065d17e29a11afdbf9f16937d306ff4a0e5a4e2c37e090"
+    }
+  ]
+}
