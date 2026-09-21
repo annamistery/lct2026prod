@@ -1,0 +1,220 @@
+#!/usr/bin/env python3
+"""Unified benchmark runner: evaluates v1 vs v2 across all test packs."""
+
+import argparse
+import json
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+ROOT_DIR = Path(__file__).resolve().parent.parent
+
+
+def run_participant_test(pack_dir: Path, endpoint: str, output_file: Path) -> bool:
+    """Executes the official participant_test.sh script inside pack_dir."""
+    script = pack_dir / "participant_test.sh"
+    manifest = pack_dir / "queries.tsv"
+    images = pack_dir / "queries"
+
+    output_file.unlink(missing_ok=True)
+
+    cmd = [
+        "bash",
+        str(script),
+        "--images-dir",
+        str(images),
+        "--manifest",
+        str(manifest),
+        "--endpoint",
+        endpoint,
+        "--output",
+        str(output_file),
+    ]
+
+    print(f"  > Запуск: {cmd[0]} {script.name} -> {endpoint} ...")
+    start = time.perf_counter()
+    res = subprocess.run(cmd, cwd=pack_dir, capture_output=True, text=True)
+    elapsed = time.perf_counter() - start
+
+    if res.returncode != 0:
+        print(f"  [ОШИБКА] Скрипт завершился с кодом {res.returncode}: {res.stderr.strip()}", file=sys.stderr)
+        return False
+
+    print(f"  ✓ Завершено за {elapsed:.1f}с. Сохранено в {output_file.name}")
+    return True
+
+
+def evaluate_pack(mapping_file: Path, preds_file: Path) -> dict:
+    if not mapping_file.is_file() or not preds_file.is_file():
+        return {"total": 0, "correct": 0, "pct": 0.0, "avg_lat": 0.0, "details": {}}
+
+    try:
+        cases = json.loads(mapping_file.read_text(encoding="utf-8")).get("cases", [])
+        mapping = {c["query_id"]: c.get("expected_slug") for c in cases}
+    except Exception:
+        return {"total": 0, "correct": 0, "pct": 0.0, "avg_lat": 0.0, "details": {}}
+
+    lines = [line.strip() for line in preds_file.read_text(encoding="utf-8").splitlines() if line.strip()]
+    details = {}
+    latencies = []
+    correct = 0
+
+    for line in lines:
+        try:
+            p = json.loads(line)
+        except Exception:
+            continue
+        qid = p.get("query_id", "")
+        exp = mapping.get(qid)
+        got = p.get("predicted_slug")
+        lat = p.get("latency_ms", 0)
+        if isinstance(lat, (int, float)):
+            latencies.append(lat)
+
+        is_ok = exp is not None and got is not None and exp == got
+        if is_ok:
+            correct += 1
+
+        details[qid] = {
+            "expected": exp,
+            "predicted": got,
+            "latency": lat,
+            "is_ok": is_ok,
+        }
+
+    total = len(details)
+    pct = (correct / total * 100.0) if total > 0 else 0.0
+    avg_lat = (sum(latencies) / len(latencies)) if latencies else 0.0
+
+    return {
+        "total": total,
+        "correct": correct,
+        "pct": pct,
+        "avg_lat": avg_lat,
+        "details": details,
+    }
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Run complete v1 vs v2 evaluation benchmark")
+    parser.add_argument("--host", default="http://127.0.0.1:8030", help="Base URL of backend (default: http://127.0.0.1:8030)")
+    parser.add_argument("--skip-run", action="store_true", help="Skip running participant_test.sh, analyze existing predictions")
+    args = parser.parse_args()
+
+    pack1 = ROOT_DIR / "tmp" / "1"
+    pack2 = ROOT_DIR / "tmp" / "2"
+
+    p1_v1_out = pack1 / "predictions_v1.jsonl"
+    p1_v2_out = pack1 / "predictions_v2.jsonl"
+    p2_v1_out = pack2 / "predictions_v1.jsonl"
+    p2_v2_out = pack2 / "predictions_v2.jsonl"
+
+    endpoint_v1 = f"{args.host.rstrip('/')}/api/v1/eval/predict"
+    endpoint_v2 = f"{args.host.rstrip('/')}/api/v2/eval/predict"
+
+    if not args.skip_run:
+        print("\n" + "=" * 80)
+        print(f" ЗАПУСК ЕДИНОГО ТЕСТИРОВАНИЯ (v1 vs v2) — хост {args.host}")
+        print("=" * 80)
+
+        print("\n[1/4] Пакет 1 (set48 / 27 каталожных фото) -> Версия v1 (чистый DINOv2 без реранка)...")
+        run_participant_test(pack1, endpoint_v1, p1_v1_out)
+
+        print("\n[2/4] Пакет 1 (set48 / 27 каталожных фото) -> Версия v2 (каскад + матрицы)...")
+        run_participant_test(pack1, endpoint_v2, p1_v2_out)
+
+        print("\n[3/4] Пакет 2 (vina / 25 полевых фото) -> Версия v1 (чистый DINOv2 без реранка)...")
+        run_participant_test(pack2, endpoint_v1, p2_v1_out)
+
+        print("\n[4/4] Пакет 2 (vina / 25 полевых фото) -> Версия v2 (каскад + матрицы)...")
+        run_participant_test(pack2, endpoint_v2, p2_v2_out)
+
+    # Evaluate results
+    p1_v1 = evaluate_pack(pack1 / "mapping.json", p1_v1_out)
+    p1_v2 = evaluate_pack(pack1 / "mapping.json", p1_v2_out)
+    p2_v1 = evaluate_pack(pack2 / "mapping.json", p2_v1_out)
+    p2_v2 = evaluate_pack(pack2 / "mapping.json", p2_v2_out)
+
+    tot_v1_correct = p1_v1["correct"] + p2_v1["correct"]
+    tot_v1_total = p1_v1["total"] + p2_v1["total"]
+    tot_v1_pct = (tot_v1_correct / tot_v1_total * 100.0) if tot_v1_total else 0.0
+    tot_v1_lat = ((p1_v1["avg_lat"] * p1_v1["total"] + p2_v1["avg_lat"] * p2_v1["total"]) / tot_v1_total) if tot_v1_total else 0.0
+
+    tot_v2_correct = p1_v2["correct"] + p2_v2["correct"]
+    tot_v2_total = p1_v2["total"] + p2_v2["total"]
+    tot_v2_pct = (tot_v2_correct / tot_v2_total * 100.0) if tot_v2_total else 0.0
+    tot_v2_lat = ((p1_v2["avg_lat"] * p1_v2["total"] + p2_v2["avg_lat"] * p2_v2["total"]) / tot_v2_total) if tot_v2_total else 0.0
+
+    # Print summary table
+    print("\n" + "=" * 92)
+    print(" СВОДНЫЙ ОТЧЁТ СРАВНЕНИЯ ТОЧНОСТИ И СКОРОСТИ: v1 (чистый DINO) vs v2 (каскад + матрицы)")
+    print("=" * 92)
+    header = f"{'Тестовый набор':<28} | {'Версия 1 (чистый DINO)':<24} | {'Версия 2 (каскад v2)':<24} | {'Дельта Hit@1':<10}"
+    print(header)
+    print("-" * 92)
+
+    def row(label, r1, r2):
+        s1 = f"{r1['correct']}/{r1['total']} ({r1['pct']:.1f}%) [{r1['avg_lat']:.0f}мс]"
+        s2 = f"{r2['correct']}/{r2['total']} ({r2['pct']:.1f}%) [{r2['avg_lat']:.0f}мс]"
+        delta = r2["pct"] - r1["pct"]
+        sign = "+" if delta > 0 else ""
+        d_str = f"{sign}{delta:.1f}%"
+        return f"{label:<28} | {s1:<24} | {s2:<24} | {d_str:<10}"
+
+    print(row("Пакет 1 (set48 / каталог)", p1_v1, p1_v2))
+    print(row("Пакет 2 (vina / полевые)", p2_v1, p2_v2))
+    print("-" * 92)
+    s_tot1 = f"{tot_v1_correct}/{tot_v1_total} ({tot_v1_pct:.1f}%) [{tot_v1_lat:.0f}мс]"
+    s_tot2 = f"{tot_v2_correct}/{tot_v2_total} ({tot_v2_pct:.1f}%) [{tot_v2_lat:.0f}мс]"
+    delta_tot = tot_v2_pct - tot_v1_pct
+    sign_tot = "+" if delta_tot > 0 else ""
+    print(f"{'ИТОГО (52 запроса)':<28} | {s_tot1:<24} | {s_tot2:<24} | {sign_tot}{delta_tot:.1f}%")
+    print("=" * 92)
+
+    # Detailed differential analysis
+    for pack_name, r1, r2 in [("Пакет 1 (каталог)", p1_v1, p1_v2), ("Пакет 2 (полевые фото)", p2_v1, p2_v2)]:
+        print(f"\n--- Детальная динамика: {pack_name} ---")
+        fixed = []
+        broken = []
+        still_fail = []
+
+        all_qids = sorted(set(r1["details"].keys()) | set(r2["details"].keys()))
+        for qid in all_qids:
+            d1 = r1["details"].get(qid, {})
+            d2 = r2["details"].get(qid, {})
+            ok1 = d1.get("is_ok", False)
+            ok2 = d2.get("is_ok", False)
+            exp = d1.get("expected") or d2.get("expected")
+
+            if not ok1 and ok2:
+                fixed.append((qid, exp, d1.get("predicted"), d2.get("predicted")))
+            elif ok1 and not ok2:
+                broken.append((qid, exp, d1.get("predicted"), d2.get("predicted")))
+            elif not ok1 and not ok2:
+                still_fail.append((qid, exp, d1.get("predicted"), d2.get("predicted")))
+
+        if fixed:
+            print(f"  🎉 ИСПРАВЛЕНО в v2 ({len(fixed)} шт.):")
+            for qid, exp, p1, p2 in fixed:
+                print(f"     [+] {qid}: ожидался {exp} | v1 дал '{p1}' ➔ v2 дал '{p2}' (ТОЧНО)")
+        else:
+            print("  - Нет запросов, исправленных в v2.")
+
+        if broken:
+            print(f"  ⚠️ РЕГРЕССИИ в v2 ({len(broken)} шт.):")
+            for qid, exp, p1, p2 in broken:
+                print(f"     [-] {qid}: ожидался {exp} | v1 дал '{p1}' (ОК) ➔ v2 дал '{p2}' (ОШИБКА)")
+        else:
+            print("  ✓ Регрессий в v2 нет.")
+
+        if still_fail:
+            print(f"  ❌ Ошибки в обеих версиях ({len(still_fail)} шт.):")
+            for qid, exp, p1, p2 in still_fail:
+                print(f"     [x] {qid}: ожидался {exp} | v1='{p1}' | v2='{p2}'")
+
+    print("\n" + "=" * 92 + "\n")
+
+
+if __name__ == "__main__":
+    main()
