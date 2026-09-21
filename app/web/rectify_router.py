@@ -1,16 +1,17 @@
 import base64
 import io
-import time
+import json
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
+import cv2
+import numpy as np
+from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from PIL import Image
 
 from app.core.config import get_settings
-from app.core.dependencies import get_detector, get_rectification, get_segmenter
 from app.services.detector import DetectorService
 from app.services.rectification import RectificationService
 from app.services.segmenter import SegmenterService
@@ -239,7 +240,7 @@ async def export_debug_artifacts(
         if result.quad_corners_orig and len(result.quad_corners_orig) == 4:
             q_pts = [(p[0], p[1]) for p in result.quad_corners_orig]
             draw.polygon(q_pts, outline="#00d2d3", width=max(3, int(orig_w / 250)))
-            for idx, pt in enumerate(q_pts, 1):
+            for _idx, pt in enumerate(q_pts, 1):
                 r = max(5, int(orig_w / 150))
                 draw.ellipse([pt[0] - r, pt[1] - r, pt[0] + r, pt[1] + r], fill="#00d2d3", outline="#000000", width=2)
 
@@ -314,7 +315,6 @@ async def export_debug_artifacts(
                     for idx, m_xy in enumerate(r.masks.xy):
                         pts = [[float(round(float(p[0]), 1)), float(round(float(p[1]), 1))] for p in m_xy]
                         m_conf = float(round(float(r.boxes.conf[idx]), 4)) if (r.boxes and len(r.boxes) > idx) else 0.0
-                        import cv2
                         c_area = float(abs(cv2.contourArea(np.array(pts, dtype=np.float32)))) if len(pts) >= 3 else 0.0
                         seg_masks.append({
                             "idx": idx + 1,
