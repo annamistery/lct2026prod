@@ -475,9 +475,10 @@ async function handleFile(file, displayName) {
 function renderResults(data, originalUrl) {
   resultsArea.style.display = 'block';
   const winner = data.winner;
-  const queryCrop = data.query_crop || originalUrl;
+  const matrixUrl = data.query_crop || originalUrl;
+  const bboxUrl = data.bbox_crop || originalUrl;
 
-  // 1. Формируем триптих сравнения v2
+  // 1. Формируем сетку сравнения v2 (Оригинал -> BBox кроп -> Матрица v2 -> Эталон Top-1)
   const winnerImgUrl = winner ? winner.image_url : '';
   const winnerTitle = winner ? winner.title : 'Не найдено';
 
@@ -485,7 +486,7 @@ function renderResults(data, originalUrl) {
     <!-- Карточка 1: Загруженный оригинал -->
     <div class="compare-card">
       <div class="compare-header">
-        <span>Загруженный оригинал</span>
+        <span>1. Оригинал</span>
         <span class="badge-tag">Фото</span>
       </div>
       <div class="compare-img-wrap">
@@ -497,25 +498,40 @@ function renderResults(data, originalUrl) {
       <div class="compare-hint"><svg width="12" height="12" fill="currentColor" viewBox="0 0 16 16"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/></svg> Кликните для зума</div>
     </div>
 
-    <!-- Карточка 2: Выпрямленная матрица v2 -->
-    <div class="compare-card" style="border-color: #00d2d3;">
+    <!-- Карточка 2: BBox кроп этикетки -->
+    <div class="compare-card">
       <div class="compare-header">
-        <span style="color: #00d2d3;">Матрица v2 (256×256)</span>
-        <span class="badge-tag" style="background: rgba(0, 210, 211, 0.2); color: #00d2d3;">${data.is_fallback ? 'BBox' : 'Quad Warp'}</span>
+        <span>2. BBox кроп</span>
+        <span class="badge-tag">YOLO</span>
       </div>
       <div class="compare-img-wrap">
         <img class="compare-img zoomable" 
-             src="${queryCrop}" 
-             alt="Выпрямленная матрица v2" 
-             data-caption="Выпрямленная каноническая матрица (256x256)">
+             src="${bboxUrl}" 
+             alt="BBox кроп этикетки" 
+             data-caption="Кроп этикетки (BBox детекция)">
       </div>
       <div class="compare-hint"><svg width="12" height="12" fill="currentColor" viewBox="0 0 16 16"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/></svg> Кликните для зума</div>
     </div>
 
-    <!-- Карточка 3: Найденный эталон Top-1 -->
+    <!-- Карточка 3: Выпрямленная матрица v2 -->
+    <div class="compare-card" style="border-color: #00d2d3;">
+      <div class="compare-header">
+        <span style="color: #00d2d3;">3. Матрица v2</span>
+        <span class="badge-tag" style="background: rgba(0, 210, 211, 0.2); color: #00d2d3;">${data.is_fallback ? 'BBox fallback' : '✓ Quad Warp'}</span>
+      </div>
+      <div class="compare-img-wrap">
+        <img class="compare-img zoomable" 
+             src="${matrixUrl}" 
+             alt="Выпрямленная матрица v2" 
+             data-caption="Выпрямленная каноническая матрица (256x256) для поиска DINOv2">
+      </div>
+      <div class="compare-hint"><svg width="12" height="12" fill="currentColor" viewBox="0 0 16 16"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/></svg> Кликните для зума</div>
+    </div>
+
+    <!-- Карточка 4: Найденный эталон Top-1 -->
     <div class="compare-card winner-border">
       <div class="compare-header">
-        <span style="color: var(--accent);">Победитель Top-1</span>
+        <span style="color: var(--accent);">4. Победитель Top-1</span>
         <span class="badge-tag accent">База v2</span>
       </div>
       <div class="compare-img-wrap">

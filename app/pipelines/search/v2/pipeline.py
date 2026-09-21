@@ -1,4 +1,6 @@
 import asyncio
+import base64
+import io
 import time
 from dataclasses import dataclass
 
@@ -69,13 +71,34 @@ class SearchPipelineV2:
             total_ms=self._elapsed(started),
         )
 
+        # 4. Generate base64 previews for UI
+        matrix_data_url = self.encode_image_data_url(rect_result.rectified_image)
+
+        bbox_data_url = None
+        if rect_result.crop_bbox is not None and not is_already_crop:
+            try:
+                x1, y1, x2, y2 = rect_result.crop_bbox
+                raw_crop = image.crop((x1, y1, x2, y2))
+                bbox_data_url = self.encode_image_data_url(raw_crop)
+            except Exception:
+                bbox_data_url = None
+
         return SearchResponseV2(
             winner=results[0] if results else None,
             results=results,
             timings=timings,
-            query_crop=query_crop,
+            query_crop=matrix_data_url,
+            bbox_crop=bbox_data_url,
+            quad_corners=rect_result.quad_corners_orig,
             is_fallback=rect_result.is_fallback,
         )
+
+    @staticmethod
+    def encode_image_data_url(image: Image.Image) -> str:
+        buf = io.BytesIO()
+        image.save(buf, format="WEBP", quality=92)
+        encoded = base64.b64encode(buf.getvalue()).decode("ascii")
+        return f"data:image/webp;base64,{encoded}"
 
     @staticmethod
     def _elapsed(started: float) -> float:

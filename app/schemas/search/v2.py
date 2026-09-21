@@ -26,6 +26,8 @@ class SearchResponseV2(BaseModel):
     results: list[SearchResultV2]
     timings: SearchTimingsV2
     query_crop: str | None = None
+    bbox_crop: str | None = None
+    quad_corners: list[list[float]] | None = None
     is_fallback: bool = False
 
 
