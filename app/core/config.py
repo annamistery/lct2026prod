@@ -17,10 +17,13 @@ class Settings(BaseSettings):
     dino_model_path: Path = Path("models/dinov2_label_finetuned")
     dino_base_model_path: Path = Path("models/dinov2-small")
     yolo_model_path: Path = Path("models/yolo_label.pt")
+    yolo_seg_model_path: Path = Path("models/yolo_seg.pt")
     embedding_model_name: str = "dinov2-label-v1"
+    embedding_model_v2_name: str = "dinov2-label-v2-rectified"
     embedding_dimension: int = 384
     canonical_size: int = 256
     yolo_confidence: float = Field(0.25, ge=0, le=1)
+    yolo_seg_confidence: float = Field(0.25, ge=0, le=1)
     max_upload_bytes: int = Field(10_485_760, ge=1024)
     max_image_pixels: int = Field(25_000_000, ge=65_536)
     max_top_k: int = Field(20, ge=1, le=100)

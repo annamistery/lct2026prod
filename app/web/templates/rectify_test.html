@@ -1,0 +1,378 @@
+{% extends "base.html" %}
+
+{% block title %}Нормализация v2 (Матрицы этикеток) — LCT2026{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Нормализация v2 (BBox ➔ Сегментация ➔ Матрица)</h1>
+    <span style="color: var(--muted); font-size: 13px;">
+      Каскад: BBox детекция <span style="color: #2ed573;">■</span> ➔ сегментация на кропе <span style="color: #ff4757;">■</span> ➔ 4-точечное выпрямление в каноническую матрицу 256×256 <span style="color: #00d2d3;">■</span>
+    </span>
+  </div>
+  
+  <div style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap;">
+    <!-- Порог детекции -->
+    <div style="display: flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--border); padding: 6px 12px; border-radius: var(--radius);">
+      <label for="conf-detect" style="font-size: 12px; color: var(--muted);">BBox Conf:</label>
+      <input type="range" id="conf-detect" min="0.05" max="0.80" step="0.05" value="0.25" style="cursor: pointer; width: 80px;">
+      <span id="conf-detect-val" style="font-weight: 700; color: #fff; min-width: 32px; font-size: 12px;">25%</span>
+    </div>
+
+    <!-- Порог сегментации -->
+    <div style="display: flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--border); padding: 6px 12px; border-radius: var(--radius);">
+      <label for="conf-seg" style="font-size: 12px; color: var(--muted);">Seg Conf:</label>
+      <input type="range" id="conf-seg" min="0.05" max="0.80" step="0.05" value="0.25" style="cursor: pointer; width: 80px;">
+      <span id="conf-seg-val" style="font-weight: 700; color: #fff; min-width: 32px; font-size: 12px;">25%</span>
+    </div>
+  </div>
+</div>
+
+<div style="display: flex; gap: 20px; height: calc(100vh - 130px);">
+  <!-- Левая панель: папка и выбор файла -->
+  <div style="width: 310px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; display: flex; flex-direction: column;">
+    
+    <label style="font-size: 11px; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; font-weight: 600;">Источник изображений:</label>
+    <select id="source-select" style="width: 100%; padding: 8px 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 13px; outline: none; margin-bottom: 10px;">
+      <option value="imports">Каталог (imports/images)</option>
+      <option value="tmp1">Тестовый пакет 1 (tmp/1/queries)</option>
+      <option value="tmp2">Тестовый пакет 2 (tmp/2/queries)</option>
+      <option value="catalog">Кропы базы (media/products)</option>
+    </select>
+
+    <input type="text" id="filter-input" placeholder="Поиск по имени файла..." 
+           style="width: 100%; padding: 8px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 13px; outline: none; margin-bottom: 10px;">
+    
+    <div id="files-list" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;">
+      <div style="color: var(--muted); padding: 8px;">Загрузка списка файлов...</div>
+    </div>
+  </div>
+
+  <!-- Правая панель: просмотр и результат выпрямления -->
+  <div style="flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; overflow-y: auto; display: flex; flex-direction: column;">
+    <div id="status-line" style="font-size: 15px; font-weight: 600; color: #fff; margin-bottom: 16px;">
+      Выберите файл слева для инференса каскада
+    </div>
+
+    <!-- Область отображения -->
+    <div id="view-area" style="display: none;">
+      
+      <!-- Переключатели слоёв оверлея -->
+      <div style="display: flex; gap: 16px; margin-bottom: 16px; align-items: center; background: var(--surface-2); padding: 8px 14px; border-radius: 6px; border: 1px solid var(--border);">
+        <span style="font-size: 12px; color: var(--muted); font-weight: 600;">Слои оверлея:</span>
+        <label style="font-size: 12px; color: #2ed573; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+          <input type="checkbox" id="toggle-bbox" checked> BBox детекция
+        </label>
+        <label style="font-size: 12px; color: #ff4757; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+          <input type="checkbox" id="toggle-seg" checked> Маска сегментации
+        </label>
+        <label style="font-size: 12px; color: #00d2d3; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+          <input type="checkbox" id="toggle-quad" checked> 4-угольник (Quad)
+        </label>
+      </div>
+
+      <div style="display: flex; gap: 24px; align-items: flex-start; margin-bottom: 24px; flex-wrap: wrap;">
+        
+        <!-- 1. Исходное фото с оверлеями каскада -->
+        <div style="flex-shrink: 0;">
+          <div style="font-size: 13px; font-weight: 600; color: #fff; margin-bottom: 8px;">1. Кадр бутылки с геометрией каскада:</div>
+          <div style="position: relative; background: #000; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; display: inline-block;" id="img-wrapper">
+            <img id="detect-img" style="max-height: 520px; width: auto; display: block;" alt="Кадр">
+            <canvas id="detect-canvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;"></canvas>
+          </div>
+          <div style="font-size: 11px; color: var(--muted); margin-top: 6px;">
+            <span style="color: #2ed573;">■</span> BBox | <span style="color: #ff4757;">■</span> Контур сегментации | <span style="color: #00d2d3;">■</span> 4 угла гомографии
+          </div>
+        </div>
+
+        <!-- 2. Полученная выпрямленная матрица (256x256) -->
+        <div style="flex-shrink: 0; display: flex; flex-direction: column; align-items: center;">
+          <div style="font-size: 13px; font-weight: 600; color: #fff; margin-bottom: 8px; width: 100%;">
+            2. Выпрямленная матрица v2:
+          </div>
+          <div style="background: #000; border: 2px solid var(--accent); border-radius: 8px; width: 256px; height: 256px; display: flex; align-items: center; justify-content: center; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
+            <img id="matrix-img" width="256" height="256" style="display: block; width: 256px; height: 256px; object-fit: cover;" alt="Матрица 256x256">
+          </div>
+          <div id="matrix-status-badge" style="margin-top: 10px; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 4px;"></div>
+          <div style="font-size: 11px; color: var(--muted); margin-top: 4px; text-align: center;">
+            Канонический размер 256×256 px
+          </div>
+        </div>
+
+        <!-- 3. Таблица метрик и таймингов каскада -->
+        <div style="flex: 1; min-width: 260px;">
+          <div style="font-size: 13px; font-weight: 600; color: #fff; margin-bottom: 8px;">Метрики каскада v2:</div>
+          <table class="detail-meta-table">
+            <tr><th>Файл</th><td id="info-file" style="word-break: break-all;"></td></tr>
+            <tr><th>Разрешение оригинала</th><td id="info-res"></td></tr>
+            <tr><th>BBox детекция</th><td id="info-time-bbox" style="color: #2ed573; font-weight: 700;"></td></tr>
+            <tr><th>Сегментация на кропе</th><td id="info-time-seg" style="color: #ff4757; font-weight: 700;"></td></tr>
+            <tr><th>Гомография (Warp)</th><td id="info-time-warp" style="color: #00d2d3; font-weight: 700;"></td></tr>
+            <tr><th>Итоговый тайминг</th><td id="info-time-total" style="color: var(--accent); font-weight: 700;"></td></tr>
+            <tr><th>Статус выравнивания</th><td id="info-status"></td></tr>
+          </table>
+
+          <div style="margin-top: 16px; font-size: 12px; color: var(--muted); line-height: 1.6; background: var(--surface-2); padding: 12px; border-radius: 6px; border: 1px solid var(--border);">
+            <strong>Как работает каскад:</strong><br>
+            1. BBox находит границу этикетки и отсекает блики на стекле.<br>
+            2. Сегментатор запускается только на кропе и находит чистый полигон.<br>
+            3. Из полигона вычисляются 4 экстремальных угла (TL, TR, BR, BL).<br>
+            4. <code>warpPerspective</code> расправляет трапецию в идеальную плоскую матрицу.
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let currentData = null;
+let allFiles = [];
+
+const sourceSelect = document.getElementById('source-select');
+const filesList = document.getElementById('files-list');
+const filterInput = document.getElementById('filter-input');
+const statusLine = document.getElementById('status-line');
+const viewArea = document.getElementById('view-area');
+const detectImg = document.getElementById('detect-img');
+const matrixImg = document.getElementById('matrix-img');
+const detectCanvas = document.getElementById('detect-canvas');
+const matrixStatusBadge = document.getElementById('matrix-status-badge');
+
+const confDetect = document.getElementById('conf-detect');
+const confDetectVal = document.getElementById('conf-detect-val');
+const confSeg = document.getElementById('conf-seg');
+const confSegVal = document.getElementById('conf-seg-val');
+
+const toggleBbox = document.getElementById('toggle-bbox');
+const toggleSeg = document.getElementById('toggle-seg');
+const toggleQuad = document.getElementById('toggle-quad');
+
+// Slider bindings
+confDetect.addEventListener('input', () => {
+  confDetectVal.textContent = Math.round(confDetect.value * 100) + '%';
+});
+confSeg.addEventListener('input', () => {
+  confSegVal.textContent = Math.round(confSeg.value * 100) + '%';
+});
+
+[confDetect, confSeg].forEach(input => {
+  input.addEventListener('change', () => {
+    const active = document.querySelector('.file-item.active');
+    if (active) loadFile(active.dataset.filename);
+  });
+});
+
+[toggleBbox, toggleSeg, toggleQuad].forEach(input => {
+  input.addEventListener('change', () => {
+    if (currentData) drawOverlay();
+  });
+});
+
+sourceSelect.addEventListener('change', () => {
+  loadFiles();
+});
+
+filterInput.addEventListener('input', () => {
+  renderFiles();
+});
+
+async function loadSources() {
+  try {
+    const res = await fetch('/api/rectify/sources');
+    const sources = await res.json();
+    if (sources && sources.length) {
+      sourceSelect.innerHTML = sources.map(s => `<option value="${s.id}">${s.label}</option>`).join('');
+    }
+  } catch (err) {
+    console.error('Ошибка загрузки источников', err);
+  }
+}
+
+async function loadFiles() {
+  filesList.innerHTML = '<div style="color: var(--muted); padding: 8px;">Загрузка файлов...</div>';
+  try {
+    const src = sourceSelect.value;
+    const res = await fetch(`/api/rectify/files?source=${src}`);
+    allFiles = await res.json();
+    renderFiles();
+    if (allFiles.length > 0) {
+      loadFile(allFiles[0]);
+    } else {
+      statusLine.textContent = 'В выбранном источнике нет изображений';
+      viewArea.style.display = 'none';
+    }
+  } catch (err) {
+    filesList.innerHTML = `<div style="color: #ff4757; padding: 8px;">Ошибка: ${err.message}</div>`;
+  }
+}
+
+function renderFiles() {
+  const q = filterInput.value.trim().toLowerCase();
+  const filtered = q ? allFiles.filter(f => f.toLowerCase().includes(q)) : allFiles;
+  if (!filtered.length) {
+    filesList.innerHTML = '<div style="color: var(--muted); padding: 8px;">Ничего не найдено</div>';
+    return;
+  }
+  filesList.innerHTML = filtered.map(f => `
+    <div class="file-item" data-filename="${f}" onclick="loadFile('${f}')"
+         style="padding: 6px 10px; font-size: 12px; border-radius: 4px; cursor: pointer; color: #ddd; word-break: break-all; transition: background 0.15s;">
+      ${f}
+    </div>
+  `).join('');
+}
+
+async function loadFile(filename) {
+  document.querySelectorAll('.file-item').forEach(el => {
+    if (el.dataset.filename === filename) {
+      el.classList.add('active');
+      el.style.background = 'var(--accent)';
+      el.style.color = '#fff';
+      el.style.fontWeight = '700';
+    } else {
+      el.classList.remove('active');
+      el.style.background = 'transparent';
+      el.style.color = '#ddd';
+      el.style.fontWeight = 'normal';
+    }
+  });
+
+  statusLine.textContent = `Инференс каскада v2 для ${filename}...`;
+  const src = sourceSelect.value;
+
+  const formData = new FormData();
+  formData.append('source', src);
+  formData.append('filename', filename);
+  formData.append('conf_detect', confDetect.value);
+  formData.append('conf_seg', confSeg.value);
+
+  try {
+    const res = await fetch('/api/rectify/process', {
+      method: 'POST',
+      body: formData,
+    });
+    if (!res.ok) throw new Error(await res.text());
+    currentData = await res.json();
+
+    statusLine.textContent = `${currentData.filename} — ${currentData.is_fallback ? '⚠️ Fallback на BBox' : '✓ Выпрямлено через 4 угла гомографии'} (${currentData.timings.total_ms} мс)`;
+    viewArea.style.display = 'block';
+
+    // Populate Info
+    document.getElementById('info-file').textContent = currentData.filename;
+    document.getElementById('info-res').textContent = `${currentData.orig_width} × ${currentData.orig_height} (${currentData.orig_mode})`;
+    document.getElementById('info-time-bbox').textContent = `${currentData.timings.bbox_ms} мс`;
+    document.getElementById('info-time-seg').textContent = `${currentData.timings.seg_ms} мс`;
+    document.getElementById('info-time-warp').textContent = `${currentData.timings.warp_ms} мс`;
+    document.getElementById('info-time-total').textContent = `${currentData.timings.total_ms} мс`;
+    
+    const statusEl = document.getElementById('info-status');
+    if (currentData.is_fallback) {
+      statusEl.innerHTML = '<span style="color: #ffa502; font-weight: 700;">⚠️ Fallback (BBox Crop)</span>';
+      matrixStatusBadge.textContent = '⚠️ Fallback на BBox';
+      matrixStatusBadge.style.background = 'rgba(255, 165, 2, 0.2)';
+      matrixStatusBadge.style.color = '#ffa502';
+      matrixStatusBadge.style.border = '1px solid #ffa502';
+    } else {
+      statusEl.innerHTML = '<span style="color: #2ed573; font-weight: 700;">✓ Точная матрица (Quad Warp)</span>';
+      matrixStatusBadge.textContent = '✓ Матрица выпрямлена';
+      matrixStatusBadge.style.background = 'rgba(46, 213, 115, 0.2)';
+      matrixStatusBadge.style.color = '#2ed573';
+      matrixStatusBadge.style.border = '1px solid #2ed573';
+    }
+
+    // Set matrix image
+    matrixImg.src = currentData.matrix_b64;
+
+    // Load full frame image and draw canvas
+    detectImg.onload = () => {
+      drawOverlay();
+    };
+    detectImg.src = currentData.image_url;
+
+  } catch (err) {
+    statusLine.textContent = `Ошибка обработки: ${err.message}`;
+  }
+}
+
+function drawOverlay() {
+  if (!currentData) return;
+  const nw = detectImg.naturalWidth;
+  const nh = detectImg.naturalHeight;
+  if (!nw || !nh) return;
+
+  detectCanvas.width = nw;
+  detectCanvas.height = nh;
+  const ctx = detectCanvas.getContext('2d');
+  ctx.clearRect(0, 0, nw, nh);
+
+  // 1. Draw BBox (Green)
+  if (toggleBbox.checked && currentData.bbox) {
+    const [xtl, ytl, xbr, ybr] = currentData.bbox;
+    ctx.strokeStyle = '#2ed573';
+    ctx.lineWidth = Math.max(2, Math.round(nw / 350));
+    ctx.strokeRect(xtl, ytl, xbr - xtl, ybr - ytl);
+    
+    ctx.fillStyle = '#2ed573';
+    ctx.font = `bold ${Math.max(12, Math.round(nw / 40))}px sans-serif`;
+    ctx.fillText('BBox (YOLO)', xtl + 6, ytl > 25 ? ytl - 6 : ytl + 20);
+  }
+
+  // 2. Draw Seg Polygon (Red dashed)
+  if (toggleSeg.checked && currentData.seg_polygon && currentData.seg_polygon.length > 2) {
+    const poly = currentData.seg_polygon;
+    ctx.beginPath();
+    ctx.setLineDash([6, 4]);
+    ctx.strokeStyle = '#ff4757';
+    ctx.lineWidth = Math.max(2, Math.round(nw / 400));
+    ctx.moveTo(poly[0][0], poly[0][1]);
+    for (let i = 1; i < poly.length; i++) {
+      ctx.lineTo(poly[i][0], poly[i][1]);
+    }
+    ctx.closePath();
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Semitransparent fill
+    ctx.fillStyle = 'rgba(255, 71, 87, 0.15)';
+    ctx.fill();
+  }
+
+  // 3. Draw 4 Quadrilateral Corners (Cyan solid + corner circles + labels)
+  if (toggleQuad.checked && currentData.quad_corners && currentData.quad_corners.length === 4) {
+    const q = currentData.quad_corners;
+    ctx.beginPath();
+    ctx.strokeStyle = '#00d2d3';
+    ctx.lineWidth = Math.max(3, Math.round(nw / 300));
+    ctx.moveTo(q[0][0], q[0][1]);
+    ctx.lineTo(q[1][0], q[1][1]);
+    ctx.lineTo(q[2][0], q[2][1]);
+    ctx.lineTo(q[3][0], q[3][1]);
+    ctx.closePath();
+    ctx.stroke();
+
+    const cornerLabels = ['1:TL', '2:TR', '3:BR', '4:BL'];
+    const radius = Math.max(5, Math.round(nw / 150));
+    
+    q.forEach((pt, i) => {
+      // Circle
+      ctx.beginPath();
+      ctx.arc(pt[0], pt[1], radius, 0, 2 * Math.PI);
+      ctx.fillStyle = '#00d2d3';
+      ctx.fill();
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Label
+      ctx.fillStyle = '#fff';
+      ctx.font = `bold ${Math.max(11, Math.round(nw / 50))}px sans-serif`;
+      ctx.fillText(cornerLabels[i], pt[0] + radius + 4, pt[1] + 4);
+    });
+  }
+}
+
+// Init on page load
+loadSources().then(loadFiles);
+</script>
+{% endblock %}

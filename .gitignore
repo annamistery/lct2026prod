@@ -21,6 +21,7 @@ imports/images/*
 logs/
 *.log
 log.txt
+*.egg-info/
 model_inventory*.txt
 sources/
 md/*

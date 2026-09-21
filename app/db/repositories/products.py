@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models.product import Product, ProductEmbedding
+from app.db.models.product import Product, ProductEmbedding, ProductEmbeddingV2
 
 
 @dataclass(frozen=True)
@@ -37,6 +37,13 @@ class ProductRepository:
         product.embeddings.append(embedding)
         self.session.add(product)
 
+    def add_v2(self, product: Product, embedding: ProductEmbeddingV2) -> None:
+        product.embeddings_v2.append(embedding)
+        self.session.add(product)
+
+    def add_embedding_v2(self, embedding: ProductEmbeddingV2) -> None:
+        self.session.add(embedding)
+
     async def nearest(self, embedding: list[float], limit: int) -> list[ProductCandidate]:
         distance = ProductEmbedding.embedding.cosine_distance(embedding)
         ranked = select(
@@ -46,6 +53,26 @@ class ProductRepository:
             ProductEmbedding.sample_type,
             distance.label("distance"),
             func.row_number().over(partition_by=ProductEmbedding.product_id, order_by=distance).label("product_rank"),
+        ).subquery()
+        statement = (
+            select(Product, ranked.c.embedding_id, ranked.c.image_path, ranked.c.sample_type, ranked.c.distance)
+            .join(ranked, ranked.c.product_id == Product.id)
+            .where(ranked.c.product_rank == 1)
+            .order_by(ranked.c.distance, Product.id)
+            .limit(limit)
+        )
+        rows = (await self.session.execute(statement)).all()
+        return [ProductCandidate(product=row[0], embedding_id=row[1], image_path=row[2], sample_type=row[3], distance=float(row[4])) for row in rows]
+
+    async def nearest_v2(self, embedding: list[float], limit: int) -> list[ProductCandidate]:
+        distance = ProductEmbeddingV2.embedding.cosine_distance(embedding)
+        ranked = select(
+            ProductEmbeddingV2.id.label("embedding_id"),
+            ProductEmbeddingV2.product_id,
+            ProductEmbeddingV2.image_path,
+            ProductEmbeddingV2.sample_type,
+            distance.label("distance"),
+            func.row_number().over(partition_by=ProductEmbeddingV2.product_id, order_by=distance).label("product_rank"),
         ).subquery()
         statement = (
             select(Product, ranked.c.embedding_id, ranked.c.image_path, ranked.c.sample_type, ranked.c.distance)

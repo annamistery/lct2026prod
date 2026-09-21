@@ -7,11 +7,13 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router import router
 from app.api.search.v1.router import router as search_v1_router
+from app.api.search.v2.router import router as search_v2_router
 from app.core.config import get_settings
 from app.core.lifespan import lifespan
 from app.core.logging import configure_logging
 from app.web.router import router as web_router
 from app.web.detect_router import router as detect_router
+from app.web.rectify_router import router as rectify_router
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
@@ -31,8 +33,10 @@ app.mount("/mobi", StaticFiles(directory=str(BASE_DIR.parent / "web"), html=True
 
 app.include_router(router)
 app.include_router(search_v1_router)
+app.include_router(search_v2_router)
 app.include_router(web_router)
 app.include_router(detect_router)
+app.include_router(rectify_router)
 
 
 @app.middleware("http")
