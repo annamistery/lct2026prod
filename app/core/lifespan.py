@@ -61,7 +61,15 @@ async def lifespan(app: FastAPI):
             target_size=settings.canonical_size,
         )
         app.state.rectification = rectification
-        pipeline = SearchPipelineV1(embeddings, images, SiftReranker(), asyncio.Semaphore(settings.gpu_concurrency), asyncio.Semaphore(settings.sift_concurrency), settings.candidate_pool_size)
+        pipeline = SearchPipelineV1(
+            embeddings=embeddings,
+            images=images,
+            reranker=SiftReranker(),
+            gpu_semaphore=asyncio.Semaphore(settings.gpu_concurrency),
+            sift_semaphore=asyncio.Semaphore(settings.sift_concurrency),
+            candidate_pool_size=settings.candidate_pool_size,
+            enable_sift_rerank=settings.enable_sift_rerank,
+        )
         app.state.pipeline_v1 = pipeline
 
         pipeline_v2 = SearchPipelineV2(

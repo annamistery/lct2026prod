@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     candidate_pool_size: int = Field(20, ge=1, le=100)
     gpu_concurrency: int = Field(1, ge=1, le=8)
     sift_concurrency: int = Field(2, ge=1, le=16)
+    enable_sift_rerank: bool = Field(False)
     cors_origins: str = ""
     log_level: str = "INFO"
 

@@ -19,6 +19,7 @@ class SearchPipelineV1:
     gpu_semaphore: asyncio.Semaphore
     sift_semaphore: asyncio.Semaphore
     candidate_pool_size: int
+    enable_sift_rerank: bool = False
 
     async def run(
         self,
@@ -34,8 +35,36 @@ class SearchPipelineV1:
             embedding = await asyncio.to_thread(self.embeddings.embed, image)
             embedding_ms = self._elapsed(embedding_started)
         database_started = time.perf_counter()
-        candidates = await repository.nearest(embedding, max(k, self.candidate_pool_size))
+        candidates = await repository.nearest(embedding, max(k, self.candidate_pool_size if self.enable_sift_rerank else k))
         pgvector_ms = self._elapsed(database_started)
+
+        if not self.enable_sift_rerank:
+            results = [
+                SearchResult(
+                    product_id=cand.product.id,
+                    slug=cand.product.slug,
+                    title=cand.product.title,
+                    manufacturer=cand.product.manufacturer,
+                    description=cand.product.description,
+                    image_url=f"/api/media/{cand.image_path}",
+                    dino_similarity=round(1.0 - cand.distance, 4),
+                    sift_score=round(1.0 - cand.distance, 4),
+                    inliers=0,
+                    inlier_ratio=0.0,
+                    pgvector_rank=rank,
+                    final_rank=rank,
+                )
+                for rank, cand in enumerate(candidates[:k], 1)
+            ]
+            timings = SearchTimings(embedding_ms=embedding_ms, pgvector_ms=pgvector_ms, sift_ms=0.0, total_ms=self._elapsed(started))
+            return SearchResponse(
+                winner=results[0] if results else None,
+                results=results,
+                timings=timings,
+                query_crop=query_crop,
+                augmentation_applied=augmentation_applied,
+            )
+
         sift_started = time.perf_counter()
 
         async def score(rank: int, candidate):

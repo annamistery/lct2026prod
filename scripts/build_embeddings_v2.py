@@ -35,13 +35,14 @@ async def build_v2_catalog(limit: int | None = None, batch_size: int = 32, repla
     session_factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
     logger.info("Инициализация моделей для пайплайна v2...")
-    detector = DetectorService(settings.yolo_model_path, settings.yolo_confidence)
+    detector = DetectorService(settings.resolved_yolo_model_path, settings.yolo_confidence)
     segmenter = None
-    if settings.yolo_seg_model_path.is_file():
-        segmenter = SegmenterService(settings.yolo_seg_model_path, settings.yolo_seg_confidence)
-        logger.info("✓ YOLO сегментатор загружен: %s", settings.yolo_seg_model_path)
+    seg_path = settings.resolved_yolo_seg_model_path
+    if seg_path.is_file():
+        segmenter = SegmenterService(seg_path, settings.yolo_seg_confidence)
+        logger.info("✓ YOLO сегментатор загружен: %s", seg_path)
     else:
-        logger.warning("⚠️ YOLO сегментатор не найден: %s (будет использован BBox fallback)", settings.yolo_seg_model_path)
+        logger.warning("⚠️ YOLO сегментатор не найден: %s (будет использован BBox fallback)", seg_path)
 
     rectifier = RectificationService(
         detector=detector,
