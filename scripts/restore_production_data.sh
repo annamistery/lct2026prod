@@ -60,6 +60,10 @@ COUNT=$(docker compose exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t 
 EMB_COUNT=$(docker compose exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t -c "SELECT count(*) FROM product_embeddings;" | tr -d ' \r\n')
 echo "✓ База успешно восстановлена: товаров: $COUNT, эмбеддингов: $EMB_COUNT"
 
+echo "Применение миграций схемы базы данных (Alembic)..."
+docker compose run --rm migrate >/dev/null 2>&1 || docker compose up -d migrate
+echo "✓ Миграции базы данных актуализированы"
+
 echo "=== [4/5] Распаковка медиа-кропов каталога ==="
 mkdir -p "$ROOT_DIR/media"
 tar -xzf "$MEDIA_ARCHIVE" -C "$ROOT_DIR/media"
