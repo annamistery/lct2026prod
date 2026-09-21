@@ -236,30 +236,52 @@ class RectificationService:
                 y_bot = (1.0 - b_ratio) * bl[1] + b_ratio * br[1]
                 return float((y_top + y_bot) * 0.5)
 
-            top_pts = [tl, tr]
-            bot_pts = [bl, br]
-
-            for p in pts:
-                if p[1] < mid_y(p[0]):
-                    top_pts.append(p)
-                else:
-                    bot_pts.append(p)
-
             # Fit 2nd-degree polynomial (arc of cylinder) to top and bottom curves
+            # Top boundary points strictly between TL and TR (ignoring outer 10% flanks)
+            x_left = tl[0] + 0.05 * (tr[0] - tl[0])
+            x_right = tr[0] - 0.05 * (tr[0] - tl[0])
+
+            valid_top = [p for p in pts if x_left <= p[0] <= x_right and p[1] < mid_y(p[0])]
+            valid_bot = [p for p in pts if x_left <= p[0] <= x_right and p[1] >= mid_y(p[0])]
+
+            # Always anchor with corner points
+            top_pts = [tl, tr] + valid_top
+            bot_pts = [bl, br] + valid_bot
+
             top_arr = np.array(top_pts, dtype=np.float32)
             bot_arr = np.array(bot_pts, dtype=np.float32)
 
-            if len(top_arr) >= 4:
-                coeffs_top = np.polyfit(top_arr[:, 0], top_arr[:, 1], 2)
-                poly_top = np.poly1d(coeffs_top)
-            else:
-                poly_top = lambda x: (1.0 - np.clip((x - tl[0]) / max(1e-5, tr[0] - tl[0]), 0.0, 1.0)) * tl[1] + np.clip((x - tl[0]) / max(1e-5, tr[0] - tl[0]), 0.0, 1.0) * tr[1]
+            # Linear fallbacks (exact straight homography edges)
+            def lin_top(x: float | np.ndarray) -> np.ndarray:
+                t = np.clip((x - tl[0]) / max(1e-5, tr[0] - tl[0]), 0.0, 1.0)
+                return (1.0 - t) * tl[1] + t * tr[1]
 
-            if len(bot_arr) >= 4:
-                coeffs_bot = np.polyfit(bot_arr[:, 0], bot_arr[:, 1], 2)
-                poly_bot = np.poly1d(coeffs_bot)
-            else:
-                poly_bot = lambda x: (1.0 - np.clip((x - bl[0]) / max(1e-5, br[0] - bl[0]), 0.0, 1.0)) * bl[1] + np.clip((x - bl[0]) / max(1e-5, br[0] - bl[0]), 0.0, 1.0) * br[1]
+            def lin_bot(x: float | np.ndarray) -> np.ndarray:
+                t = np.clip((x - bl[0]) / max(1e-5, br[0] - bl[0]), 0.0, 1.0)
+                return (1.0 - t) * bl[1] + t * br[1]
+
+            poly_top = lin_top
+            if len(valid_top) >= 6:
+                try:
+                    c_top = np.polyfit(top_arr[:, 0], top_arr[:, 1], 2)
+                    mid_x = (tl[0] + tr[0]) * 0.5
+                    lin_y = (tl[1] + tr[1]) * 0.5
+                    # Check that arc curvature is mild (less than 15% of crop height)
+                    if abs(np.poly1d(c_top)(mid_x) - lin_y) < (crop_h * 0.15):
+                        poly_top = np.poly1d(c_top)
+                except Exception:
+                    poly_top = lin_top
+
+            poly_bot = lin_bot
+            if len(valid_bot) >= 6:
+                try:
+                    c_bot = np.polyfit(bot_arr[:, 0], bot_arr[:, 1], 2)
+                    mid_x = (bl[0] + br[0]) * 0.5
+                    lin_y = (bl[1] + br[1]) * 0.5
+                    if abs(np.poly1d(c_bot)(mid_x) - lin_y) < (crop_h * 0.15):
+                        poly_bot = np.poly1d(c_bot)
+                except Exception:
+                    poly_bot = lin_bot
 
             # Build remap grid of size (target_size, target_size)
             W, H = self.target_size, self.target_size

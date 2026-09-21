@@ -58,7 +58,7 @@
     <div id="view-area" style="display: none;">
       
       <!-- Переключатели слоёв оверлея -->
-      <div style="display: flex; gap: 16px; margin-bottom: 16px; align-items: center; background: var(--surface-2); padding: 8px 14px; border-radius: 6px; border: 1px solid var(--border);">
+      <div style="display: flex; gap: 16px; margin-bottom: 16px; align-items: center; background: var(--surface-2); padding: 8px 14px; border-radius: 6px; border: 1px solid var(--border); flex-wrap: wrap;">
         <span style="font-size: 12px; color: var(--muted); font-weight: 600;">Слои оверлея:</span>
         <label style="font-size: 12px; color: #2ed573; cursor: pointer; display: flex; align-items: center; gap: 4px;">
           <input type="checkbox" id="toggle-bbox" checked> BBox детекция
@@ -69,6 +69,9 @@
         <label style="font-size: 12px; color: #00d2d3; cursor: pointer; display: flex; align-items: center; gap: 4px;">
           <input type="checkbox" id="toggle-quad" checked> 4-угольник (Quad)
         </label>
+        <button id="btn-export-debug" onclick="exportDebugArtifacts()" style="margin-left: auto; background: var(--surface); border: 1px solid var(--accent); color: #fff; padding: 5px 12px; border-radius: 4px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+          💾 Сохранить диагностику в файл
+        </button>
       </div>
 
       <div style="display: flex; gap: 24px; align-items: flex-start; margin-bottom: 24px; flex-wrap: wrap;">
@@ -380,5 +383,46 @@ function drawOverlay() {
 
 // Init on page load
 loadSources().then(loadFiles);
+
+async function exportDebugArtifacts() {
+  const btn = document.getElementById('btn-export-debug');
+  const activeEl = document.querySelector('.file-item.active');
+  const filename = activeEl ? activeEl.dataset.filename : '';
+  if (!filename) {
+    alert('Пожалуйста, выберите файл из списка слева.');
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = '⏳ Сохранение...';
+
+  const formData = new FormData();
+  formData.append('source', sourceSelect.value);
+  formData.append('filename', filename);
+  formData.append('conf_detect', confDetect.value);
+  formData.append('conf_seg', confSeg.value);
+
+  try {
+    const res = await fetch('/api/rectify/export_debug', {
+      method: 'POST',
+      body: formData
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Ошибка экспорта');
+
+    const a = document.createElement('a');
+    a.href = data.collage_b64;
+    a.download = `debug_${filename.replace(/\.[^/.]+$/, '')}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+
+    alert(`✓ Диагностический коллаж скачан на ваш ПК и сохранён на сервере:\n${data.server_export_dir}`);
+  } catch (err) {
+    alert('Ошибка экспорта: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '💾 Сохранить диагностику в файл';
+  }
+}
 </script>
 {% endblock %}

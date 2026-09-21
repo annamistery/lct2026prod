@@ -279,9 +279,14 @@
     </div>
 
     <div id="results-area" style="display: none;">
-      <div class="section-title">
-        <span>Сопоставление изображений v2</span>
-        <span style="font-size: 12px; color: var(--muted); font-weight: normal;">(кликните на картинку для зума в полный размер)</span>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 18px; margin-bottom: 12px; flex-wrap: wrap; gap: 10px;">
+        <div class="section-title" style="margin: 0;">
+          <span>Сопоставление изображений v2</span>
+          <span style="font-size: 12px; color: var(--muted); font-weight: normal;">(кликните на картинку для зума)</span>
+        </div>
+        <button id="btn-export-debug" onclick="exportDebugArtifacts()" style="background: var(--surface-2); border: 1px solid var(--accent); color: #fff; padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: opacity 0.2s;">
+          💾 Сохранить диагностику (BBox + Seg + Матрица)
+        </button>
       </div>
 
       <!-- Триптих: Загруженный оригинал | Выпрямленная матрица v2 | Победитель Топ-1 -->
@@ -610,6 +615,46 @@ function renderResults(data, originalUrl) {
 
 // Init
 loadSources().then(loadFiles);
+
+async function exportDebugArtifacts() {
+  const btn = document.getElementById('btn-export-debug');
+  const activeEl = document.querySelector('.file-item.active');
+  const filename = activeEl ? activeEl.dataset.filename : '';
+  if (!filename) {
+    alert('Пожалуйста, выберите файл из списка слева для сохранения диагностики.');
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = '⏳ Сохранение на сервере...';
+
+  const formData = new FormData();
+  formData.append('source', sourceSelect.value);
+  formData.append('filename', filename);
+
+  try {
+    const res = await fetch('/api/rectify/export_debug', {
+      method: 'POST',
+      body: formData
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Ошибка экспорта');
+
+    // Trigger download
+    const a = document.createElement('a');
+    a.href = data.collage_b64;
+    a.download = `debug_${filename.replace(/\.[^/.]+$/, '')}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+
+    alert(`✓ Диагностические файлы сохранены на сервере в папку:\n${data.server_export_dir}\n\nКоллаж со всеми этапами (BBox + Seg + Матрица) скачан на ваш ПК.`);
+  } catch (err) {
+    alert('Ошибка экспорта: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '💾 Сохранить диагностику (BBox + Seg + Матрица)';
+  }
+}
 
 async function loadSources() {
   try {
