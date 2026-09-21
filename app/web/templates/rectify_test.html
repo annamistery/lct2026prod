@@ -264,7 +264,7 @@ async function loadFile(filename) {
     if (!res.ok) throw new Error(await res.text());
     currentData = await res.json();
 
-    statusLine.textContent = `${currentData.filename} — ${currentData.is_fallback ? '⚠️ Fallback на BBox' : '✓ Выпрямлено через 4 угла гомографии'} (${currentData.timings.total_ms} мс)`;
+    statusLine.textContent = `${currentData.filename} — ${currentData.is_fallback ? '⚠️ Fallback на BBox' : '✓ Выпрямлено по полной обводке сегментации'} (${currentData.timings.total_ms} мс)`;
     viewArea.style.display = 'block';
 
     // Populate Info
@@ -289,8 +289,8 @@ async function loadFile(filename) {
       matrixStatusBadge.style.color = '#ffa502';
       matrixStatusBadge.style.border = '1px solid #ffa502';
     } else {
-      statusEl.innerHTML = '<span style="color: #2ed573; font-weight: 700;">✓ Точная матрица (Quad Warp)</span>';
-      matrixStatusBadge.textContent = '✓ Матрица выпрямлена';
+      statusEl.innerHTML = '<span style="color: #2ed573; font-weight: 700;">✓ Точная матрица (Вся обводка сегментации)</span>';
+      matrixStatusBadge.textContent = '✓ Вся обводка развернута';
       matrixStatusBadge.style.background = 'rgba(46, 213, 115, 0.2)';
       matrixStatusBadge.style.color = '#2ed573';
       matrixStatusBadge.style.border = '1px solid #2ed573';

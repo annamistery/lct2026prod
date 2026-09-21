@@ -268,12 +268,12 @@ async def export_debug_artifacts(
         c_draw = ImageDraw.Draw(collage)
 
         # ASCII only to prevent Pillow default font UnicodeEncodeError on Linux
-        status_str = "FALLBACK (BBox)" if result.is_fallback else "QUAD WARP (Matrix)"
+        status_str = "FALLBACK (BBox)" if result.is_fallback else "CONTOUR UNROLL (Matrix v2)"
         c_draw.text((20, 12), f"LCT2026: {filename} | {status_str}", fill="#ffffff")
         c_draw.text((20, 36), f"BBox: {result.bbox_ms}ms | Seg: {result.seg_ms}ms | Warp: {result.warp_ms}ms | Total: {result.total_ms}ms", fill="#aaaaaa")
 
         x_cursor = gap
-        c_draw.text((x_cursor, header_h - 18), "1. Original + BBox + Seg + 4 Corners", fill="#2ed573")
+        c_draw.text((x_cursor, header_h - 18), "1. Original + BBox + Full Seg Contour", fill="#2ed573")
         collage.paste(ov_resized, (x_cursor, header_h))
         x_cursor += ov_w + gap
 
@@ -281,7 +281,7 @@ async def export_debug_artifacts(
         collage.paste(bb_resized, (x_cursor, header_h))
         x_cursor += bb_w + gap
 
-        c_draw.text((x_cursor, header_h - 18), "3. Matrix v2 (256x256)", fill="#00d2d3")
+        c_draw.text((x_cursor, header_h - 18), "3. Full Contour Matrix v2 (256x256)", fill="#00d2d3")
         collage.paste(mat_resized, (x_cursor, header_h))
 
         # Save to media/debug_exports on disk (always writable in Docker)
@@ -366,7 +366,7 @@ async def export_debug_artifacts(
         report_lines.extend([
             "",
             "-" * 80,
-            "3. 4 ОПОРНЫХ УГЛА ГОМОГРАФИИ (QUADRILATERAL)",
+            "3. 4 ОПОРНЫХ УГЛА ГРАНИЦ СЕГМЕНТАЦИИ (TL, TR, BR, BL)",
             "-" * 80,
         ])
         if result.quad_corners_orig and len(result.quad_corners_orig) == 4:
@@ -375,6 +375,7 @@ async def export_debug_artifacts(
             report_lines.append(f"  2:TR (Top-Right):    ({q[1][0]}, {q[1][1]})")
             report_lines.append(f"  3:BR (Bottom-Right): ({q[2][0]}, {q[2][1]})")
             report_lines.append(f"  4:BL (Bottom-Left):  ({q[3][0]}, {q[3][1]})")
+            report_lines.append("  Алгоритм развертки: Coons Patch (трансфинитная интерполяция всей обводки сегментации)")
         else:
             report_lines.append("4 угла не извлечены (использован BBox fallback).")
 

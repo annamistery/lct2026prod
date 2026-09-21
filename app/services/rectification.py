@@ -55,33 +55,46 @@ class RectificationService:
         crop_w: int,
         crop_h: int,
     ) -> np.ndarray | None:
-        """Extracts 4 ordered corner points from a segmentation polygon contour."""
-        pts = np.array(polygon, dtype=np.float32).reshape(-1, 1, 2)
+        """Extracts 4 boundary corner anchors from the full segmentation polygon."""
+        pts = np.array(polygon, dtype=np.float32)
         if len(pts) < 4:
             return None
 
-        peri = cv2.arcLength(pts, True)
-        quad = None
+        # Ensure clockwise orientation
+        sa = 0.5 * np.sum(pts[:, 0] * np.roll(pts[:, 1], -1) - pts[:, 1] * np.roll(pts[:, 0], -1))
+        if sa < 0:
+            pts = pts[::-1]
 
-        # 1. Try approxPolyDP with progressive epsilon to find 4 corners
-        for factor in (0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.015, 0.01):
-            approx = cv2.approxPolyDP(pts, factor * peri, True)
-            if len(approx) == 4:
-                quad = approx.reshape(4, 2)
-                break
+        center = np.mean(pts, axis=0)
+        pts_c = pts - center
+        cov = np.cov(pts_c, rowvar=False)
+        evals, evecs = np.linalg.eigh(cov)
 
-        # 2. Fallback to minimal rotated bounding rectangle
-        if quad is None:
-            rect = cv2.minAreaRect(pts)
-            quad = cv2.boxPoints(rect)
+        # Primary vertical axis of bottle
+        v_y = evecs[:, 1]
+        if v_y[1] < 0:
+            v_y = -v_y
+        # Primary horizontal axis of bottle (pointing right)
+        v_x = np.array([v_y[1], -v_y[0]])
+        if v_x[0] < 0:
+            v_x = -v_x
 
-        quad = self.order_points(np.array(quad, dtype=np.float32))
+        proj_x = pts_c @ v_x
+        proj_y = pts_c @ v_y
+
+        idx_tl = int(np.argmin(proj_x + proj_y))
+        idx_tr = int(np.argmin(-proj_x + proj_y))
+        idx_br = int(np.argmax(proj_x + proj_y))
+        idx_bl = int(np.argmax(-proj_x + proj_y))
+
+        quad = np.array([pts[idx_tl], pts[idx_tr], pts[idx_br], pts[idx_bl]], dtype=np.float32)
+        quad = self.order_points(quad)
 
         # Clamp points to crop boundaries
         quad[:, 0] = np.clip(quad[:, 0], 0, crop_w - 1)
         quad[:, 1] = np.clip(quad[:, 1], 0, crop_h - 1)
 
-        # Sanity check: quadrilateral area must be at least 2% of crop
+        # Sanity check: area must be at least 2% of crop
         area = abs(float(cv2.contourArea(quad)))
         if area < (crop_w * crop_h * 0.02):
             return None
@@ -214,100 +227,108 @@ class RectificationService:
         self,
         crop_image: Image.Image,
         polygon: list[tuple[float, float]],
-        quad: np.ndarray,
+        quad: np.ndarray | None = None,
     ) -> Image.Image:
-        """Unrolls curved cylindrical bottle label into a flat canonical square matrix using cv2.remap.
+        """Unrolls the entire segmentation boundary contour into a canonical square matrix (target_size x target_size).
 
-        Straightens top and bottom arc curves and stretches horizontally compressed text on cylinder flanks.
+        Preserves 100% of the label surface without cutting edges, straightening top/bottom curves
+        and compensating for cylindrical perspective via transfinite interpolation (Coons patch).
         """
         try:
             crop_np = np.array(crop_image.convert("RGB"))
             crop_h, crop_w = crop_np.shape[:2]
 
-            tl, tr, br, bl = quad[0], quad[1], quad[2], quad[3]
-
             pts = np.array(polygon, dtype=np.float32)
+            N = len(pts)
+            if N < 4:
+                return crop_image.convert("RGB").resize((self.target_size, self.target_size), Image.Resampling.LANCZOS)
 
-            # Mid-line Y between top edge (TL-TR) and bottom edge (BL-BR)
-            def mid_y(x: float) -> float:
-                t_ratio = np.clip((x - tl[0]) / max(1e-5, (tr[0] - tl[0])), 0.0, 1.0)
-                b_ratio = np.clip((x - bl[0]) / max(1e-5, (br[0] - bl[0])), 0.0, 1.0)
-                y_top = (1.0 - t_ratio) * tl[1] + t_ratio * tr[1]
-                y_bot = (1.0 - b_ratio) * bl[1] + b_ratio * br[1]
-                return float((y_top + y_bot) * 0.5)
+            # Ensure Clockwise orientation
+            sa = 0.5 * np.sum(pts[:, 0] * np.roll(pts[:, 1], -1) - pts[:, 1] * np.roll(pts[:, 0], -1))
+            if sa < 0:
+                pts = pts[::-1]
 
-            # Fit 2nd-degree polynomial (arc of cylinder) to top and bottom curves
-            # Top boundary points strictly between TL and TR (ignoring outer 10% flanks)
-            x_left = tl[0] + 0.05 * (tr[0] - tl[0])
-            x_right = tr[0] - 0.05 * (tr[0] - tl[0])
+            center = np.mean(pts, axis=0)
+            pts_c = pts - center
+            cov = np.cov(pts_c, rowvar=False)
+            evals, evecs = np.linalg.eigh(cov)
 
-            valid_top = [p for p in pts if x_left <= p[0] <= x_right and p[1] < mid_y(p[0])]
-            valid_bot = [p for p in pts if x_left <= p[0] <= x_right and p[1] >= mid_y(p[0])]
+            # Primary vertical axis of bottle
+            v_y = evecs[:, 1]
+            if v_y[1] < 0:
+                v_y = -v_y
+            # Primary horizontal axis of bottle (pointing right)
+            v_x = np.array([v_y[1], -v_y[0]])
+            if v_x[0] < 0:
+                v_x = -v_x
 
-            # Always anchor with corner points
-            top_pts = [tl, tr] + valid_top
-            bot_pts = [bl, br] + valid_bot
+            proj_x = pts_c @ v_x
+            proj_y = pts_c @ v_y
 
-            top_arr = np.array(top_pts, dtype=np.float32)
-            bot_arr = np.array(bot_pts, dtype=np.float32)
+            idx_tl = int(np.argmin(proj_x + proj_y))
+            idx_tr = int(np.argmin(-proj_x + proj_y))
+            idx_br = int(np.argmax(proj_x + proj_y))
+            idx_bl = int(np.argmax(-proj_x + proj_y))
 
-            # Linear fallbacks (exact straight homography edges)
-            def lin_top(x: float | np.ndarray) -> np.ndarray:
-                t = np.clip((x - tl[0]) / max(1e-5, tr[0] - tl[0]), 0.0, 1.0)
-                return (1.0 - t) * tl[1] + t * tr[1]
+            def get_arc(i_from: int, i_to: int, step_dir: int = 1) -> np.ndarray:
+                steps = ((i_to - i_from) * step_dir) % N
+                return np.array([pts[(i_from + step_dir * s) % N] for s in range(steps + 1)], dtype=np.float32)
 
-            def lin_bot(x: float | np.ndarray) -> np.ndarray:
-                t = np.clip((x - bl[0]) / max(1e-5, br[0] - bl[0]), 0.0, 1.0)
-                return (1.0 - t) * bl[1] + t * br[1]
+            c_top_raw = get_arc(idx_tl, idx_tr, 1)      # TL -> TR along top boundary
+            c_right_raw = get_arc(idx_tr, idx_br, 1)    # TR -> BR along right flank
+            c_bot_raw = get_arc(idx_bl, idx_br, -1)    # BL -> BR along bottom boundary
+            c_left_raw = get_arc(idx_tl, idx_bl, -1)   # TL -> BL along left flank
 
-            poly_top = lin_top
-            if len(valid_top) >= 6:
-                try:
-                    c_top = np.polyfit(top_arr[:, 0], top_arr[:, 1], 2)
-                    mid_x = (tl[0] + tr[0]) * 0.5
-                    lin_y = (tl[1] + tr[1]) * 0.5
-                    # Check that arc curvature is mild (less than 15% of crop height)
-                    if abs(np.poly1d(c_top)(mid_x) - lin_y) < (crop_h * 0.15):
-                        poly_top = np.poly1d(c_top)
-                except Exception:
-                    poly_top = lin_top
+            def resample_curve(curve_pts: np.ndarray, num_samples: int, cylindrical: bool = False) -> np.ndarray:
+                dists = np.linalg.norm(np.diff(curve_pts, axis=0), axis=1)
+                cum_dist = np.insert(np.cumsum(dists), 0, 0.0)
+                total_len = cum_dist[-1]
+                if total_len < 1e-5:
+                    return np.repeat(curve_pts[0:1], num_samples, axis=0)
 
-            poly_bot = lin_bot
-            if len(valid_bot) >= 6:
-                try:
-                    c_bot = np.polyfit(bot_arr[:, 0], bot_arr[:, 1], 2)
-                    mid_x = (bl[0] + br[0]) * 0.5
-                    lin_y = (bl[1] + br[1]) * 0.5
-                    if abs(np.poly1d(c_bot)(mid_x) - lin_y) < (crop_h * 0.15):
-                        poly_bot = np.poly1d(c_bot)
-                except Exception:
-                    poly_bot = lin_bot
+                t_norm = cum_dist / total_len
+                cols = np.linspace(0.0, 1.0, num_samples, dtype=np.float32)
 
-            # Build remap grid of size (target_size, target_size)
+                if cylindrical:
+                    theta_0 = 0.82  # ~47 degrees cylindrical view angle
+                    s_norm = 2.0 * cols - 1.0
+                    theta = s_norm * theta_0
+                    factor = np.sin(theta) / np.sin(theta_0)
+                    u = np.clip((factor + 1.0) * 0.5, 0.0, 1.0)
+                else:
+                    u = cols
+
+                x_s = np.interp(u, t_norm, curve_pts[:, 0])
+                y_s = np.interp(u, t_norm, curve_pts[:, 1])
+                return np.column_stack([x_s, y_s])
+
             W, H = self.target_size, self.target_size
-            theta_0 = 0.82  # ~47 degrees cylindrical view angle
+            c_top = resample_curve(c_top_raw, W, cylindrical=True)
+            c_bot = resample_curve(c_bot_raw, W, cylindrical=True)
+            c_left = resample_curve(c_left_raw, H, cylindrical=False)
+            c_right = resample_curve(c_right_raw, H, cylindrical=False)
 
-            cols = np.linspace(0.0, 1.0, W, dtype=np.float32)
-            s_norm = 2.0 * cols - 1.0
-            theta = s_norm * theta_0
-            factor = np.sin(theta) / np.sin(theta_0)
-            u = np.clip((factor + 1.0) * 0.5, 0.0, 1.0)
+            p_tl = c_top[0]
+            p_tr = c_top[-1]
+            p_bl = c_bot[0]
+            p_br = c_bot[-1]
 
-            x_top = (1.0 - u) * tl[0] + u * tr[0]
-            x_bot = (1.0 - u) * bl[0] + u * br[0]
+            u = np.linspace(0.0, 1.0, W, dtype=np.float32)[None, :]
+            v = np.linspace(0.0, 1.0, H, dtype=np.float32)[:, None]
 
-            y_top = np.array([float(poly_top(x)) for x in x_top], dtype=np.float32)
-            y_bot = np.array([float(poly_bot(x)) for x in x_bot], dtype=np.float32)
+            # Coons Patch Transfinite Interpolation
+            blend_tb = (1.0 - v) * c_top[None, :, :] + v * c_bot[None, :, :]
+            blend_lr = (1.0 - u[:, :, None]) * c_left[:, None, :] + u[:, :, None] * c_right[:, None, :]
+            blend_corners = (
+                (1.0 - u[:, :, None]) * (1.0 - v) * p_tl +
+                u[:, :, None] * (1.0 - v) * p_tr +
+                (1.0 - u[:, :, None]) * v * p_bl +
+                u[:, :, None] * v * p_br
+            )
 
-            y_bot = np.maximum(y_bot, y_top + 10.0)
-
-            rows = np.linspace(0.0, 1.0, H, dtype=np.float32)[:, None]
-
-            map_x = ((1.0 - rows) * x_top[None, :] + rows * x_bot[None, :]).astype(np.float32)
-            map_y = ((1.0 - rows) * y_top[None, :] + rows * y_bot[None, :]).astype(np.float32)
-
-            map_x = np.clip(map_x, 0, crop_w - 1)
-            map_y = np.clip(map_y, 0, crop_h - 1)
+            map_grid = blend_tb + blend_lr - blend_corners
+            map_x = np.clip(map_grid[:, :, 0].astype(np.float32), 0, crop_w - 1)
+            map_y = np.clip(map_grid[:, :, 1].astype(np.float32), 0, crop_h - 1)
 
             unrolled = cv2.remap(
                 crop_np,
@@ -318,7 +339,9 @@ class RectificationService:
             )
             return Image.fromarray(unrolled)
         except Exception:
-            return self._warp_perspective(crop_image, quad)
+            if quad is not None:
+                return self._warp_perspective(crop_image, quad)
+            return crop_image.convert("RGB").resize((self.target_size, self.target_size), Image.Resampling.LANCZOS)
 
     def _warp_perspective(self, crop_image: Image.Image, quad: np.ndarray) -> Image.Image:
         """Applies 4-point perspective warp into canonical square matrix."""
