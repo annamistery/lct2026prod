@@ -31,6 +31,20 @@ logger = logging.getLogger("build_embeddings_v2")
 
 async def build_v2_catalog(limit: int | None = None, batch_size: int = 32, replace: bool = False):
     settings = get_settings()
+
+    # Ensure database schema is up to date with migrations
+    logger.info("Проверка и применение миграций базы данных (Alembic)...")
+    try:
+        from alembic import command
+        from alembic.config import Config
+
+        alembic_cfg = Config(str(ROOT_DIR / "alembic.ini"))
+        alembic_cfg.set_main_option("script_location", str(ROOT_DIR / "alembic"))
+        await asyncio.to_thread(command.upgrade, alembic_cfg, "head")
+        logger.info("✓ Миграции базы данных успешно применены (включая product_embeddings_v2).")
+    except Exception as e:
+        logger.warning("Не удалось автоматически применить миграции alembic: %s", e)
+
     engine = create_async_engine(settings.database_url, echo=False)
     session_factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
