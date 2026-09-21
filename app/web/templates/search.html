@@ -401,10 +401,12 @@ function renderResults(data, originalUrl) {
           <div style="font-size: 12px; color: #aaa; margin-bottom: 12px;">${w.description || ''}</div>
           <div class="scores-row" style="flex-wrap: wrap;">
             <div class="score-badge">DINO Similarity: <strong>${(w.dino_similarity * 100).toFixed(1)}%</strong></div>
-            <div class="score-badge">SIFT Score: <strong>${w.sift_score.toFixed(3)}</strong></div>
-            <div class="score-badge">SIFT Inliers: <strong>${w.inliers}</strong></div>
-            <div class="score-badge">Inlier Ratio: <strong>${(w.inlier_ratio * 100).toFixed(1)}%</strong></div>
-            <div class="score-badge">Общее время: <strong>${data.timings.total_ms} мс</strong> (DINO: ${data.timings.embedding_ms}мс, DB: ${data.timings.pgvector_ms}мс, SIFT: ${data.timings.sift_ms}мс)</div>
+            ${w.sift_score != null ? `
+              <div class="score-badge">SIFT Score: <strong>${w.sift_score.toFixed(3)}</strong></div>
+              <div class="score-badge">SIFT Inliers: <strong>${w.inliers}</strong></div>
+              <div class="score-badge">Inlier Ratio: <strong>${(w.inlier_ratio * 100).toFixed(1)}%</strong></div>
+            ` : ''}
+            <div class="score-badge">Общее время: <strong>${data.timings.total_ms} мс</strong> (DINO: ${data.timings.embedding_ms}мс, DB: ${data.timings.pgvector_ms}мс${data.timings.sift_ms != null ? `, SIFT: ${data.timings.sift_ms}мс` : ''})</div>
           </div>
         </div>
       </div>
@@ -431,8 +433,7 @@ function renderResults(data, originalUrl) {
         <div class="card-meta" style="font-size: 12px; margin-bottom: 8px;">${r.manufacturer}</div>
         <div style="display: flex; gap: 8px; font-size: 11px; color: var(--muted); margin-top: auto; flex-wrap: wrap;">
           <span>DINO: <strong>${(r.dino_similarity * 100).toFixed(0)}%</strong></span>
-          <span>SIFT: <strong>${r.sift_score.toFixed(2)}</strong></span>
-          <span>Inliers: <strong>${r.inliers}</strong></span>
+          ${r.sift_score != null ? `<span>SIFT: <strong>${r.sift_score.toFixed(2)}</strong></span><span>Inliers: <strong>${r.inliers}</strong></span>` : ''}
         </div>
       </div>
     </div>

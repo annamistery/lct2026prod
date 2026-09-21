@@ -11,9 +11,9 @@ class SearchResult(BaseModel):
     description: str
     image_url: str
     dino_similarity: float
-    sift_score: float
-    inliers: int
-    inlier_ratio: float
+    sift_score: float | None = None
+    inliers: int | None = None
+    inlier_ratio: float | None = None
     pgvector_rank: int
     final_rank: int
 
@@ -21,7 +21,7 @@ class SearchResult(BaseModel):
 class SearchTimings(BaseModel):
     embedding_ms: float
     pgvector_ms: float
-    sift_ms: float
+    sift_ms: float | None = None
     total_ms: float
 
 

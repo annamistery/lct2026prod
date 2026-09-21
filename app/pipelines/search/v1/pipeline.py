@@ -48,15 +48,15 @@ class SearchPipelineV1:
                     description=cand.product.description,
                     image_url=f"/api/media/{cand.image_path}",
                     dino_similarity=round(1.0 - cand.distance, 4),
-                    sift_score=round(1.0 - cand.distance, 4),
-                    inliers=0,
-                    inlier_ratio=0.0,
+                    sift_score=None,
+                    inliers=None,
+                    inlier_ratio=None,
                     pgvector_rank=rank,
                     final_rank=rank,
                 )
                 for rank, cand in enumerate(candidates[:k], 1)
             ]
-            timings = SearchTimings(embedding_ms=embedding_ms, pgvector_ms=pgvector_ms, sift_ms=0.0, total_ms=self._elapsed(started))
+            timings = SearchTimings(embedding_ms=embedding_ms, pgvector_ms=pgvector_ms, sift_ms=None, total_ms=self._elapsed(started))
             return SearchResponse(
                 winner=results[0] if results else None,
                 results=results,
