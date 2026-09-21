@@ -9,7 +9,7 @@ import time
 from pathlib import Path
 
 from PIL import Image
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 # Ensure project root is in sys.path
@@ -32,19 +32,33 @@ logger = logging.getLogger("build_embeddings_v2")
 async def build_v2_catalog(limit: int | None = None, batch_size: int = 32, replace: bool = False):
     settings = get_settings()
 
-    # Ensure database schema is up to date with migrations
-    logger.info("Проверка и применение миграций базы данных (Alembic)...")
-    from alembic import command
-    from alembic.config import Config
-
-    alembic_cfg = Config(str(ROOT_DIR / "alembic.ini"))
-    alembic_cfg.set_main_option("script_location", str(ROOT_DIR / "alembic"))
-    alembic_cfg.set_main_option("sqlalchemy.url", settings.database_url.replace("+asyncpg", "+psycopg"))
-    await asyncio.to_thread(command.upgrade, alembic_cfg, "head")
-    logger.info("✓ Миграции базы данных успешно применены (включая product_embeddings_v2).")
-
     engine = create_async_engine(settings.database_url, echo=False)
     session_factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+
+    # 1. Guarantee table product_embeddings_v2 exists in database
+    logger.info("Проверка структуры базы данных...")
+    async with session_factory() as session:
+        await session.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS product_embeddings_v2 (
+                    id UUID PRIMARY KEY,
+                    product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+                    image_path VARCHAR(500) NOT NULL,
+                    sample_type VARCHAR(20) NOT NULL CHECK (sample_type IN ('catalog', 'augmented', 'real', 'customer')),
+                    embedding vector(384) NOT NULL,
+                    embedding_model VARCHAR(200) NOT NULL,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                );
+                CREATE INDEX IF NOT EXISTS ix_product_embeddings_v2_product_id ON product_embeddings_v2(product_id);
+                CREATE INDEX IF NOT EXISTS ix_product_embeddings_v2_sample_type ON product_embeddings_v2(sample_type);
+                INSERT INTO alembic_version (version_num) VALUES ('20260921_0005') ON CONFLICT (version_num) DO NOTHING;
+                UPDATE alembic_version SET version_num = '20260921_0005';
+                """
+            )
+        )
+        await session.commit()
+        logger.info("✓ Таблица product_embeddings_v2 и индексы готовы в PostgreSQL.")
 
     logger.info("Инициализация моделей для пайплайна v2...")
     detector = DetectorService(settings.resolved_yolo_model_path, settings.yolo_confidence)
