@@ -287,18 +287,115 @@ async def export_debug_artifacts(
         # Save to media/debug_exports on disk (always writable in Docker)
         stem = Path(filename).stem
         export_dir = settings.media_dir / "debug_exports" / stem
+
+        # 1. Full YOLO Detection analysis
+        det_boxes = []
+        if detector is not None:
+            det_res = detector.model.predict(source=rgb_img, conf=conf_detect, verbose=False)
+            for r in det_res:
+                for b in r.boxes:
+                    c = [float(round(float(v), 1)) for v in b.xyxy[0].tolist()]
+                    det_boxes.append({
+                        "coords": c,
+                        "conf": float(round(float(b.conf[0]), 4)),
+                        "w": round(c[2] - c[0], 1),
+                        "h": round(c[3] - c[1], 1),
+                    })
+            det_boxes.sort(key=lambda x: x["conf"], reverse=True)
+
+        # 2. Full YOLO Segmentation analysis (on the crop)
+        seg_masks = []
+        crop_w_val = bbox_crop_img.width
+        crop_h_val = bbox_crop_img.height
+        if segmenter is not None and result.crop_bbox:
+            seg_res = segmenter.model.predict(source=bbox_crop_img, conf=conf_seg, verbose=False)
+            for r in seg_res:
+                if r.masks is not None:
+                    for idx, m_xy in enumerate(r.masks.xy):
+                        pts = [[float(round(float(p[0]), 1)), float(round(float(p[1]), 1))] for p in m_xy]
+                        m_conf = float(round(float(r.boxes.conf[idx]), 4)) if (r.boxes and len(r.boxes) > idx) else 0.0
+                        import cv2
+                        c_area = float(abs(cv2.contourArea(np.array(pts, dtype=np.float32)))) if len(pts) >= 3 else 0.0
+                        seg_masks.append({
+                            "idx": idx + 1,
+                            "conf": m_conf,
+                            "points_count": len(pts),
+                            "area_px": round(c_area, 1),
+                            "area_pct": round((c_area / max(1, crop_w_val * crop_h_val)) * 100, 1),
+                        })
+            seg_masks.sort(key=lambda x: x["area_px"], reverse=True)
+
+        # 3. Generate structured text report
+        report_lines = [
+            "=" * 80,
+            f" LCT2026 ДИАГНОСТИЧЕСКИЙ ОТЧЕТ ДЕТЕКЦИИ И СЕГМЕНТАЦИИ: {filename}",
+            "=" * 80,
+            f"Источник: {source}",
+            f"Размер оригинала: {orig_w} x {orig_h} px",
+            f"Статус выравнивания: {'⚠️ FALLBACK НА BBOX' if result.is_fallback else '✓ ВЫПРЯМЛЕНИЕ (QUAD WARP)'}",
+            f"Тайминги: BBox {result.bbox_ms}ms | Seg {result.seg_ms}ms | Warp {result.warp_ms}ms | Итого {result.total_ms}ms",
+            "",
+            "-" * 80,
+            f"1. ДЕТЕКЦИЯ BBOX (YOLO Detect, порог conf={conf_detect})",
+            "-" * 80,
+            f"Всего найдено BBox: {len(det_boxes)}",
+        ]
+        for idx, b in enumerate(det_boxes, 1):
+            report_lines.append(f"  [{idx}] BBox: {b['coords']} | Conf: {b['conf']} | Размер: {b['w']}x{b['h']} px")
+        if result.bbox:
+            report_lines.append(f"Выбран лучший BBox: {result.bbox}")
+            report_lines.append(f"Кроп с 5% padding: {result.crop_bbox}")
+        else:
+            report_lines.append("BBox не обнаружен (fallback на весь кадр).")
+
+        report_lines.extend([
+            "",
+            "-" * 80,
+            f"2. СЕГМЕНТАЦИЯ НА КРОПЕ (YOLO Segment, порог conf={conf_seg})",
+            "-" * 80,
+            f"Размер входного кропа: {crop_w_val} x {crop_h_val} px",
+            f"Всего найдено масок сегментации: {len(seg_masks)}",
+        ])
+        for m in seg_masks:
+            report_lines.append(f"  [Маска {m['idx']}] Conf: {m['conf']} | Вершин: {m['points_count']} | Площадь: {m['area_px']} px² ({m['area_pct']}% площади кропа)")
+        if result.seg_polygon_orig:
+            report_lines.append(f"Выбрана лучшая маска: {len(result.seg_polygon_orig)} точек полигона.")
+        else:
+            report_lines.append("Маска сегментации не обнаружена.")
+
+        report_lines.extend([
+            "",
+            "-" * 80,
+            "3. 4 ОПОРНЫХ УГЛА ГОМОГРАФИИ (QUADRILATERAL)",
+            "-" * 80,
+        ])
+        if result.quad_corners_orig and len(result.quad_corners_orig) == 4:
+            q = result.quad_corners_orig
+            report_lines.append(f"  1:TL (Top-Left):     ({q[0][0]}, {q[0][1]})")
+            report_lines.append(f"  2:TR (Top-Right):    ({q[1][0]}, {q[1][1]})")
+            report_lines.append(f"  3:BR (Bottom-Right): ({q[2][0]}, {q[2][1]})")
+            report_lines.append(f"  4:BL (Bottom-Left):  ({q[3][0]}, {q[3][1]})")
+        else:
+            report_lines.append("4 угла не извлечены (использован BBox fallback).")
+
+        report_lines.append("=" * 80)
+        report_text = "\n".join(report_lines)
+
         try:
             export_dir.mkdir(parents=True, exist_ok=True)
             collage.save(export_dir / "collage.png", format="PNG")
             overlay.save(export_dir / "01_overlay_full.png", format="PNG")
             bbox_crop_img.save(export_dir / "02_bbox_crop.png", format="PNG")
             result.rectified_image.save(export_dir / "03_matrix_256.png", format="PNG")
+            (export_dir / "diagnostic_report.txt").write_text(report_text, encoding="utf-8")
 
             meta_payload = {
                 "filename": filename,
                 "source": source,
                 "orig_width": int(orig_w),
                 "orig_height": int(orig_h),
+                "detection_boxes": det_boxes,
+                "segmentation_masks": seg_masks,
                 "bbox": [float(v) for v in result.bbox] if result.bbox else None,
                 "crop_bbox": [int(v) for v in result.crop_bbox] if result.crop_bbox else None,
                 "seg_polygon": [[float(p[0]), float(p[1])] for p in result.seg_polygon_orig] if result.seg_polygon_orig else None,
@@ -322,6 +419,7 @@ async def export_debug_artifacts(
             "filename": filename,
             "server_export_dir": str(export_dir),
             "collage_b64": collage_b64,
+            "report_text": report_text,
             "is_fallback": result.is_fallback,
         }
     except Exception as exc:

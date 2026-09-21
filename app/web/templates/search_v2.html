@@ -301,6 +301,14 @@
         <span style="font-size: 12px; color: var(--muted); font-weight: normal;">(по косинусному расстоянию нормализованных матриц)</span>
       </div>
       <div id="candidates-grid" class="grid"></div>
+
+      <!-- Текстовый отчет детекции и сегментации -->
+      <div id="debug-report-container" style="display: none; margin-top: 24px;">
+        <div class="section-title" style="color: #00d2d3;">
+          <span>Текстовый отчет детекции и сегментации</span>
+        </div>
+        <pre id="debug-report-pre" style="background: #000; border: 1px solid var(--border); border-radius: 6px; padding: 14px; font-size: 12px; color: #2ed573; overflow-x: auto; max-height: 260px; line-height: 1.5; font-family: monospace;"></pre>
+      </div>
     </div>
 
   </div>
@@ -653,7 +661,12 @@ async function exportDebugArtifacts() {
     a.click();
     document.body.removeChild(a);
 
-    alert(`✓ Диагностические файлы сохранены на сервере в папку:\n${data.server_export_dir}\n\nКоллаж со всеми этапами (BBox + Seg + Матрица) скачан на ваш ПК.`);
+    if (data.report_text) {
+      document.getElementById('debug-report-container').style.display = 'block';
+      document.getElementById('debug-report-pre').textContent = data.report_text;
+    }
+
+    alert(`✓ Диагностические файлы сохранены на сервере в папку:\n${data.server_export_dir}\n\nФайлы:\n- collage.png\n- 01_overlay_full.png\n- 02_bbox_crop.png\n- 03_matrix_256.png\n- diagnostic_report.txt\n- meta.json\n\nКоллаж скачан на ваш ПК.`);
   } catch (err) {
     alert('Ошибка экспорта: ' + err.message);
   } finally {

@@ -122,6 +122,12 @@
             3. Из полигона вычисляются 4 экстремальных угла (TL, TR, BR, BL).<br>
             4. <code>warpPerspective</code> расправляет трапецию в идеальную плоскую матрицу.
           </div>
+
+          <!-- Текстовый отчет -->
+          <div id="debug-report-container" style="display: none; margin-top: 16px;">
+            <div style="font-size: 13px; font-weight: 600; color: #00d2d3; margin-bottom: 6px;">Отчет детектора и сегментатора:</div>
+            <pre id="debug-report-pre" style="background: #000; border: 1px solid var(--border); border-radius: 6px; padding: 12px; font-size: 11px; color: #2ed573; overflow-x: auto; max-height: 250px; line-height: 1.4; font-family: monospace;"></pre>
+          </div>
         </div>
 
       </div>
@@ -422,7 +428,12 @@ async function exportDebugArtifacts() {
     a.click();
     document.body.removeChild(a);
 
-    alert(`✓ Диагностический коллаж скачан на ваш ПК и сохранён на сервере:\n${data.server_export_dir}`);
+    if (data.report_text) {
+      document.getElementById('debug-report-container').style.display = 'block';
+      document.getElementById('debug-report-pre').textContent = data.report_text;
+    }
+
+    alert(`✓ Диагностический коллаж скачан на ваш ПК и сохранён на сервере:\n${data.server_export_dir}\n\nФайлы:\n- collage.png\n- 01_overlay_full.png\n- 02_bbox_crop.png\n- 03_matrix_256.png\n- diagnostic_report.txt\n- meta.json`);
   } catch (err) {
     alert('Ошибка экспорта: ' + err.message);
   } finally {
