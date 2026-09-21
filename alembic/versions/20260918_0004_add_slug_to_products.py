@@ -15,8 +15,19 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column("products", sa.Column("slug", sa.String(length=300), nullable=True))
-    op.create_index("ix_products_slug", "products", ["slug"], unique=True)
+    conn = op.get_bind()
+    conn.execute(sa.text("""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name='products' AND column_name='slug'
+            ) THEN
+                ALTER TABLE products ADD COLUMN slug VARCHAR(300);
+            END IF;
+        END $$;
+        CREATE UNIQUE INDEX IF NOT EXISTS ix_products_slug ON products(slug);
+    """))
 
 
 def downgrade() -> None:

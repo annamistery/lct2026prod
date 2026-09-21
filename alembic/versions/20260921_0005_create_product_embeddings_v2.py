@@ -16,21 +16,20 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.create_table(
-        "product_embeddings_v2",
-        sa.Column("id", sa.Uuid(), nullable=False),
-        sa.Column("product_id", sa.Uuid(), nullable=False),
-        sa.Column("image_path", sa.String(length=500), nullable=False),
-        sa.Column("sample_type", sa.String(length=20), nullable=False),
-        sa.Column("embedding", pgvector.sqlalchemy.Vector(dim=384), nullable=False),
-        sa.Column("embedding_model", sa.String(length=200), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.CheckConstraint("sample_type IN ('catalog', 'augmented', 'real', 'customer')", name="ck_product_embeddings_v2_sample_type"),
-        sa.ForeignKeyConstraint(["product_id"], ["products.id"], name="fk_product_embeddings_v2_product_id_products", ondelete="CASCADE"),
-        sa.PrimaryKeyConstraint("id", name="pk_product_embeddings_v2"),
-    )
-    op.create_index("ix_product_embeddings_v2_product_id", "product_embeddings_v2", ["product_id"])
-    op.create_index("ix_product_embeddings_v2_sample_type", "product_embeddings_v2", ["sample_type"])
+    conn = op.get_bind()
+    conn.execute(sa.text("""
+        CREATE TABLE IF NOT EXISTS product_embeddings_v2 (
+            id UUID PRIMARY KEY,
+            product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+            image_path VARCHAR(500) NOT NULL,
+            sample_type VARCHAR(20) NOT NULL CHECK (sample_type IN ('catalog', 'augmented', 'real', 'customer')),
+            embedding vector(384) NOT NULL,
+            embedding_model VARCHAR(200) NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
+        CREATE INDEX IF NOT EXISTS ix_product_embeddings_v2_product_id ON product_embeddings_v2(product_id);
+        CREATE INDEX IF NOT EXISTS ix_product_embeddings_v2_sample_type ON product_embeddings_v2(sample_type);
+    """))
 
 
 def downgrade() -> None:
