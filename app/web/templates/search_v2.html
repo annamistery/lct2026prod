@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Поиск v1 (DINOv2) — LCT2026{% endblock %}
+{% block title %}Поиск v2 (Матрицы этикеток) — LCT2026{% endblock %}
 
 {% block content %}
 <style>
@@ -230,9 +230,9 @@
 
 <div class="page-header">
   <div>
-    <h1>Поиск v1 (Чистый DINOv2 + pgvector)</h1>
+    <h1>Поиск v2 (Каскадная нормализация + Матрицы)</h1>
     <span style="color: var(--muted); font-size: 13px;">
-      Пайплайн: YOLO Detect ➔ DINOv2 LoRA (CLS 384d) ➔ pgvector Exact Match (без реранкера)
+      Пайплайн v2: BBox Detect ➔ Seg on Crop ➔ 4-точечное выпрямление в матрицу ➔ DINOv2 ➔ product_embeddings_v2
     </span>
   </div>
 </div>
@@ -266,25 +266,25 @@
     </div>
   </div>
 
-  <!-- Правая колонка: результаты поиска -->
+  <!-- Правая колонка: результаты поиска v2 -->
   <div style="flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; overflow-y: auto; display: flex; flex-direction: column;">
     
     <div id="status-line" style="font-size: 15px; font-weight: 600; color: #fff; margin-bottom: 16px;">
-      Выберите файл слева для мгновенного поиска
+      Выберите файл слева для мгновенного поиска v2
     </div>
 
     <div id="loading" style="display: none; text-align: center; padding: 30px;">
-      <div style="font-size: 16px; color: var(--accent); margin-bottom: 8px;">Распознавание этикетки и поиск по вектору DINOv2...</div>
-      <span style="color: var(--muted); font-size: 12px;">YOLO Detect ➔ DINOv2 Embedding ➔ pgvector Exact Cosine Search</span>
+      <div style="font-size: 16px; color: var(--accent); margin-bottom: 8px;">Выпрямление этикетки в матрицу и поиск v2...</div>
+      <span style="color: var(--muted); font-size: 12px;">BBox Detect ➔ Seg Mask ➔ Quad Warp (256x256) ➔ DINOv2 ➔ pgvector v2</span>
     </div>
 
     <div id="results-area" style="display: none;">
       <div class="section-title">
-        <span>Сопоставление изображений</span>
+        <span>Сопоставление изображений v2</span>
         <span style="font-size: 12px; color: var(--muted); font-weight: normal;">(кликните на картинку для зума в полный размер)</span>
       </div>
 
-      <!-- Триптих: Загруженный оригинал | Кроп оригинала | Победитель Топ-1 -->
+      <!-- Триптих: Загруженный оригинал | Выпрямленная матрица v2 | Победитель Топ-1 -->
       <div class="compare-grid" id="compare-grid"></div>
 
       <!-- Карточка победителя Top-1 -->
@@ -292,8 +292,8 @@
 
       <!-- Кандидаты Top-5 -->
       <div class="section-title">
-        <span>Кандидаты Top-5 (ранжирование DINOv2)</span>
-        <span style="font-size: 12px; color: var(--muted); font-weight: normal;">(по косинусному расстоянию pgvector)</span>
+        <span>Кандидаты Top-5 в базе v2</span>
+        <span style="font-size: 12px; color: var(--muted); font-weight: normal;">(по косинусному расстоянию нормализованных матриц)</span>
       </div>
       <div id="candidates-grid" class="grid"></div>
     </div>
@@ -424,7 +424,7 @@ async function selectFile(filename) {
     }
   });
 
-  statusLine.textContent = `Загрузка и поиск для ${filename}...`;
+  statusLine.textContent = `Загрузка и поиск v2 для ${filename}...`;
   const src = sourceSelect.value;
 
   try {
@@ -444,7 +444,7 @@ async function handleFile(file, displayName) {
   }
   currentOriginalUrl = URL.createObjectURL(file);
 
-  statusLine.textContent = `Поиск v1 (DINOv2) для: ${displayName || file.name}...`;
+  statusLine.textContent = `Поиск v2 (Матрицы) для: ${displayName || file.name}...`;
   loading.style.display = 'block';
   resultsArea.style.display = 'none';
   compareGrid.innerHTML = '';
@@ -456,14 +456,14 @@ async function handleFile(file, displayName) {
   formData.append('k', '5');
 
   try {
-    const res = await fetch('/api/v1/search', {
+    const res = await fetch('/api/v2/search', {
       method: 'POST',
       body: formData
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || 'Ошибка поиска');
+    if (!res.ok) throw new Error(data.detail || 'Ошибка поиска v2');
 
-    statusLine.textContent = `Результаты поиска v1: ${displayName || file.name} (${data.timings.total_ms} мс)`;
+    statusLine.textContent = `Результаты поиска v2: ${displayName || file.name} (${data.timings.total_ms} мс)`;
     renderResults(data, currentOriginalUrl);
   } catch (err) {
     statusLine.textContent = `Ошибка: ${err.message}`;
@@ -477,7 +477,7 @@ function renderResults(data, originalUrl) {
   const winner = data.winner;
   const queryCrop = data.query_crop || originalUrl;
 
-  // 1. Формируем триптих сравнения
+  // 1. Формируем триптих сравнения v2
   const winnerImgUrl = winner ? winner.image_url : '';
   const winnerTitle = winner ? winner.title : 'Не найдено';
 
@@ -497,17 +497,17 @@ function renderResults(data, originalUrl) {
       <div class="compare-hint"><svg width="12" height="12" fill="currentColor" viewBox="0 0 16 16"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/></svg> Кликните для зума</div>
     </div>
 
-    <!-- Карточка 2: Вырезанный кроп этикетки -->
-    <div class="compare-card">
+    <!-- Карточка 2: Выпрямленная матрица v2 -->
+    <div class="compare-card" style="border-color: #00d2d3;">
       <div class="compare-header">
-        <span>Кроп этикетки (YOLO)</span>
-        <span class="badge-tag">Запрос DINO</span>
+        <span style="color: #00d2d3;">Матрица v2 (256×256)</span>
+        <span class="badge-tag" style="background: rgba(0, 210, 211, 0.2); color: #00d2d3;">${data.is_fallback ? 'BBox' : 'Quad Warp'}</span>
       </div>
       <div class="compare-img-wrap">
         <img class="compare-img zoomable" 
              src="${queryCrop}" 
-             alt="Кроп этикетки (запрос)" 
-             data-caption="Кроп этикетки после YOLO детекции (256x256)">
+             alt="Выпрямленная матрица v2" 
+             data-caption="Выпрямленная каноническая матрица (256x256)">
       </div>
       <div class="compare-hint"><svg width="12" height="12" fill="currentColor" viewBox="0 0 16 16"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/></svg> Кликните для зума</div>
     </div>
@@ -516,14 +516,14 @@ function renderResults(data, originalUrl) {
     <div class="compare-card winner-border">
       <div class="compare-header">
         <span style="color: var(--accent);">Победитель Top-1</span>
-        <span class="badge-tag accent">База</span>
+        <span class="badge-tag accent">База v2</span>
       </div>
       <div class="compare-img-wrap">
         ${winnerImgUrl ? `
           <img class="compare-img zoomable" 
                src="${winnerImgUrl}" 
                alt="${winnerTitle}" 
-               data-caption="Найденный эталон из каталога: ${winnerTitle}">
+               data-caption="Найденный эталон из каталога v2: ${winnerTitle}">
         ` : `
           <div style="color: var(--muted); font-size: 12px;">Не найдено</div>
         `}
@@ -543,16 +543,16 @@ function renderResults(data, originalUrl) {
              alt="${w.title}" 
              data-caption="Победитель (Top-1): ${w.title}">
         <div style="flex: 1;">
-          <span class="winner-badge">Победитель (Top-1 Match)</span>
+          <span class="winner-badge">Победитель v2 (Top-1 Match)</span>
           <div style="font-size: 18px; font-weight: 700; color: #fff; margin-bottom: 4px;">
             <a href="/products/${w.product_id}" style="color: #fff;">${w.title}</a>
           </div>
           <div style="color: var(--muted); font-size: 13px; margin-bottom: 8px;">${w.manufacturer}</div>
           <div style="font-size: 12px; color: #aaa; margin-bottom: 12px;">${w.description || ''}</div>
           <div class="scores-row" style="flex-wrap: wrap;">
-            <div class="score-badge">DINO Similarity: <strong style="color: #2ed573;">${simPct}%</strong></div>
-            <div class="score-badge">Ранг в базе: <strong>#${w.pgvector_rank}</strong></div>
-            <div class="score-badge">Общее время: <strong>${data.timings.total_ms} мс</strong> (DINO: ${data.timings.embedding_ms}мс, DB: ${data.timings.pgvector_ms}мс)</div>
+            <div class="score-badge">DINO Similarity v2: <strong style="color: #2ed573;">${simPct}%</strong></div>
+            <div class="score-badge">Выпрямление: <strong>${data.is_fallback ? '⚠️ BBox fallback' : '✓ 4 угла гомографии'}</strong></div>
+            <div class="score-badge">Общее время: <strong>${data.timings.total_ms} мс</strong> (Нормализация: ${data.timings.rectification_ms}мс, DINO: ${data.timings.embedding_ms}мс, DB v2: ${data.timings.pgvector_ms}мс)</div>
           </div>
         </div>
       </div>
@@ -571,18 +571,17 @@ function renderResults(data, originalUrl) {
             <img class="zoomable" 
                  src="${r.image_url}" 
                  alt="${r.title}" 
-                 data-caption="#${i + 1} Кандидат: ${r.title} (${r.manufacturer}) | DINO: ${simPct}%" 
+                 data-caption="#${i + 1} Кандидат v2: ${r.title} (${r.manufacturer}) | DINO: ${simPct}%" 
                  style="max-width: 100%; max-height: 100%; object-fit: contain;">
           </div>
           <div class="card-body">
-            <div style="font-size: 11px; color: var(--accent); font-weight: 600; margin-bottom: 4px;">#${i + 1} КАНДИДАТ</div>
+            <div style="font-size: 11px; color: var(--accent); font-weight: 600; margin-bottom: 4px;">#${i + 1} КАНДИДАТ v2</div>
             <div class="card-title" style="font-size: 14px;">
               <a href="/products/${r.product_id}">${r.title}</a>
             </div>
             <div class="card-meta" style="font-size: 12px; margin-bottom: 8px;">${r.manufacturer}</div>
             <div style="display: flex; gap: 8px; font-size: 11px; color: var(--muted); margin-top: auto; flex-wrap: wrap;">
-              <span>DINO: <strong style="color: #fff;">${simPct}%</strong></span>
-              <span>Ранг: <strong>#${r.pgvector_rank}</strong></span>
+              <span>Сходство DINO: <strong style="color: #fff;">${simPct}%</strong></span>
             </div>
           </div>
         </div>
