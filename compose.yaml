@@ -39,6 +39,7 @@ services:
       - ./app:/srv/app/app:ro
       - ./web:/srv/app/web:ro
       - ./alembic:/srv/app/alembic:ro
+      - ./tmp:/srv/app/tmp:ro
     depends_on:
       db:
         condition: service_healthy

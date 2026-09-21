@@ -15,25 +15,34 @@ from app.services.detector import DetectorService
 from app.services.rectification import RectificationService
 from app.services.segmenter import SegmenterService
 
-BASE_DIR = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 router = APIRouter(tags=["rectify-web"])
-templates = Jinja2Templates(directory=str(BASE_DIR / "web" / "templates"))
+templates = Jinja2Templates(directory=str(PROJECT_ROOT / "app" / "web" / "templates"))
 
 
 def get_source_dir(source: str) -> Path:
-    base = BASE_DIR.parent
-    if source == "imports":
-        d = Path("/imports/images") if Path("/imports/images").is_dir() else base / "imports" / "images"
-    elif source == "tmp1":
-        d = base / "tmp" / "1" / "queries"
+    if source == "tmp1":
+        for cand in [PROJECT_ROOT / "tmp" / "1" / "queries", Path("/srv/app/tmp/1/queries"), Path("tmp/1/queries")]:
+            if cand.is_dir():
+                return cand
+        return PROJECT_ROOT / "tmp" / "1" / "queries"
     elif source == "tmp2":
-        d = base / "tmp" / "2" / "queries"
+        for cand in [PROJECT_ROOT / "tmp" / "2" / "queries", Path("/srv/app/tmp/2/queries"), Path("tmp/2/queries")]:
+            if cand.is_dir():
+                return cand
+        return PROJECT_ROOT / "tmp" / "2" / "queries"
+    elif source == "imports":
+        for cand in [Path("/imports/images"), PROJECT_ROOT / "imports" / "images", Path("imports/images")]:
+            if cand.is_dir():
+                return cand
+        return Path("/imports/images")
     elif source == "catalog":
-        d = base / "media" / "products"
-    else:
-        d = base / "imports" / "images"
-    return d
+        for cand in [Path("/media/products"), PROJECT_ROOT / "media" / "products", Path("media/products")]:
+            if cand.is_dir():
+                return cand
+        return Path("/media/products")
+    return PROJECT_ROOT / "tmp" / "1" / "queries"
 
 
 def encode_image_base64(image: Image.Image, format: str = "WEBP", quality: int = 92) -> str:
@@ -58,38 +67,50 @@ async def rectify_test_page(request: Request):
 @router.get("/api/rectify/sources")
 async def list_sources():
     sources = []
-    base = BASE_DIR.parent
-    for src_id, label, path in [
-        ("imports", "Каталог (imports/images)", get_source_dir("imports")),
-        ("tmp1", "Тестовый пакет 1 (tmp/1/queries)", base / "tmp" / "1" / "queries"),
-        ("tmp2", "Тестовый пакет 2 (tmp/2/queries)", base / "tmp" / "2" / "queries"),
-        ("catalog", "Кропы этикеток (media/products)", base / "media" / "products"),
+    for src_id, label in [
+        ("tmp1", "Тест 1 (set48 / 27 фото)"),
+        ("tmp2", "Тест 2 (vina / 25 фото)"),
+        ("imports", "Каталог (imports/images)"),
+        ("catalog", "Кропы базы (media/products)"),
     ]:
-        if path.is_dir():
-            count = sum(1 for p in path.iterdir() if p.is_file() and p.suffix.lower() in {".jpg", ".jpeg", ".webp", ".png"})
+        p = get_source_dir(src_id)
+        if p.is_dir():
+            if src_id == "catalog":
+                nested = list(p.glob("*/label.webp"))
+                count = len(nested) if nested else sum(1 for f in p.iterdir() if f.is_file() and f.suffix.lower() in {".jpg", ".jpeg", ".webp", ".png"})
+            else:
+                count = sum(1 for f in p.iterdir() if f.is_file() and f.suffix.lower() in {".jpg", ".jpeg", ".webp", ".png"})
             sources.append({"id": src_id, "label": f"{label} ({count})", "count": count})
     return sources
 
 
 @router.get("/api/rectify/files")
-async def list_files(source: str = "imports", q: str = ""):
+async def list_files(source: str = "tmp1", q: str = ""):
     source_dir = get_source_dir(source)
     if not source_dir.is_dir():
         return []
     allowed_exts = {".webp", ".jpg", ".jpeg", ".png"}
-    files = [p.name for p in sorted(source_dir.iterdir()) if p.is_file() and p.suffix.lower() in allowed_exts]
+    if source == "catalog":
+        nested = sorted(source_dir.glob("*/label.webp"))
+        if nested:
+            files = [f"{p.parent.name}/{p.name}" for p in nested]
+        else:
+            files = [p.name for p in sorted(source_dir.iterdir()) if p.is_file() and p.suffix.lower() in allowed_exts]
+    else:
+        files = [p.name for p in sorted(source_dir.iterdir()) if p.is_file() and p.suffix.lower() in allowed_exts]
+
     if q.strip():
         search = q.strip().lower()
         files = [f for f in files if search in f.lower()]
-    return files[:400]
+    return files[:500]
 
 
 @router.get("/api/rectify/image")
-async def get_image(source: str = "imports", filename: str = ""):
+async def get_image(source: str = "tmp1", filename: str = ""):
     source_dir = get_source_dir(source)
     file_path = (source_dir / filename).resolve()
-    if source_dir not in file_path.parents or not file_path.is_file():
-        raise HTTPException(status_code=404, detail="File not found")
+    if not file_path.is_file():
+        raise HTTPException(status_code=404, detail=f"File not found: {filename}")
     return FileResponse(file_path)
 
 

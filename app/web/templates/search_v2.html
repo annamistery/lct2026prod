@@ -593,6 +593,18 @@ function renderResults(data, originalUrl) {
 }
 
 // Init
-loadFiles();
+loadSources().then(loadFiles);
+
+async function loadSources() {
+  try {
+    const res = await fetch('/api/rectify/sources');
+    const sources = await res.json();
+    if (sources && sources.length) {
+      sourceSelect.innerHTML = sources.map(s => `<option value="${s.id}">${s.label}</option>`).join('');
+    }
+  } catch (err) {
+    console.error('Ошибка загрузки источников', err);
+  }
+}
 </script>
 {% endblock %}
