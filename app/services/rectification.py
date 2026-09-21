@@ -65,27 +65,16 @@ class RectificationService:
         if sa < 0:
             pts = pts[::-1]
 
-        center = np.mean(pts, axis=0)
-        pts_c = pts - center
-        cov = np.cov(pts_c, rowvar=False)
-        evals, evecs = np.linalg.eigh(cov)
-
-        # Primary vertical axis of bottle
-        v_y = evecs[:, 1]
-        if v_y[1] < 0:
-            v_y = -v_y
-        # Primary horizontal axis of bottle (pointing right)
-        v_x = np.array([v_y[1], -v_y[0]])
-        if v_x[0] < 0:
-            v_x = -v_x
-
-        proj_x = pts_c @ v_x
-        proj_y = pts_c @ v_y
-
-        idx_tl = int(np.argmin(proj_x + proj_y))
-        idx_tr = int(np.argmin(-proj_x + proj_y))
-        idx_br = int(np.argmax(proj_x + proj_y))
-        idx_bl = int(np.argmax(-proj_x + proj_y))
+        # Natural image orientation:
+        # In the crop image, the bottle is already roughly upright (Y is vertical, X is horizontal).
+        # Top-Left: min(x + y)
+        # Top-Right: max(x - y)
+        # Bottom-Right: max(x + y)
+        # Bottom-Left: min(x - y)
+        idx_tl = int(np.argmin(pts[:, 0] + pts[:, 1]))
+        idx_tr = int(np.argmax(pts[:, 0] - pts[:, 1]))
+        idx_br = int(np.argmax(pts[:, 0] + pts[:, 1]))
+        idx_bl = int(np.argmin(pts[:, 0] - pts[:, 1]))
 
         quad = np.array([pts[idx_tl], pts[idx_tr], pts[idx_br], pts[idx_bl]], dtype=np.float32)
         quad = self.order_points(quad)
@@ -248,27 +237,16 @@ class RectificationService:
             if sa < 0:
                 pts = pts[::-1]
 
-            center = np.mean(pts, axis=0)
-            pts_c = pts - center
-            cov = np.cov(pts_c, rowvar=False)
-            evals, evecs = np.linalg.eigh(cov)
-
-            # Primary vertical axis of bottle
-            v_y = evecs[:, 1]
-            if v_y[1] < 0:
-                v_y = -v_y
-            # Primary horizontal axis of bottle (pointing right)
-            v_x = np.array([v_y[1], -v_y[0]])
-            if v_x[0] < 0:
-                v_x = -v_x
-
-            proj_x = pts_c @ v_x
-            proj_y = pts_c @ v_y
-
-            idx_tl = int(np.argmin(proj_x + proj_y))
-            idx_tr = int(np.argmin(-proj_x + proj_y))
-            idx_br = int(np.argmax(proj_x + proj_y))
-            idx_bl = int(np.argmax(-proj_x + proj_y))
+            # Natural image orientation:
+            # In the crop image, the bottle is upright (Y is vertical downwards, X is horizontal).
+            # Top-Left: min(x + y)
+            # Top-Right: max(x - y)
+            # Bottom-Right: max(x + y)
+            # Bottom-Left: min(x - y)
+            idx_tl = int(np.argmin(pts[:, 0] + pts[:, 1]))
+            idx_tr = int(np.argmax(pts[:, 0] - pts[:, 1]))
+            idx_br = int(np.argmax(pts[:, 0] + pts[:, 1]))
+            idx_bl = int(np.argmin(pts[:, 0] - pts[:, 1]))
 
             def get_arc(i_from: int, i_to: int, step_dir: int = 1) -> np.ndarray:
                 steps = ((i_to - i_from) * step_dir) % N
