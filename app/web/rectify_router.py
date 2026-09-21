@@ -129,35 +129,38 @@ async def process_rectification(
         target_size=target_size,
     )
 
-    with Image.open(file_path) as raw_img:
-        orig_w, orig_h = raw_img.size
-        orig_mode = raw_img.mode
-        rgb_img = raw_img.convert("RGB")
+    try:
+        with Image.open(file_path) as raw_img:
+            orig_w, orig_h = raw_img.size
+            orig_mode = raw_img.mode
+            rgb_img = raw_img.convert("RGB")
 
-    result = rectifier.rectify(rgb_img, conf_detect=conf_detect, conf_seg=conf_seg)
-    matrix_b64 = encode_image_base64(result.rectified_image, format="WEBP", quality=95)
+        result = rectifier.rectify(rgb_img, conf_detect=conf_detect, conf_seg=conf_seg)
+        matrix_b64 = encode_image_base64(result.rectified_image, format="WEBP", quality=95)
 
-    return {
-        "filename": filename,
-        "source": source,
-        "orig_width": orig_w,
-        "orig_height": orig_h,
-        "orig_mode": orig_mode,
-        "image_url": f"/api/rectify/image?source={source}&filename={filename}",
-        "has_detector": detector is not None,
-        "has_segmenter": segmenter is not None,
-        "seg_model_path": str(settings.resolved_yolo_seg_model_path),
-        "bbox": result.bbox,
-        "crop_bbox": result.crop_bbox,
-        "seg_polygon": result.seg_polygon_orig,
-        "quad_corners": result.quad_corners_orig,
-        "is_fallback": result.is_fallback,
-        "matrix_b64": matrix_b64,
-        "matrix_size": target_size,
-        "timings": {
-            "bbox_ms": result.bbox_ms,
-            "seg_ms": result.seg_ms,
-            "warp_ms": result.warp_ms,
-            "total_ms": result.total_ms,
-        },
-    }
+        return {
+            "filename": filename,
+            "source": source,
+            "orig_width": int(orig_w),
+            "orig_height": int(orig_h),
+            "orig_mode": str(orig_mode),
+            "image_url": f"/api/rectify/image?source={source}&filename={filename}",
+            "has_detector": detector is not None,
+            "has_segmenter": segmenter is not None,
+            "seg_model_path": str(settings.resolved_yolo_seg_model_path),
+            "bbox": [float(v) for v in result.bbox] if result.bbox else None,
+            "crop_bbox": [int(v) for v in result.crop_bbox] if result.crop_bbox else None,
+            "seg_polygon": [[float(p[0]), float(p[1])] for p in result.seg_polygon_orig] if result.seg_polygon_orig else None,
+            "quad_corners": [[float(p[0]), float(p[1])] for p in result.quad_corners_orig] if result.quad_corners_orig else None,
+            "is_fallback": bool(result.is_fallback),
+            "matrix_b64": matrix_b64,
+            "matrix_size": int(target_size),
+            "timings": {
+                "bbox_ms": float(result.bbox_ms),
+                "seg_ms": float(result.seg_ms),
+                "warp_ms": float(result.warp_ms),
+                "total_ms": float(result.total_ms),
+            },
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc

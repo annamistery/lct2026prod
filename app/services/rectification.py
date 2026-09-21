@@ -106,14 +106,14 @@ class RectificationService:
                 return RectificationResult(
                     rectified_image=rectified,
                     bbox=(0.0, 0.0, float(crop_w), float(crop_h)),
-                    crop_bbox=(0, 0, crop_w, crop_h),
-                    seg_polygon_orig=[[float(p[0]), float(p[1])] for p in polygon],
-                    quad_corners_orig=[[float(p[0]), float(p[1])] for p in quad],
+                    crop_bbox=(0, 0, int(crop_w), int(crop_h)),
+                    seg_polygon_orig=[[float(round(float(p[0]), 1)), float(round(float(p[1]), 1))] for p in polygon],
+                    quad_corners_orig=[[float(round(float(p[0]), 1)), float(round(float(p[1]), 1))] for p in quad],
                     is_fallback=False,
                     bbox_ms=0.0,
-                    seg_ms=seg_ms,
-                    warp_ms=warp_ms,
-                    total_ms=round((time.perf_counter() - started) * 1000, 2),
+                    seg_ms=float(seg_ms),
+                    warp_ms=float(warp_ms),
+                    total_ms=float(round((time.perf_counter() - started) * 1000, 2)),
                 )
 
         # Fallback to direct resize
@@ -122,14 +122,14 @@ class RectificationService:
         return RectificationResult(
             rectified_image=rectified,
             bbox=(0.0, 0.0, float(crop_w), float(crop_h)),
-            crop_bbox=(0, 0, crop_w, crop_h),
-            seg_polygon_orig=[[float(p[0]), float(p[1])] for p in polygon] if polygon else None,
+            crop_bbox=(0, 0, int(crop_w), int(crop_h)),
+            seg_polygon_orig=[[float(round(float(p[0]), 1)), float(round(float(p[1]), 1))] for p in polygon] if polygon else None,
             quad_corners_orig=None,
             is_fallback=True,
             bbox_ms=0.0,
-            seg_ms=seg_ms,
-            warp_ms=warp_ms,
-            total_ms=round((time.perf_counter() - started) * 1000, 2),
+            seg_ms=float(seg_ms),
+            warp_ms=float(warp_ms),
+            total_ms=float(round((time.perf_counter() - started) * 1000, 2)),
         )
 
     def rectify(
@@ -176,20 +176,20 @@ class RectificationService:
                 warp_ms = round((time.perf_counter() - warp_started) * 1000, 2)
 
                 # Map polygon and corners back to full original image coordinates
-                poly_orig = [[round(p[0] + crop_xtl, 1), round(p[1] + crop_ytl, 1)] for p in polygon]
-                quad_orig = [[round(p[0] + crop_xtl, 1), round(p[1] + crop_ytl, 1)] for p in quad]
+                poly_orig = [[float(round(float(p[0]) + crop_xtl, 1)), float(round(float(p[1]) + crop_ytl, 1))] for p in polygon]
+                quad_orig = [[float(round(float(p[0]) + crop_xtl, 1)), float(round(float(p[1]) + crop_ytl, 1))] for p in quad]
 
                 return RectificationResult(
                     rectified_image=rectified,
-                    bbox=(round(xtl, 1), round(ytl, 1), round(xbr, 1), round(ybr, 1)),
-                    crop_bbox=(crop_xtl, crop_ytl, crop_xbr, crop_ybr),
+                    bbox=(float(round(float(xtl), 1)), float(round(float(ytl), 1)), float(round(float(xbr), 1)), float(round(float(ybr), 1))),
+                    crop_bbox=(int(crop_xtl), int(crop_ytl), int(crop_xbr), int(crop_ybr)),
                     seg_polygon_orig=poly_orig,
                     quad_corners_orig=quad_orig,
                     is_fallback=False,
-                    bbox_ms=bbox_ms,
-                    seg_ms=seg_ms,
-                    warp_ms=warp_ms,
-                    total_ms=round((time.perf_counter() - started) * 1000, 2),
+                    bbox_ms=float(bbox_ms),
+                    seg_ms=float(seg_ms),
+                    warp_ms=float(warp_ms),
+                    total_ms=float(round((time.perf_counter() - started) * 1000, 2)),
                 )
 
         # Fallback to direct BBox crop without segmentation warp
@@ -199,32 +199,35 @@ class RectificationService:
 
         return RectificationResult(
             rectified_image=rectified,
-            bbox=(round(xtl, 1), round(ytl, 1), round(xbr, 1), round(ybr, 1)),
-            crop_bbox=(crop_xtl, crop_ytl, crop_xbr, crop_ybr),
-            seg_polygon_orig=[[round(p[0] + crop_xtl, 1), round(p[1] + crop_ytl, 1)] for p in polygon] if polygon else None,
+            bbox=(float(round(float(xtl), 1)), float(round(float(ytl), 1)), float(round(float(xbr), 1)), float(round(float(ybr), 1))),
+            crop_bbox=(int(crop_xtl), int(crop_ytl), int(crop_xbr), int(crop_ybr)),
+            seg_polygon_orig=[[float(round(float(p[0]) + crop_xtl, 1)), float(round(float(p[1]) + crop_ytl, 1))] for p in polygon] if polygon else None,
             quad_corners_orig=None,
             is_fallback=True,
-            bbox_ms=bbox_ms,
-            seg_ms=seg_ms,
-            warp_ms=warp_ms,
-            total_ms=round((time.perf_counter() - started) * 1000, 2),
+            bbox_ms=float(bbox_ms),
+            seg_ms=float(seg_ms),
+            warp_ms=float(warp_ms),
+            total_ms=float(round((time.perf_counter() - started) * 1000, 2)),
         )
 
     def _warp_perspective(self, crop_image: Image.Image, quad: np.ndarray) -> Image.Image:
         """Applies 4-point perspective warp into canonical square matrix."""
-        crop_np = np.array(crop_image.convert("RGB"))
-        dst_pts = np.float32([
-            [0, 0],
-            [self.target_size - 1, 0],
-            [self.target_size - 1, self.target_size - 1],
-            [0, self.target_size - 1],
-        ])
-        matrix = cv2.getPerspectiveTransform(quad, dst_pts)
-        warped = cv2.warpPerspective(
-            crop_np,
-            matrix,
-            (self.target_size, self.target_size),
-            flags=cv2.INTER_LANCZOS4,
-            borderMode=cv2.BORDER_REPLICATE,
-        )
-        return Image.fromarray(warped)
+        try:
+            crop_np = np.array(crop_image.convert("RGB"))
+            dst_pts = np.float32([
+                [0, 0],
+                [self.target_size - 1, 0],
+                [self.target_size - 1, self.target_size - 1],
+                [0, self.target_size - 1],
+            ])
+            matrix = cv2.getPerspectiveTransform(np.float32(quad), dst_pts)
+            warped = cv2.warpPerspective(
+                crop_np,
+                matrix,
+                (self.target_size, self.target_size),
+                flags=cv2.INTER_LANCZOS4,
+                borderMode=cv2.BORDER_REPLICATE,
+            )
+            return Image.fromarray(warped)
+        except Exception:
+            return crop_image.convert("RGB").resize((self.target_size, self.target_size), Image.Resampling.LANCZOS)
