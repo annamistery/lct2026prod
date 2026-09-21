@@ -291,17 +291,17 @@ class RectificationService:
             p_bl = c_bot[0]
             p_br = c_bot[-1]
 
-            u = np.linspace(0.0, 1.0, W, dtype=np.float32)[None, :]
-            v = np.linspace(0.0, 1.0, H, dtype=np.float32)[:, None]
+            U = np.linspace(0.0, 1.0, W, dtype=np.float32)[None, :, None]
+            V = np.linspace(0.0, 1.0, H, dtype=np.float32)[:, None, None]
 
             # Coons Patch Transfinite Interpolation
-            blend_tb = (1.0 - v) * c_top[None, :, :] + v * c_bot[None, :, :]
-            blend_lr = (1.0 - u[:, :, None]) * c_left[:, None, :] + u[:, :, None] * c_right[:, None, :]
+            blend_tb = (1.0 - V) * c_top[None, :, :] + V * c_bot[None, :, :]
+            blend_lr = (1.0 - U) * c_left[:, None, :] + U * c_right[:, None, :]
             blend_corners = (
-                (1.0 - u[:, :, None]) * (1.0 - v) * p_tl +
-                u[:, :, None] * (1.0 - v) * p_tr +
-                (1.0 - u[:, :, None]) * v * p_bl +
-                u[:, :, None] * v * p_br
+                (1.0 - U) * (1.0 - V) * p_tl +
+                U * (1.0 - V) * p_tr +
+                (1.0 - U) * V * p_bl +
+                U * V * p_br
             )
 
             map_grid = blend_tb + blend_lr - blend_corners
