@@ -4,7 +4,8 @@ import uuid
 from PIL import Image
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Product, ProductEmbedding
+from app.core.config import get_settings
+from app.db.models import Product, ProductEmbedding, ProductEmbeddingV2
 from app.db.repositories.products import ProductRepository
 from app.pipelines.search.v1.pipeline import SearchPipelineV1
 from app.services.augment import generate_augmented_cloud
@@ -70,9 +71,23 @@ class ProductIngestionService:
                     )
                 )
 
+            settings = get_settings()
+            product_embeddings_v2 = [
+                ProductEmbeddingV2(
+                    product_id=product_id,
+                    image_path=stored.label_path,
+                    sample_type="catalog" if aug_name == "catalog" else "augmented",
+                    embedding=embedding,
+                    embedding_model=settings.embedding_model_v2_name,
+                )
+                for (aug_name, _), embedding in zip(augmented_items, embeddings_list, strict=True)
+            ]
+
             repo = ProductRepository(session)
             for emb in product_embeddings:
                 repo.add(product, emb)
+            for emb_v2 in product_embeddings_v2:
+                repo.add_embedding_v2(emb_v2)
 
             await session.commit()
             await session.refresh(product)

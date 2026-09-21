@@ -29,26 +29,13 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger("build_embeddings_v2")
 
 
-async def build_v2_catalog(limit: int | None = None, batch_size: int = 32, replace: bool = False):
+async def build_v2_catalog(limit: int | None = None, batch_size: int = 32, replace: bool = True):
     settings = get_settings()
     engine = create_async_engine(settings.database_url, echo=False)
     session_factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
-    logger.info("Инициализация моделей для пайплайна v2...")
+    logger.info("Инициализация моделей для построения базы векторов v2...")
     detector = DetectorService(settings.resolved_yolo_model_path, settings.yolo_confidence)
-    segmenter = None
-    seg_path = settings.resolved_yolo_seg_model_path
-    if seg_path.is_file():
-        segmenter = SegmenterService(seg_path, settings.yolo_seg_confidence)
-        logger.info("✓ YOLO сегментатор загружен: %s", seg_path)
-    else:
-        logger.warning("⚠️ YOLO сегментатор не найден: %s (будет использован BBox fallback)", seg_path)
-
-    rectifier = RectificationService(
-        detector=detector,
-        segmenter=segmenter,
-        target_size=settings.canonical_size,
-    )
     embeddings_service = EmbeddingService(settings.dino_model_path, settings.dino_base_model_path, settings.embedding_dimension)
     images_service = ImageService(settings.media_dir, settings.canonical_size, settings.max_upload_bytes, settings.max_image_pixels)
 
@@ -61,10 +48,11 @@ async def build_v2_catalog(limit: int | None = None, batch_size: int = 32, repla
         logger.info("Найдено товаров для генерации v2: %d", total_products)
 
         if replace:
-            logger.info("Очистка старых векторов из product_embeddings_v2...")
+            logger.info("Очистка старых векторов из таблицы product_embeddings_v2...")
             from sqlalchemy import delete
             await session.execute(delete(ProductEmbeddingV2))
             await session.commit()
+            logger.info("✓ Таблица product_embeddings_v2 полностью очищена.")
 
         start_all = time.perf_counter()
         processed_count = 0
@@ -73,43 +61,54 @@ async def build_v2_catalog(limit: int | None = None, batch_size: int = 32, repla
         for idx, product in enumerate(products, 1):
             prod_start = time.perf_counter()
 
-            # Resolve image path
-            img_path = None
-            for p in (product.source_image_path, product.label_image_path):
-                if p:
-                    cand = images_service.resolve(p)
-                    if cand.is_file():
-                        img_path = cand
-                        break
+            # 1. Приоритет: берем чистый эталонный кроп этикетки из каталога
+            # Никакой сегментации и гомографии на эталонах — они уже чистые и прямоугольные!
+            label_img = None
+            if product.label_image_path:
+                cand = images_service.resolve(product.label_image_path)
+                if cand.is_file():
+                    try:
+                        with Image.open(cand) as raw:
+                            label_img = raw.convert("RGB")
+                    except Exception:
+                        label_img = None
 
-            if img_path is None:
-                logger.warning("[%d/%d] Пропуск %s: исходное изображение не найдено", idx, total_products, product.title)
+            # Если отдельного кропа нет — детектируем BBox на полном фото каталога
+            if label_img is None and product.source_image_path:
+                cand = images_service.resolve(product.source_image_path)
+                if cand.is_file():
+                    try:
+                        with Image.open(cand) as raw:
+                            full_source = raw.convert("RGB")
+                            box = detector.best_box(full_source)
+                            if box is not None:
+                                label_img = images_service.crop(full_source, box)
+                            else:
+                                label_img = images_service.canonical(full_source)
+                    except Exception:
+                        label_img = None
+
+            if label_img is None:
+                logger.warning("[%d/%d] Пропуск %s: эталонное изображение не найдено", idx, total_products, product.title)
                 continue
 
-            try:
-                with Image.open(img_path) as raw:
-                    full_img = raw.convert("RGB")
-            except Exception as e:
-                logger.warning("[%d/%d] Ошибка чтения изображения %s: %s", idx, total_products, img_path, e)
-                continue
+            # 2. Канонический чистый прямоугольный мастер 256×256
+            clean_master = images_service.canonical(label_img)
 
-            # 1. Cascade Rectification
-            rect_res = rectifier.rectify(full_img)
-
-            # 2. Save rectified master matrix to media
+            # Сохраняем эталонный мастер для v2
             rect_rel_path = f"rectified/{product.id}.webp"
             rect_abs_path = settings.media_dir / rect_rel_path
             rect_abs_path.parent.mkdir(parents=True, exist_ok=True)
-            rect_res.rectified_image.save(rect_abs_path, format="WEBP", quality=95)
+            clean_master.save(rect_abs_path, format="WEBP", quality=95)
 
-            # 3. Generate 116 augmentation cloud from rectified matrix
-            augmented_items = generate_augmented_cloud(rect_res.rectified_image, variants_per_aug=5)
+            # 3. Облако из 116 аугментаций от ЧИСТОГО эталона
+            augmented_items = generate_augmented_cloud(clean_master, variants_per_aug=5)
             aug_images = [img for _, img in augmented_items]
 
-            # 4. Extract embeddings
+            # 4. Расчет эмбеддингов DINOv2 батчами
             vectors = embeddings_service.embed_batch(aug_images, batch_size=batch_size)
 
-            # 5. Insert rows into product_embeddings_v2
+            # 5. Запись в базу данных v2
             embeddings_v2 = [
                 ProductEmbeddingV2(
                     product_id=product.id,
@@ -128,13 +127,12 @@ async def build_v2_catalog(limit: int | None = None, batch_size: int = 32, repla
             total_vectors += len(embeddings_v2)
             elapsed = time.perf_counter() - prod_start
             logger.info(
-                "[%d/%d] %s (%s) — 116 векторов за %.2fc (fallback=%s)",
+                "[%d/%d] %s (%s) — 116 векторов за %.2fc",
                 idx,
                 total_products,
                 product.title[:40],
                 product.slug or "no-slug",
                 elapsed,
-                rect_res.is_fallback,
             )
 
         total_time = time.perf_counter() - start_all
@@ -153,7 +151,7 @@ def main():
     parser = argparse.ArgumentParser(description="Build product_embeddings_v2 catalog embeddings")
     parser.add_argument("--limit", type=int, default=None, help="Limit number of products to process")
     parser.add_argument("--batch-size", type=int, default=32, help="Embedding batch size")
-    parser.add_argument("--replace", action="store_true", help="Delete existing product_embeddings_v2 first")
+    parser.add_argument("--replace", action=argparse.BooleanOptionalAction, default=True, help="Clear existing product_embeddings_v2 first (default: True)")
     args = parser.parse_args()
 
     asyncio.run(build_v2_catalog(limit=args.limit, batch_size=args.batch_size, replace=args.replace))
