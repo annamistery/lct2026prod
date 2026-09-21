@@ -101,7 +101,7 @@ class RectificationService:
         if polygon is not None:
             quad = self.extract_quadrilateral(polygon, crop_w, crop_h)
             if quad is not None:
-                rectified = self._warp_perspective(crop_image, quad)
+                rectified = self.unroll_cylinder_mesh(crop_image, polygon, quad)
                 warp_ms = round((time.perf_counter() - warp_started) * 1000, 2)
                 return RectificationResult(
                     rectified_image=rectified,
@@ -167,12 +167,12 @@ class RectificationService:
         polygon = self.segmenter.best_polygon(crop_img, conf=conf_seg) if self.segmenter is not None else None
         seg_ms = round((time.perf_counter() - seg_started) * 1000, 2)
 
-        # 3. 4-Corner Extraction & Homography Warp
+        # 3. 4-Corner Extraction & Homography / Mesh Warp
         warp_started = time.perf_counter()
         if polygon is not None:
             quad = self.extract_quadrilateral(polygon, crop_w, crop_h)
             if quad is not None:
-                rectified = self._warp_perspective(crop_img, quad)
+                rectified = self.unroll_cylinder_mesh(crop_img, polygon, quad)
                 warp_ms = round((time.perf_counter() - warp_started) * 1000, 2)
 
                 # Map polygon and corners back to full original image coordinates
@@ -209,6 +209,94 @@ class RectificationService:
             warp_ms=float(warp_ms),
             total_ms=float(round((time.perf_counter() - started) * 1000, 2)),
         )
+
+    def unroll_cylinder_mesh(
+        self,
+        crop_image: Image.Image,
+        polygon: list[tuple[float, float]],
+        quad: np.ndarray,
+    ) -> Image.Image:
+        """Unrolls curved cylindrical bottle label into a flat canonical square matrix using cv2.remap.
+
+        Straightens top and bottom arc curves and stretches horizontally compressed text on cylinder flanks.
+        """
+        try:
+            crop_np = np.array(crop_image.convert("RGB"))
+            crop_h, crop_w = crop_np.shape[:2]
+
+            tl, tr, br, bl = quad[0], quad[1], quad[2], quad[3]
+
+            pts = np.array(polygon, dtype=np.float32)
+
+            # Mid-line Y between top edge (TL-TR) and bottom edge (BL-BR)
+            def mid_y(x: float) -> float:
+                t_ratio = np.clip((x - tl[0]) / max(1e-5, (tr[0] - tl[0])), 0.0, 1.0)
+                b_ratio = np.clip((x - bl[0]) / max(1e-5, (br[0] - bl[0])), 0.0, 1.0)
+                y_top = (1.0 - t_ratio) * tl[1] + t_ratio * tr[1]
+                y_bot = (1.0 - b_ratio) * bl[1] + b_ratio * br[1]
+                return float((y_top + y_bot) * 0.5)
+
+            top_pts = [tl, tr]
+            bot_pts = [bl, br]
+
+            for p in pts:
+                if p[1] < mid_y(p[0]):
+                    top_pts.append(p)
+                else:
+                    bot_pts.append(p)
+
+            # Fit 2nd-degree polynomial (arc of cylinder) to top and bottom curves
+            top_arr = np.array(top_pts, dtype=np.float32)
+            bot_arr = np.array(bot_pts, dtype=np.float32)
+
+            if len(top_arr) >= 4:
+                coeffs_top = np.polyfit(top_arr[:, 0], top_arr[:, 1], 2)
+                poly_top = np.poly1d(coeffs_top)
+            else:
+                poly_top = lambda x: (1.0 - np.clip((x - tl[0]) / max(1e-5, tr[0] - tl[0]), 0.0, 1.0)) * tl[1] + np.clip((x - tl[0]) / max(1e-5, tr[0] - tl[0]), 0.0, 1.0) * tr[1]
+
+            if len(bot_arr) >= 4:
+                coeffs_bot = np.polyfit(bot_arr[:, 0], bot_arr[:, 1], 2)
+                poly_bot = np.poly1d(coeffs_bot)
+            else:
+                poly_bot = lambda x: (1.0 - np.clip((x - bl[0]) / max(1e-5, br[0] - bl[0]), 0.0, 1.0)) * bl[1] + np.clip((x - bl[0]) / max(1e-5, br[0] - bl[0]), 0.0, 1.0) * br[1]
+
+            # Build remap grid of size (target_size, target_size)
+            W, H = self.target_size, self.target_size
+            theta_0 = 0.82  # ~47 degrees cylindrical view angle
+
+            cols = np.linspace(0.0, 1.0, W, dtype=np.float32)
+            s_norm = 2.0 * cols - 1.0
+            theta = s_norm * theta_0
+            factor = np.sin(theta) / np.sin(theta_0)
+            u = np.clip((factor + 1.0) * 0.5, 0.0, 1.0)
+
+            x_top = (1.0 - u) * tl[0] + u * tr[0]
+            x_bot = (1.0 - u) * bl[0] + u * br[0]
+
+            y_top = np.array([float(poly_top(x)) for x in x_top], dtype=np.float32)
+            y_bot = np.array([float(poly_bot(x)) for x in x_bot], dtype=np.float32)
+
+            y_bot = np.maximum(y_bot, y_top + 10.0)
+
+            rows = np.linspace(0.0, 1.0, H, dtype=np.float32)[:, None]
+
+            map_x = ((1.0 - rows) * x_top[None, :] + rows * x_bot[None, :]).astype(np.float32)
+            map_y = ((1.0 - rows) * y_top[None, :] + rows * y_bot[None, :]).astype(np.float32)
+
+            map_x = np.clip(map_x, 0, crop_w - 1)
+            map_y = np.clip(map_y, 0, crop_h - 1)
+
+            unrolled = cv2.remap(
+                crop_np,
+                map_x,
+                map_y,
+                interpolation=cv2.INTER_LANCZOS4,
+                borderMode=cv2.BORDER_REPLICATE,
+            )
+            return Image.fromarray(unrolled)
+        except Exception:
+            return self._warp_perspective(crop_image, quad)
 
     def _warp_perspective(self, crop_image: Image.Image, quad: np.ndarray) -> Image.Image:
         """Applies 4-point perspective warp into canonical square matrix."""
