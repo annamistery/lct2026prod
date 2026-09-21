@@ -103,7 +103,7 @@ async def build_v2_catalog(limit: int | None = None, batch_size: int = 32, repla
             rect_res.rectified_image.save(rect_abs_path, format="WEBP", quality=95)
 
             # 3. Generate 116 augmentation cloud from rectified matrix
-            augmented_items = generate_augmented_cloud(rect_res.rectified_image, variants=5)
+            augmented_items = generate_augmented_cloud(rect_res.rectified_image, variants_per_aug=5)
             aug_images = [img for _, img in augmented_items]
 
             # 4. Extract embeddings
