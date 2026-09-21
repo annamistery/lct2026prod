@@ -44,11 +44,15 @@ async def lifespan(app: FastAPI):
         app.state.detector = detector
 
         segmenter = None
-        if settings.yolo_seg_model_path.is_file():
+        seg_path = settings.resolved_yolo_seg_model_path
+        if seg_path.is_file():
             try:
-                segmenter = await asyncio.to_thread(SegmenterService, settings.yolo_seg_model_path, settings.yolo_seg_confidence)
+                segmenter = await asyncio.to_thread(SegmenterService, seg_path, settings.yolo_seg_confidence)
+                logger.info("YOLO segmentation model loaded from %s", seg_path)
             except Exception:
-                logger.warning("YOLO segmentation model failed to initialize", exc_info=True)
+                logger.warning("YOLO segmentation model failed to initialize from %s", seg_path, exc_info=True)
+        else:
+            logger.warning("YOLO segmentation model file not found at %s", seg_path)
         app.state.segmenter = segmenter
 
         rectification = RectificationService(

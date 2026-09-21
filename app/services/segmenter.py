@@ -12,9 +12,10 @@ class SegmenterService:
         self.model = YOLO(str(model_path))
         self.confidence = confidence
 
-    def best_polygon(self, image: Image.Image) -> list[tuple[float, float]] | None:
+    def best_polygon(self, image: Image.Image, conf: float | None = None) -> list[tuple[float, float]] | None:
         """Runs segmentation on the image and returns the largest polygon as list of (x, y) coordinates."""
-        results = self.model.predict(source=image, conf=self.confidence, verbose=False)
+        threshold = self.confidence if conf is None else conf
+        results = self.model.predict(source=image, conf=threshold, verbose=False)
         polygons = []
         for res in results:
             if res.masks is not None:

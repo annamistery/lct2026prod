@@ -11,8 +11,9 @@ class DetectorService:
         self.model = YOLO(str(model_path))
         self.confidence = confidence
 
-    def best_box(self, image: Image.Image) -> tuple[float, float, float, float] | None:
-        results = self.model.predict(source=image, conf=self.confidence, verbose=False)
+    def best_box(self, image: Image.Image, conf: float | None = None) -> tuple[float, float, float, float] | None:
+        threshold = self.confidence if conf is None else conf
+        results = self.model.predict(source=image, conf=threshold, verbose=False)
         detections = []
         for result in results:
             for box in result.boxes:

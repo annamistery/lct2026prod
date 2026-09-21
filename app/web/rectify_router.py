@@ -109,17 +109,19 @@ async def process_rectification(
 
     settings = get_settings()
 
-    # Get services from state or create with requested thresholds
+    # Get services from state or load with resolved paths
     detector: DetectorService = request.app.state.detector
     segmenter: SegmenterService = request.app.state.segmenter
 
-    # If thresholds differ from defaults or service missing, instantiate lightweight
-    if detector is None or detector.confidence != conf_detect:
-        detector = DetectorService(settings.yolo_model_path, conf_detect)
+    if detector is None:
+        det_path = settings.resolved_yolo_model_path
+        if det_path.is_file():
+            detector = DetectorService(det_path, conf_detect)
 
-    if segmenter is None or segmenter.confidence != conf_seg:
-        if settings.yolo_seg_model_path.is_file():
-            segmenter = SegmenterService(settings.yolo_seg_model_path, conf_seg)
+    if segmenter is None:
+        seg_path = settings.resolved_yolo_seg_model_path
+        if seg_path.is_file():
+            segmenter = SegmenterService(seg_path, conf_seg)
 
     rectifier = RectificationService(
         detector=detector,
@@ -132,7 +134,7 @@ async def process_rectification(
         orig_mode = raw_img.mode
         rgb_img = raw_img.convert("RGB")
 
-    result = rectifier.rectify(rgb_img)
+    result = rectifier.rectify(rgb_img, conf_detect=conf_detect, conf_seg=conf_seg)
     matrix_b64 = encode_image_base64(result.rectified_image, format="WEBP", quality=95)
 
     return {
@@ -142,6 +144,9 @@ async def process_rectification(
         "orig_height": orig_h,
         "orig_mode": orig_mode,
         "image_url": f"/api/rectify/image?source={source}&filename={filename}",
+        "has_detector": detector is not None,
+        "has_segmenter": segmenter is not None,
+        "seg_model_path": str(settings.resolved_yolo_seg_model_path),
         "bbox": result.bbox,
         "crop_bbox": result.crop_bbox,
         "seg_polygon": result.seg_polygon_orig,

@@ -37,6 +37,30 @@ class Settings(BaseSettings):
     def allowed_origins(self) -> list[str]:
         return [value.strip() for value in self.cors_origins.split(",") if value.strip()]
 
+    @property
+    def resolved_yolo_model_path(self) -> Path:
+        if self.yolo_model_path.is_file():
+            return self.yolo_model_path
+        if Path("/models/yolo_label.pt").is_file():
+            return Path("/models/yolo_label.pt")
+        base = Path(__file__).resolve().parent.parent.parent
+        cand = base / "models" / "yolo_label.pt"
+        if cand.is_file():
+            return cand
+        return self.yolo_model_path
+
+    @property
+    def resolved_yolo_seg_model_path(self) -> Path:
+        if self.yolo_seg_model_path.is_file():
+            return self.yolo_seg_model_path
+        if Path("/models/yolo_seg.pt").is_file():
+            return Path("/models/yolo_seg.pt")
+        base = Path(__file__).resolve().parent.parent.parent
+        cand = base / "models" / "yolo_seg.pt"
+        if cand.is_file():
+            return cand
+        return self.yolo_seg_model_path
+
 
 @lru_cache
 def get_settings() -> Settings:

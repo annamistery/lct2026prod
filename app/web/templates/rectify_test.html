@@ -267,7 +267,13 @@ async function loadFile(filename) {
     document.getElementById('info-time-total').textContent = `${currentData.timings.total_ms} мс`;
     
     const statusEl = document.getElementById('info-status');
-    if (currentData.is_fallback) {
+    if (!currentData.has_segmenter) {
+      statusEl.innerHTML = `<span style="color: #ff4757; font-weight: 700;">❌ Модель сегментации не найдена</span><br><small style="color: var(--muted);">${currentData.seg_model_path}</small>`;
+      matrixStatusBadge.textContent = '❌ Нет yolo_seg.pt';
+      matrixStatusBadge.style.background = 'rgba(255, 71, 87, 0.2)';
+      matrixStatusBadge.style.color = '#ff4757';
+      matrixStatusBadge.style.border = '1px solid #ff4757';
+    } else if (currentData.is_fallback) {
       statusEl.innerHTML = '<span style="color: #ffa502; font-weight: 700;">⚠️ Fallback (BBox Crop)</span>';
       matrixStatusBadge.textContent = '⚠️ Fallback на BBox';
       matrixStatusBadge.style.background = 'rgba(255, 165, 2, 0.2)';

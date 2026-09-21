@@ -81,20 +81,20 @@ class RectificationService:
         quad[:, 0] = np.clip(quad[:, 0], 0, crop_w - 1)
         quad[:, 1] = np.clip(quad[:, 1], 0, crop_h - 1)
 
-        # Sanity check: quadrilateral area must be at least 5% of crop
-        area = cv2.contourArea(quad)
-        if area < (crop_w * crop_h * 0.05):
+        # Sanity check: quadrilateral area must be at least 2% of crop
+        area = abs(float(cv2.contourArea(quad)))
+        if area < (crop_w * crop_h * 0.02):
             return None
 
         return quad
 
-    def rectify_crop(self, crop_image: Image.Image) -> RectificationResult:
+    def rectify_crop(self, crop_image: Image.Image, conf_seg: float | None = None) -> RectificationResult:
         """Rectifies an already cropped label image (e.g. from camera view or manual crop)."""
         started = time.perf_counter()
         crop_w, crop_h = crop_image.size
         seg_started = time.perf_counter()
 
-        polygon = self.segmenter.best_polygon(crop_image) if self.segmenter is not None else None
+        polygon = self.segmenter.best_polygon(crop_image, conf=conf_seg) if self.segmenter is not None else None
         seg_ms = round((time.perf_counter() - seg_started) * 1000, 2)
 
         warp_started = time.perf_counter()
@@ -132,19 +132,24 @@ class RectificationService:
             total_ms=round((time.perf_counter() - started) * 1000, 2),
         )
 
-    def rectify(self, full_image: Image.Image) -> RectificationResult:
+    def rectify(
+        self,
+        full_image: Image.Image,
+        conf_detect: float | None = None,
+        conf_seg: float | None = None,
+    ) -> RectificationResult:
         """Runs full cascade: BBox detect -> Crop with padding -> Seg on Crop -> 4-point Warp."""
         started = time.perf_counter()
         orig_w, orig_h = full_image.size
 
         # 1. BBox Detection
         bbox_started = time.perf_counter()
-        box = self.detector.best_box(full_image) if self.detector is not None else None
+        box = self.detector.best_box(full_image, conf=conf_detect) if self.detector is not None else None
         bbox_ms = round((time.perf_counter() - bbox_started) * 1000, 2)
 
         if box is None:
             # Fallback on whole image
-            return self.rectify_crop(full_image)
+            return self.rectify_crop(full_image, conf_seg=conf_seg)
 
         xtl, ytl, xbr, ybr = box
         pad_x = int((xbr - xtl) * self.padding_ratio)
@@ -159,7 +164,7 @@ class RectificationService:
 
         # 2. Segmentation on the clean crop
         seg_started = time.perf_counter()
-        polygon = self.segmenter.best_polygon(crop_img) if self.segmenter is not None else None
+        polygon = self.segmenter.best_polygon(crop_img, conf=conf_seg) if self.segmenter is not None else None
         seg_ms = round((time.perf_counter() - seg_started) * 1000, 2)
 
         # 3. 4-Corner Extraction & Homography Warp
