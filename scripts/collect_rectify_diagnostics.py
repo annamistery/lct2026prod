@@ -269,6 +269,7 @@ def analyze_image_geometry(
     t_warp = (time.perf_counter() - t_warp0) * 1000
     diag["timings_ms"]["warp"] = round(t_warp, 2)
     matrix_bgr = cv2.cvtColor(np.array(rectified_img), cv2.COLOR_RGB2BGR)
+    crop_bgr = cv2.cvtColor(np.array(crop_img), cv2.COLOR_RGB2BGR)
 
     diag["status"] = "OK"
 
