@@ -9,10 +9,15 @@ Optionally packs everything into a single zip archive for easy download to local
 
 from __future__ import annotations
 
+import os
+
+# Set writable config directories before importing libraries (Docker non-root support)
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/matplotlib")
+os.environ.setdefault("YOLO_CONFIG_DIR", "/tmp/Ultralytics")
+
 import argparse
 import json
 import math
-import os
 import shutil
 import sys
 import time
@@ -429,8 +434,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--output-dir",
-        default="tmp/rectify_diagnostics",
-        help="Directory where diagnostic samples and reports are saved.",
+        default="media/rectify_diagnostics",
+        help="Directory where diagnostic samples and reports are saved (defaults to writable media/rectify_diagnostics).",
     )
     parser.add_argument(
         "--zip",
@@ -457,6 +462,23 @@ def parse_args() -> argparse.Namespace:
         help="Confidence threshold for YOLO segmentation model.",
     )
     return parser.parse_args()
+
+
+def resolve_output_dir(raw_dir: str) -> Path:
+    p = Path(raw_dir)
+    if p.is_absolute():
+        return p
+
+    # In Docker, /media is the dedicated host bind mount with write permissions
+    media_root = Path("/media")
+    if media_root.is_dir() and os.access(str(media_root), os.W_OK):
+        parts = p.parts
+        if parts and parts[0] in ("media", "tmp"):
+            sub = Path(*parts[1:]) if len(parts) > 1 else Path(".")
+            return media_root / sub
+        return media_root / p
+
+    return PROJECT_ROOT / p
 
 
 def main():
@@ -500,9 +522,7 @@ def main():
         print("ERROR: No images found to process. Check --dirs arguments.")
         sys.exit(1)
 
-    diag_base_dir = Path(args.output_dir)
-    if not diag_base_dir.is_absolute():
-        diag_base_dir = PROJECT_ROOT / diag_base_dir
+    diag_base_dir = resolve_output_dir(args.output_dir)
     diag_base_dir.mkdir(parents=True, exist_ok=True)
 
     results = []
