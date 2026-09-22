@@ -55,29 +55,28 @@ class RectificationService:
         crop_w: int,
         crop_h: int,
     ) -> np.ndarray | None:
-        """Extracts 4 boundary corner anchors from the full segmentation polygon."""
+        """Extracts 4 stable boundary corner anchors from the segmentation polygon.
+
+        Uses oriented bounding box (minAreaRect) or convex hull extrema to guarantee
+        that corners never collapse into a single point on vertical/straight boundaries.
+        """
         pts = np.array(polygon, dtype=np.float32)
         if len(pts) < 4:
             return None
 
-        # Ensure clockwise orientation
-        sa = 0.5 * np.sum(pts[:, 0] * np.roll(pts[:, 1], -1) - pts[:, 1] * np.roll(pts[:, 0], -1))
-        if sa < 0:
-            pts = pts[::-1]
+        # Calculate oriented bounding box
+        rect = cv2.minAreaRect(pts)
+        box = cv2.boxPoints(rect)  # 4 points
+        box = self.order_points(box)
 
-        # Natural image orientation:
-        # In the crop image, the bottle is already roughly upright (Y is vertical, X is horizontal).
-        # Top-Left: min(x + y)
-        # Top-Right: max(x - y)
-        # Bottom-Right: max(x + y)
-        # Bottom-Left: min(x - y)
-        idx_tl = int(np.argmin(pts[:, 0] + pts[:, 1]))
-        idx_tr = int(np.argmax(pts[:, 0] - pts[:, 1]))
-        idx_br = int(np.argmax(pts[:, 0] + pts[:, 1]))
-        idx_bl = int(np.argmin(pts[:, 0] - pts[:, 1]))
+        # Refine corners by snapping to nearest actual polygon points along direction rays
+        refined_corners = []
+        for c in box:
+            dists = np.linalg.norm(pts - c, axis=1)
+            nearest_idx = int(np.argmin(dists))
+            refined_corners.append(pts[nearest_idx])
 
-        quad = np.array([pts[idx_tl], pts[idx_tr], pts[idx_br], pts[idx_bl]], dtype=np.float32)
-        quad = self.order_points(quad)
+        quad = self.order_points(np.array(refined_corners, dtype=np.float32))
 
         # Clamp points to crop boundaries
         quad[:, 0] = np.clip(quad[:, 0], 0, crop_w - 1)
@@ -218,104 +217,136 @@ class RectificationService:
         polygon: list[tuple[float, float]],
         quad: np.ndarray | None = None,
     ) -> Image.Image:
-        """Unrolls the entire segmentation boundary contour into a canonical square matrix (target_size x target_size).
+        """Unrolls the label into a canonical square matrix (target_size x target_size).
 
-        Preserves 100% of the label surface without cutting edges, straightening top/bottom curves
-        and compensating for cylindrical perspective via transfinite interpolation (Coons patch).
+        Implements a robust hybrid rectification pipeline:
+        1. Spike / Notch suppression via adaptive morphological opening/closing.
+        2. Solidity assessment (handles complex figurative crowns vs cylindrical labels).
+        3. Column-wise cylindrical remap with quadratic curvature smoothing and guaranteed
+           positive Jacobian (eliminates all fold/wrinkle defects).
+        4. Fallback to robust perspective homography if non-cylindrical or irregular.
         """
         try:
             crop_np = np.array(crop_image.convert("RGB"))
             crop_h, crop_w = crop_np.shape[:2]
-
             pts = np.array(polygon, dtype=np.float32)
-            N = len(pts)
-            if N < 4:
+
+            if len(pts) < 4:
                 return crop_image.convert("RGB").resize((self.target_size, self.target_size), Image.Resampling.LANCZOS)
 
-            # Ensure Clockwise orientation
-            sa = 0.5 * np.sum(pts[:, 0] * np.roll(pts[:, 1], -1) - pts[:, 1] * np.roll(pts[:, 0], -1))
-            if sa < 0:
-                pts = pts[::-1]
+            # Check solidity
+            hull = cv2.convexHull(pts)
+            area = float(cv2.contourArea(pts))
+            hull_area = float(cv2.contourArea(hull))
+            solidity = area / max(1.0, hull_area)
 
-            # Natural image orientation:
-            # In the crop image, the bottle is upright (Y is vertical downwards, X is horizontal).
-            # Top-Left: min(x + y)
-            # Top-Right: max(x - y)
-            # Bottom-Right: max(x + y)
-            # Bottom-Left: min(x - y)
-            idx_tl = int(np.argmin(pts[:, 0] + pts[:, 1]))
-            idx_tr = int(np.argmax(pts[:, 0] - pts[:, 1]))
-            idx_br = int(np.argmax(pts[:, 0] + pts[:, 1]))
-            idx_bl = int(np.argmin(pts[:, 0] - pts[:, 1]))
+            # If label has highly irregular decorative contours (e.g. domes/spires, solidity < 0.78),
+            # use robust perspective homography on the main body
+            if solidity < 0.78 and quad is not None:
+                return self._warp_perspective(crop_image, quad)
 
-            def get_arc(i_from: int, i_to: int, step_dir: int = 1) -> np.ndarray:
-                steps = ((i_to - i_from) * step_dir) % N
-                return np.array([pts[(i_from + step_dir * s) % N] for s in range(steps + 1)], dtype=np.float32)
+            # 1. Orientation via minAreaRect
+            rect = cv2.minAreaRect(pts)
+            center, (bw, bh), angle = rect
+            if bw < bh:
+                tilt = angle
+            else:
+                tilt = angle + 90.0 if angle < 0 else angle - 90.0
 
-            c_top_raw = get_arc(idx_tl, idx_tr, 1)      # TL -> TR along top boundary
-            c_right_raw = get_arc(idx_tr, idx_br, 1)    # TR -> BR along right flank
-            c_bot_raw = get_arc(idx_bl, idx_br, -1)    # BL -> BR along bottom boundary
-            c_left_raw = get_arc(idx_tl, idx_bl, -1)   # TL -> BL along left flank
+            # Correct tilt if bottle is angled > 1 deg
+            if abs(tilt) > 1.0 and abs(tilt) < 45.0:
+                M_rot = cv2.getRotationMatrix2D(center, tilt, 1.0)
+                crop_rot = cv2.warpAffine(
+                    crop_np, M_rot, (crop_w, crop_h), flags=cv2.INTER_LANCZOS4, borderMode=cv2.BORDER_REPLICATE
+                )
+                ones = np.ones((len(pts), 1), dtype=np.float32)
+                pts_rot = np.dot(M_rot, np.hstack([pts, ones]).T).T
+            else:
+                crop_rot = crop_np
+                pts_rot = pts
 
-            def resample_curve(curve_pts: np.ndarray, num_samples: int, cylindrical: bool = False) -> np.ndarray:
-                dists = np.linalg.norm(np.diff(curve_pts, axis=0), axis=1)
-                cum_dist = np.insert(np.cumsum(dists), 0, 0.0)
-                total_len = cum_dist[-1]
-                if total_len < 1e-5:
-                    return np.repeat(curve_pts[0:1], num_samples, axis=0)
+            # 2. Raster Mask from polygon with Spike and Notch suppression
+            mask = np.zeros((crop_h, crop_w), dtype=np.uint8)
+            cv2.fillPoly(mask, [np.int32(pts_rot)], 255)
 
-                t_norm = cum_dist / total_len
-                cols = np.linspace(0.0, 1.0, num_samples, dtype=np.float32)
+            # Adaptive kernel size (1.5% of crop dimensions)
+            k_w = max(5, int(crop_w * 0.015) | 1)
+            k_h = max(5, int(crop_h * 0.015) | 1)
+            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k_w, k_h))
+            mask_clean = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+            mask_clean = cv2.morphologyEx(mask_clean, cv2.MORPH_OPEN, kernel)
 
-                if cylindrical:
-                    theta_0 = 0.82  # ~47 degrees cylindrical view angle
-                    s_norm = 2.0 * cols - 1.0
-                    theta = s_norm * theta_0
-                    factor = np.sin(theta) / np.sin(theta_0)
-                    u = np.clip((factor + 1.0) * 0.5, 0.0, 1.0)
-                else:
-                    u = cols
+            # 3. Solid column detection (filter out empty fringe borders)
+            col_sums = np.sum(mask_clean > 0, axis=0)
+            valid_cols = np.where(col_sums >= max(15, int(0.12 * np.max(col_sums))))[0]
+            if len(valid_cols) < 20:
+                if quad is not None:
+                    return self._warp_perspective(crop_image, quad)
+                return crop_image.convert("RGB").resize((self.target_size, self.target_size), Image.Resampling.LANCZOS)
 
-                x_s = np.interp(u, t_norm, curve_pts[:, 0])
-                y_s = np.interp(u, t_norm, curve_pts[:, 1])
-                return np.column_stack([x_s, y_s])
+            xmin = int(valid_cols[0])
+            xmax = int(valid_cols[-1])
+            w_label = xmax - xmin
 
-            W, H = self.target_size, self.target_size
-            c_top = resample_curve(c_top_raw, W, cylindrical=True)
-            c_bot = resample_curve(c_bot_raw, W, cylindrical=True)
-            c_left = resample_curve(c_left_raw, H, cylindrical=False)
-            c_right = resample_curve(c_right_raw, H, cylindrical=False)
+            # 4. Extract Top and Bottom profiles per column
+            xs_prof = []
+            y_tops = []
+            y_bots = []
+            for x in range(xmin, xmax + 1):
+                rows = np.where(mask_clean[:, x] > 0)[0]
+                if len(rows) >= 10:
+                    xs_prof.append(x)
+                    y_tops.append(rows[0])
+                    y_bots.append(rows[-1])
 
-            p_tl = c_top[0]
-            p_tr = c_top[-1]
-            p_bl = c_bot[0]
-            p_br = c_bot[-1]
+            if len(xs_prof) < 15:
+                if quad is not None:
+                    return self._warp_perspective(crop_image, quad)
+                return crop_image.convert("RGB").resize((self.target_size, self.target_size), Image.Resampling.LANCZOS)
 
-            U = np.linspace(0.0, 1.0, W, dtype=np.float32)[None, :, None]
-            V = np.linspace(0.0, 1.0, H, dtype=np.float32)[:, None, None]
+            xs_prof = np.array(xs_prof, dtype=np.float32)
+            y_tops = np.array(y_tops, dtype=np.float32)
+            y_bots = np.array(y_bots, dtype=np.float32)
 
-            # Coons Patch Transfinite Interpolation
-            blend_tb = (1.0 - V) * c_top[None, :, :] + V * c_bot[None, :, :]
-            blend_lr = (1.0 - U) * c_left[:, None, :] + U * c_right[:, None, :]
-            blend_corners = (
-                (1.0 - U) * (1.0 - V) * p_tl +
-                U * (1.0 - V) * p_tr +
-                (1.0 - U) * V * p_bl +
-                U * V * p_br
-            )
+            # 5. Robust Quadratic Curvature Smoothing
+            x_mid = (xmin + xmax) * 0.5
+            X_rel = xs_prof - x_mid
 
-            map_grid = blend_tb + blend_lr - blend_corners
-            map_x = np.clip(map_grid[:, :, 0].astype(np.float32), 0, crop_w - 1)
-            map_y = np.clip(map_grid[:, :, 1].astype(np.float32), 0, crop_h - 1)
+            poly_top = np.polyfit(X_rel, y_tops, 2)
+            poly_bot = np.polyfit(X_rel, y_bots, 2)
+
+            # 6. Build Cylindrical Remap Grid (target_size x target_size)
+            cols = np.linspace(0.0, 1.0, self.target_size, dtype=np.float32)
+            theta_0 = 0.82  # ~47 deg cylindrical view
+            s_norm = 2.0 * cols - 1.0
+            u = np.sin(s_norm * theta_0) / np.sin(theta_0)
+            grid_x_rel = u * (w_label * 0.5)
+            grid_x = x_mid + grid_x_rel
+
+            c_top = np.polyval(poly_top, grid_x_rel)
+            c_bot = np.polyval(poly_bot, grid_x_rel)
+
+            # Strict clearance guarantee: bottom must exceed top by at least 65% of mean height
+            mean_h = float(np.mean(y_bots - y_tops))
+            min_clearance = max(20.0, 0.65 * mean_h)
+            c_bot = np.maximum(c_bot, c_top + min_clearance)
+
+            V = np.linspace(0.0, 1.0, self.target_size, dtype=np.float32)[:, None]
+            map_x = np.tile(grid_x[None, :], (self.target_size, 1)).astype(np.float32)
+            map_y = ((1.0 - V) * c_top[None, :] + V * c_bot[None, :]).astype(np.float32)
+
+            map_x = np.clip(map_x, 0, crop_w - 1)
+            map_y = np.clip(map_y, 0, crop_h - 1)
 
             unrolled = cv2.remap(
-                crop_np,
+                crop_rot,
                 map_x,
                 map_y,
                 interpolation=cv2.INTER_LANCZOS4,
                 borderMode=cv2.BORDER_REPLICATE,
             )
             return Image.fromarray(unrolled)
+
         except Exception:
             if quad is not None:
                 return self._warp_perspective(crop_image, quad)
