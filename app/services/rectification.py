@@ -75,7 +75,8 @@ class RectificationService:
         """Truly unrolls the cylindrical label into a flat canonical 256x256 matrix.
 
         Aligns the bottle's vertical axis using minAreaRect to prevent false perspective skew.
-        Extracts column-wise top and bottom cylinder arcs from the raster mask.
+        Extracts column-wise top and bottom cylinder arcs ONLY from the solid body columns,
+        preventing false bottom upward pinching caused by partial-height edge artifacts.
         Straightens top and bottom curves into horizontal lines and compensates for
         lateral cylindrical compression.
         """
@@ -118,37 +119,54 @@ class RectificationService:
             mask_clean = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
             mask_clean = cv2.morphologyEx(mask_clean, cv2.MORPH_OPEN, kernel)
 
-            # 3. Detect solid horizontal label column span
+            # 3. Detect column span
             col_sums = np.sum(mask_clean > 0, axis=0)
-            max_c = np.max(col_sums)
-            valid_cols = np.where(col_sums >= max(20, int(0.15 * max_c)))[0]
+            valid_cols = np.where(col_sums >= 20)[0]
             if len(valid_cols) < 20:
                 return None, None
 
-            xmin = int(valid_cols[0])
-            xmax = int(valid_cols[-1])
-            w_label = xmax - xmin
-            x_mid = (xmin + xmax) * 0.5
+            xmin_raw = int(valid_cols[0])
+            xmax_raw = int(valid_cols[-1])
 
-            # 4. Extract continuous top and bottom boundary curves per column
-            xs_prof, y_tops, y_bots = [], [], []
-            for x in range(xmin, xmax + 1):
+            # 4. Extract top and bottom coordinates across columns
+            xs_raw, y_tops_raw, y_bots_raw = [], [], []
+            for x in range(xmin_raw, xmax_raw + 1):
                 rows = np.where(mask_clean[:, x] > 0)[0]
                 if len(rows) >= 10:
-                    xs_prof.append(x)
-                    y_tops.append(rows[0])
-                    y_bots.append(rows[-1])
+                    xs_raw.append(x)
+                    y_tops_raw.append(rows[0])
+                    y_bots_raw.append(rows[-1])
 
-            if len(xs_prof) < 15:
+            if len(xs_raw) < 15:
                 return None, None
 
-            xs_prof = np.array(xs_prof, dtype=np.float32)
-            y_tops = np.array(y_tops, dtype=np.float32)
-            y_bots = np.array(y_bots, dtype=np.float32)
+            xs_raw = np.array(xs_raw, dtype=np.float32)
+            y_tops_raw = np.array(y_tops_raw, dtype=np.float32)
+            y_bots_raw = np.array(y_bots_raw, dtype=np.float32)
 
-            X_rel = xs_prof - x_mid
-            poly_top = np.polyfit(X_rel, y_tops, 2)
-            poly_bot = np.polyfit(X_rel, y_bots, 2)
+            heights = y_bots_raw - y_tops_raw
+            med_h = float(np.median(heights))
+
+            # CRITICAL FIX: Retain ONLY solid body columns where the label spans
+            # at least 65% of its typical median height. This completely discards
+            # outer edge columns where the bottom is missing (which falsely forced y_bot
+            # into the upper half of the label and caused massive upward pinching of the bottom).
+            full_cols = np.where(heights >= 0.65 * med_h)[0]
+            if len(full_cols) < 15:
+                full_cols = np.arange(len(xs_raw))
+
+            xs_clean = xs_raw[full_cols]
+            y_tops_clean = y_tops_raw[full_cols]
+            y_bots_clean = y_bots_raw[full_cols]
+
+            xmin_clean = int(xs_clean[0])
+            xmax_clean = int(xs_clean[-1])
+            w_clean = max(10, xmax_clean - xmin_clean)
+            x_mid = (xmin_clean + xmax_clean) * 0.5
+
+            X_rel = xs_clean - x_mid
+            poly_top = np.polyfit(X_rel, y_tops_clean, 2)
+            poly_bot = np.polyfit(X_rel, y_bots_clean, 2)
 
             # 5. Build Remap Grid:
             # - Straightens top curve into line Y=0
@@ -158,13 +176,13 @@ class RectificationService:
             theta_0 = 0.82
             s_norm = 2.0 * cols - 1.0
             u = np.sin(s_norm * theta_0) / np.sin(theta_0)
-            grid_x_rel = u * (w_label * 0.5)
+            grid_x_rel = u * (w_clean * 0.5)
             grid_x = x_mid + grid_x_rel
 
             c_top = np.polyval(poly_top, grid_x_rel)
             c_bot = np.polyval(poly_bot, grid_x_rel)
 
-            mean_h = float(np.mean(y_bots - y_tops))
+            mean_h = float(np.mean(y_bots_clean - y_tops_clean))
             min_clearance = max(20.0, 0.70 * mean_h)
             c_bot = np.maximum(c_bot, c_top + min_clearance)
 
@@ -183,7 +201,6 @@ class RectificationService:
                 borderMode=cv2.BORDER_REPLICATE,
             )
 
-            # Reconstruct true 4 corner anchors in unrotated crop coordinates
             box = cv2.boxPoints(rect)
             quad = self.order_points(box)
 
