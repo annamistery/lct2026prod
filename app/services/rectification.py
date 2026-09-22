@@ -1,3 +1,4 @@
+import itertools
 import time
 from dataclasses import dataclass
 
@@ -17,6 +18,7 @@ class RectificationResult:
     seg_polygon_orig: list[list[float]] | None
     quad_corners_orig: list[list[float]] | None
     is_fallback: bool
+    method: str
     bbox_ms: float
     seg_ms: float
     warp_ms: float
@@ -30,90 +32,242 @@ class RectificationService:
         segmenter: SegmenterService | None = None,
         target_size: int = 256,
         padding_ratio: float = 0.05,
+        fill_color: tuple[int, int, int] = (20, 20, 20),
     ):
         self.detector = detector
         self.segmenter = segmenter
         self.target_size = target_size
         self.padding_ratio = padding_ratio
+        self.fill_color = fill_color
 
     @staticmethod
     def order_points(pts: np.ndarray) -> np.ndarray:
-        """Orders 4 points into canonical order: [Top-Left, Top-Right, Bottom-Right, Bottom-Left]."""
+        """Orders 4 points into canonical order: TL, TR, BR, BL."""
         rect = np.zeros((4, 2), dtype=np.float32)
         s = pts.sum(axis=1)
         rect[0] = pts[np.argmin(s)]
         rect[2] = pts[np.argmax(s)]
-
         diff = np.diff(pts, axis=1)
         rect[1] = pts[np.argmin(diff)]
         rect[3] = pts[np.argmax(diff)]
         return rect
 
-    def extract_quadrilateral(
+    def _clean_convex_hull(
         self,
         polygon: list[tuple[float, float]],
-        crop_w: int,
-        crop_h: int,
+        crop_shape: tuple[int, int],
     ) -> np.ndarray | None:
-        """Extracts 4 boundary corner anchors from the segmentation polygon for display."""
+        """Return a cleaned convex hull of the segmentation polygon."""
         pts = np.array(polygon, dtype=np.float32)
         if len(pts) < 4:
             return None
 
-        rect = cv2.minAreaRect(pts)
-        box = cv2.boxPoints(rect)
-        quad = self.order_points(box)
+        h, w = crop_shape
+        mask = np.zeros((h, w), dtype=np.uint8)
+        cv2.fillPoly(mask, [np.int32(pts)], 255)
 
-        quad[:, 0] = np.clip(quad[:, 0], 0, crop_w - 1)
-        quad[:, 1] = np.clip(quad[:, 1], 0, crop_h - 1)
+        k = max(3, int(min(w, h) * 0.01) | 1)
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))
+        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
 
-        area = abs(float(cv2.contourArea(quad)))
-        if area < (crop_w * crop_h * 0.02):
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        if not contours:
+            return None
+        cnt = max(contours, key=cv2.contourArea)
+        hull = cv2.convexHull(cnt)[:, 0, :]
+        if len(hull) < 4:
+            return None
+        return hull.astype(np.float32)
+
+    def _max_area_inscribed_quadrilateral(self, hull_pts: np.ndarray) -> np.ndarray | None:
+        """Find the four hull vertices that form the largest-area quadrilateral.
+
+        This is used as the perspective frame of the label. We simplify the hull
+        first, then brute-force all 4-point combinations; the vertex count is small
+        after simplification.
+        """
+        pts = hull_pts.astype(np.float32)
+        if len(pts) < 4:
             return None
 
-        return quad
+        closed = pts if np.allclose(pts[0], pts[-1]) else np.vstack([pts, pts[0]])
+        perimeter = cv2.arcLength(closed, True)
+        eps = 0.005 * perimeter
+        approx = cv2.approxPolyDP(closed, eps, True).reshape(-1, 2)
+        n = len(approx)
+        if n < 4:
+            return None
 
-    def rectify_crop(self, crop_image: Image.Image, conf_seg: float | None = None) -> RectificationResult:
-        """Rectifies an already cropped label image."""
+        if n > 60:
+            # Fallback to minAreaRect if the hull is too noisy to brute-force.
+            rect = cv2.minAreaRect(pts)
+            return cv2.boxPoints(rect)
+
+        best_area = -1.0
+        best_quad = None
+        for combo in itertools.combinations(range(n), 4):
+            quad = approx[np.array(combo)]
+            area = abs(float(cv2.contourArea(quad)))
+            if area > best_area:
+                best_area = area
+                best_quad = quad
+
+        if best_quad is None:
+            return None
+        return best_quad.astype(np.float32)
+
+    def _orient_frame_portrait(self, quad: np.ndarray) -> np.ndarray:
+        """Reorder the 4 corner frame so the label's long side is vertical."""
+        ordered = self.order_points(quad)
+        top_len = float(np.linalg.norm(ordered[1] - ordered[0]))
+        bot_len = float(np.linalg.norm(ordered[2] - ordered[3]))
+        left_len = float(np.linalg.norm(ordered[3] - ordered[0]))
+        right_len = float(np.linalg.norm(ordered[2] - ordered[1]))
+        width = (top_len + bot_len) / 2.0
+        height = (left_len + right_len) / 2.0
+
+        if width > height:
+            # Rotate clockwise: old top edge becomes the new left edge (vertical)
+            return np.array(
+                [ordered[1], ordered[2], ordered[3], ordered[0]], dtype=np.float32
+            )
+        return ordered
+
+    def extract_perspective_frame(
+        self,
+        polygon: list[tuple[float, float]],
+        crop_shape: tuple[int, int],
+    ) -> np.ndarray | None:
+        """Extract a robust 4-point perspective frame from the segmentation polygon."""
+        hull = self._clean_convex_hull(polygon, crop_shape)
+        if hull is None:
+            return None
+
+        quad = self._max_area_inscribed_quadrilateral(hull)
+        if quad is None:
+            return None
+
+        ordered = self._orient_frame_portrait(quad)
+
+        h, w = crop_shape
+        ordered[:, 0] = np.clip(ordered[:, 0], 0, w - 1)
+        ordered[:, 1] = np.clip(ordered[:, 1], 0, h - 1)
+
+        area = abs(float(cv2.contourArea(ordered)))
+        if area < (w * h * 0.01):
+            return None
+
+        return ordered
+
+    def _rectify_perspective_letterbox(
+        self,
+        crop_image: Image.Image,
+        src_pts: np.ndarray,
+    ) -> Image.Image:
+        """Map the perspective frame to a 256x256 canvas preserving aspect ratio."""
+        crop_np = np.array(crop_image.convert("RGB"))
+
+        top_len = float(np.linalg.norm(src_pts[1] - src_pts[0]))
+        bot_len = float(np.linalg.norm(src_pts[2] - src_pts[3]))
+        left_len = float(np.linalg.norm(src_pts[3] - src_pts[0]))
+        right_len = float(np.linalg.norm(src_pts[2] - src_pts[1]))
+
+        src_w = (top_len + bot_len) / 2.0
+        src_h = (left_len + right_len) / 2.0
+        aspect = src_w / max(1e-6, src_h)
+
+        target = float(self.target_size)
+        if aspect >= 1.0:
+            dst_w = target
+            dst_h = max(1.0, target / aspect)
+        else:
+            dst_h = target
+            dst_w = max(1.0, target * aspect)
+
+        cx = target / 2.0
+        cy = target / 2.0
+        dst_pts = np.float32(
+            [
+                [cx - dst_w / 2, cy - dst_h / 2],
+                [cx + dst_w / 2, cy - dst_h / 2],
+                [cx + dst_w / 2, cy + dst_h / 2],
+                [cx - dst_w / 2, cy + dst_h / 2],
+            ]
+        )
+
+        matrix = cv2.getPerspectiveTransform(src_pts.astype(np.float32), dst_pts)
+        warped = cv2.warpPerspective(
+            crop_np,
+            matrix,
+            (self.target_size, self.target_size),
+            flags=cv2.INTER_LANCZOS4,
+            borderMode=cv2.BORDER_CONSTANT,
+            borderValue=self.fill_color,
+        )
+        return Image.fromarray(warped)
+
+    def rectify_crop(
+        self,
+        crop_image: Image.Image,
+        conf_seg: float | None = None,
+    ) -> RectificationResult:
         started = time.perf_counter()
         crop_w, crop_h = crop_image.size
         seg_started = time.perf_counter()
-
-        polygon = self.segmenter.best_polygon(crop_image, conf=conf_seg) if self.segmenter is not None else None
+        polygon = (
+            self.segmenter.best_polygon(crop_image, conf=conf_seg)
+            if self.segmenter is not None
+            else None
+        )
         seg_ms = round((time.perf_counter() - seg_started) * 1000, 2)
 
         warp_started = time.perf_counter()
         if polygon is not None:
-            quad = self.extract_quadrilateral(polygon, crop_w, crop_h)
-            rectified = self.unroll_cylinder_mesh(crop_image, polygon, quad)
-            warp_ms = round((time.perf_counter() - warp_started) * 1000, 2)
-            return RectificationResult(
-                rectified_image=rectified,
-                bbox=(0.0, 0.0, float(crop_w), float(crop_h)),
-                crop_bbox=(0, 0, int(crop_w), int(crop_h)),
-                seg_polygon_orig=[[float(round(float(p[0]), 1)), float(round(float(p[1]), 1))] for p in polygon],
-                quad_corners_orig=[[float(round(float(p[0]), 1)), float(round(float(p[1]), 1))] for p in quad] if quad is not None else None,
-                is_fallback=False,
-                bbox_ms=0.0,
-                seg_ms=float(seg_ms),
-                warp_ms=float(warp_ms),
-                total_ms=float(round((time.perf_counter() - started) * 1000, 2)),
+            frame = self.extract_perspective_frame(polygon, (crop_h, crop_w))
+            if frame is not None:
+                rectified = self._rectify_perspective_letterbox(crop_image, frame)
+                method = "perspective_letterbox"
+                quad = frame
+            else:
+                rectified = crop_image.convert("RGB").resize(
+                    (self.target_size, self.target_size), Image.Resampling.LANCZOS
+                )
+                method = "fallback_resize"
+                quad = None
+        else:
+            rectified = crop_image.convert("RGB").resize(
+                (self.target_size, self.target_size), Image.Resampling.LANCZOS
             )
+            method = "fallback_resize"
+            quad = None
 
-        # Fallback to direct resize
-        rectified = crop_image.convert("RGB").resize((self.target_size, self.target_size), Image.Resampling.LANCZOS)
         warp_ms = round((time.perf_counter() - warp_started) * 1000, 2)
+        total_ms = round((time.perf_counter() - started) * 1000, 2)
+
+        poly_orig = (
+            [[float(round(p[0], 1)), float(round(p[1], 1))] for p in polygon]
+            if polygon
+            else None
+        )
+        quad_orig = (
+            [[float(round(p[0], 1)), float(round(p[1], 1))] for p in quad]
+            if quad is not None
+            else None
+        )
+
         return RectificationResult(
             rectified_image=rectified,
             bbox=(0.0, 0.0, float(crop_w), float(crop_h)),
             crop_bbox=(0, 0, int(crop_w), int(crop_h)),
-            seg_polygon_orig=[[float(round(float(p[0]), 1)), float(round(float(p[1]), 1))] for p in polygon] if polygon else None,
-            quad_corners_orig=None,
-            is_fallback=True,
+            seg_polygon_orig=poly_orig,
+            quad_corners_orig=quad_orig,
+            is_fallback=method == "fallback_resize",
+            method=method,
             bbox_ms=0.0,
             seg_ms=float(seg_ms),
             warp_ms=float(warp_ms),
-            total_ms=float(round((time.perf_counter() - started) * 1000, 2)),
+            total_ms=float(total_ms),
         )
 
     def rectify(
@@ -122,17 +276,18 @@ class RectificationService:
         conf_detect: float | None = None,
         conf_seg: float | None = None,
     ) -> RectificationResult:
-        """Runs full cascade: BBox detect -> Crop with padding -> Seg on Crop -> Cylinder Unroll."""
         started = time.perf_counter()
         orig_w, orig_h = full_image.size
 
-        # 1. BBox Detection
         bbox_started = time.perf_counter()
         box = self.detector.best_box(full_image, conf=conf_detect) if self.detector is not None else None
         bbox_ms = round((time.perf_counter() - bbox_started) * 1000, 2)
 
         if box is None:
-            return self.rectify_crop(full_image, conf_seg=conf_seg)
+            result = self.rectify_crop(full_image, conf_seg=conf_seg)
+            result.bbox_ms = float(bbox_ms)
+            result.total_ms = round((time.perf_counter() - started) * 1000, 2)
+            return result
 
         xtl, ytl, xbr, ybr = box
         pad_x = int((xbr - xtl) * self.padding_ratio)
@@ -145,198 +300,57 @@ class RectificationService:
         crop_img = full_image.crop((crop_xtl, crop_ytl, crop_xbr, crop_ybr))
         crop_w, crop_h = crop_img.size
 
-        # 2. Segmentation on clean crop
         seg_started = time.perf_counter()
-        polygon = self.segmenter.best_polygon(crop_img, conf=conf_seg) if self.segmenter is not None else None
+        polygon = (
+            self.segmenter.best_polygon(crop_img, conf=conf_seg)
+            if self.segmenter is not None
+            else None
+        )
         seg_ms = round((time.perf_counter() - seg_started) * 1000, 2)
 
-        # 3. True Cylindrical Unrolling into 256x256 canonical matrix
         warp_started = time.perf_counter()
+        method = "fallback_resize"
+        rectified = crop_img.convert("RGB").resize(
+            (self.target_size, self.target_size), Image.Resampling.LANCZOS
+        )
+        quad = None
+
         if polygon is not None:
-            quad = self.extract_quadrilateral(polygon, crop_w, crop_h)
-            rectified = self.unroll_cylinder_mesh(crop_img, polygon, quad)
-            warp_ms = round((time.perf_counter() - warp_started) * 1000, 2)
+            frame = self.extract_perspective_frame(polygon, (crop_h, crop_w))
+            if frame is not None:
+                rectified = self._rectify_perspective_letterbox(crop_img, frame)
+                method = "perspective_letterbox"
+                quad = frame
 
-            poly_orig = [[float(round(float(p[0]) + crop_xtl, 1)), float(round(float(p[1]) + crop_ytl, 1))] for p in polygon]
-            quad_orig = [[float(round(float(p[0]) + crop_xtl, 1)), float(round(float(p[1]) + crop_ytl, 1))] for p in quad] if quad is not None else None
-
-            return RectificationResult(
-                rectified_image=rectified,
-                bbox=(float(round(float(xtl), 1)), float(round(float(ytl), 1)), float(round(float(xbr), 1)), float(round(float(ybr), 1))),
-                crop_bbox=(int(crop_xtl), int(crop_ytl), int(crop_xbr), int(crop_ybr)),
-                seg_polygon_orig=poly_orig,
-                quad_corners_orig=quad_orig,
-                is_fallback=False,
-                bbox_ms=float(bbox_ms),
-                seg_ms=float(seg_ms),
-                warp_ms=float(warp_ms),
-                total_ms=float(round((time.perf_counter() - started) * 1000, 2)),
-            )
-
-        # Fallback to direct BBox crop without segmentation warp
-        fallback_crop = full_image.crop((int(xtl), int(ytl), int(xbr), int(ybr)))
-        rectified = fallback_crop.convert("RGB").resize((self.target_size, self.target_size), Image.Resampling.LANCZOS)
         warp_ms = round((time.perf_counter() - warp_started) * 1000, 2)
+        total_ms = round((time.perf_counter() - started) * 1000, 2)
+
+        poly_orig = (
+            [[float(round(p[0] + crop_xtl, 1)), float(round(p[1] + crop_ytl, 1))] for p in polygon]
+            if polygon
+            else None
+        )
+        quad_orig = (
+            [[float(round(p[0] + crop_xtl, 1)), float(round(p[1] + crop_ytl, 1))] for p in quad]
+            if quad is not None
+            else None
+        )
 
         return RectificationResult(
             rectified_image=rectified,
-            bbox=(float(round(float(xtl), 1)), float(round(float(ytl), 1)), float(round(float(xbr), 1)), float(round(float(ybr), 1))),
+            bbox=(
+                float(round(float(xtl), 1)),
+                float(round(float(ytl), 1)),
+                float(round(float(xbr), 1)),
+                float(round(float(ybr), 1)),
+            ),
             crop_bbox=(int(crop_xtl), int(crop_ytl), int(crop_xbr), int(crop_ybr)),
-            seg_polygon_orig=None,
-            quad_corners_orig=None,
-            is_fallback=True,
+            seg_polygon_orig=poly_orig,
+            quad_corners_orig=quad_orig,
+            is_fallback=method == "fallback_resize",
+            method=method,
             bbox_ms=float(bbox_ms),
             seg_ms=float(seg_ms),
             warp_ms=float(warp_ms),
-            total_ms=float(round((time.perf_counter() - started) * 1000, 2)),
+            total_ms=float(total_ms),
         )
-
-    def unroll_cylinder_mesh(
-        self,
-        crop_image: Image.Image,
-        polygon: list[tuple[float, float]],
-        quad: np.ndarray | None = None,
-    ) -> Image.Image:
-        """Truly unrolls the cylindrical label into a flat canonical 256x256 matrix.
-
-        Straightens the top/bottom cylinder curves into horizontal lines,
-        unbends the cylindrical perspective along the horizontal axis,
-        and isolates ONLY the label surface without the bottle background.
-        """
-        try:
-            crop_np = np.array(crop_image.convert("RGB"))
-            ch, cw = crop_np.shape[:2]
-            pts = np.array(polygon, dtype=np.float32)
-
-            if len(pts) < 4:
-                return crop_image.convert("RGB").resize((self.target_size, self.target_size), Image.Resampling.LANCZOS)
-
-            # 1. Orientation via minAreaRect (align upright cylinder axis)
-            rect = cv2.minAreaRect(pts)
-            center, (bw, bh), angle = rect
-            if bw < bh:
-                tilt = angle
-            else:
-                tilt = angle + 90.0 if angle < 0 else angle - 90.0
-
-            if abs(tilt) > 1.0 and abs(tilt) < 45.0:
-                M_rot = cv2.getRotationMatrix2D(center, tilt, 1.0)
-                crop_rot = cv2.warpAffine(
-                    crop_np, M_rot, (cw, ch), flags=cv2.INTER_LANCZOS4, borderMode=cv2.BORDER_REPLICATE
-                )
-                ones = np.ones((len(pts), 1), dtype=np.float32)
-                pts_rot = np.dot(M_rot, np.hstack([pts, ones]).T).T
-            else:
-                crop_rot = crop_np
-                pts_rot = pts
-
-            # 2. Raster Mask with spike & notch suppression
-            mask = np.zeros((ch, cw), dtype=np.uint8)
-            cv2.fillPoly(mask, [np.int32(pts_rot)], 255)
-
-            k_w = max(5, int(cw * 0.015) | 1)
-            k_h = max(5, int(ch * 0.015) | 1)
-            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k_w, k_h))
-            mask_clean = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
-            mask_clean = cv2.morphologyEx(mask_clean, cv2.MORPH_OPEN, kernel)
-
-            # 3. Detect valid solid columns
-            col_sums = np.sum(mask_clean > 0, axis=0)
-            max_col = np.max(col_sums)
-            valid_cols = np.where(col_sums >= max(20, int(0.15 * max_col)))[0]
-            if len(valid_cols) < 20:
-                if quad is not None:
-                    return self._warp_perspective(crop_image, quad)
-                return crop_image.convert("RGB").resize((self.target_size, self.target_size), Image.Resampling.LANCZOS)
-
-            xmin = int(valid_cols[0])
-            xmax = int(valid_cols[-1])
-            w_label = xmax - xmin
-
-            # 4. Extract clean top and bottom boundary curves per column
-            xs_prof = []
-            y_tops = []
-            y_bots = []
-            for x in range(xmin, xmax + 1):
-                rows = np.where(mask_clean[:, x] > 0)[0]
-                if len(rows) >= 10:
-                    xs_prof.append(x)
-                    y_tops.append(rows[0])
-                    y_bots.append(rows[-1])
-
-            if len(xs_prof) < 15:
-                if quad is not None:
-                    return self._warp_perspective(crop_image, quad)
-                return crop_image.convert("RGB").resize((self.target_size, self.target_size), Image.Resampling.LANCZOS)
-
-            xs_prof = np.array(xs_prof, dtype=np.float32)
-            y_tops = np.array(y_tops, dtype=np.float32)
-            y_bots = np.array(y_bots, dtype=np.float32)
-
-            # 5. Parabolic fitting of top and bottom cylinder arcs
-            x_mid = (xmin + xmax) * 0.5
-            X_rel = xs_prof - x_mid
-
-            poly_top = np.polyfit(X_rel, y_tops, 2)
-            poly_bot = np.polyfit(X_rel, y_bots, 2)
-
-            # 6. Build Remap Grid:
-            # - Straightens top curve into line Y=0
-            # - Straightens bottom curve into line Y=255
-            # - Unbends cylinder compression via sin(theta)/sin(theta_0)
-            cols = np.linspace(0.0, 1.0, self.target_size, dtype=np.float32)
-            theta_0 = 0.82
-            s_norm = 2.0 * cols - 1.0
-            u = np.sin(s_norm * theta_0) / np.sin(theta_0)
-            grid_x_rel = u * (w_label * 0.5)
-            grid_x = x_mid + grid_x_rel
-
-            c_top = np.polyval(poly_top, grid_x_rel)
-            c_bot = np.polyval(poly_bot, grid_x_rel)
-
-            mean_h = float(np.mean(y_bots - y_tops))
-            min_clearance = max(20.0, 0.70 * mean_h)
-            c_bot = np.maximum(c_bot, c_top + min_clearance)
-
-            V = np.linspace(0.0, 1.0, self.target_size, dtype=np.float32)[:, None]
-            map_x = np.tile(grid_x[None, :], (self.target_size, 1)).astype(np.float32)
-            map_y = ((1.0 - V) * c_top[None, :] + V * c_bot[None, :]).astype(np.float32)
-
-            map_x = np.clip(map_x, 0, cw - 1)
-            map_y = np.clip(map_y, 0, ch - 1)
-
-            unrolled = cv2.remap(
-                crop_rot,
-                map_x,
-                map_y,
-                interpolation=cv2.INTER_LANCZOS4,
-                borderMode=cv2.BORDER_REPLICATE,
-            )
-            return Image.fromarray(unrolled)
-
-        except Exception:
-            if quad is not None:
-                return self._warp_perspective(crop_image, quad)
-            return crop_image.convert("RGB").resize((self.target_size, self.target_size), Image.Resampling.LANCZOS)
-
-    def _warp_perspective(self, crop_image: Image.Image, quad: np.ndarray) -> Image.Image:
-        """Applies 4-point perspective warp into canonical square matrix."""
-        try:
-            crop_np = np.array(crop_image.convert("RGB"))
-            dst_pts = np.float32([
-                [0, 0],
-                [self.target_size - 1, 0],
-                [self.target_size - 1, self.target_size - 1],
-                [0, self.target_size - 1],
-            ])
-            matrix = cv2.getPerspectiveTransform(np.float32(quad), dst_pts)
-            warped = cv2.warpPerspective(
-                crop_np,
-                matrix,
-                (self.target_size, self.target_size),
-                flags=cv2.INTER_LANCZOS4,
-                borderMode=cv2.BORDER_REPLICATE,
-            )
-            return Image.fromarray(warped)
-        except Exception:
-            return crop_image.convert("RGB").resize((self.target_size, self.target_size), Image.Resampling.LANCZOS)

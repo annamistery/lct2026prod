@@ -175,6 +175,7 @@ async def process_rectification(
             "seg_polygon": [[float(p[0]), float(p[1])] for p in result.seg_polygon_orig] if result.seg_polygon_orig else None,
             "quad_corners": [[float(p[0]), float(p[1])] for p in result.quad_corners_orig] if result.quad_corners_orig else None,
             "is_fallback": bool(result.is_fallback),
+            "method": str(result.method),
             "matrix_b64": matrix_b64,
             "matrix_size": int(target_size),
             "timings": {
@@ -269,7 +270,7 @@ async def export_debug_artifacts(
         c_draw = ImageDraw.Draw(collage)
 
         # ASCII only to prevent Pillow default font UnicodeEncodeError on Linux
-        status_str = "FALLBACK (BBox)" if result.is_fallback else "CONTOUR UNROLL (Matrix v2)"
+        status_str = result.method.upper().replace("_", " ")
         c_draw.text((20, 12), f"LCT2026: {filename} | {status_str}", fill="#ffffff")
         c_draw.text((20, 36), f"BBox: {result.bbox_ms}ms | Seg: {result.seg_ms}ms | Warp: {result.warp_ms}ms | Total: {result.total_ms}ms", fill="#aaaaaa")
 
@@ -282,7 +283,7 @@ async def export_debug_artifacts(
         collage.paste(bb_resized, (x_cursor, header_h))
         x_cursor += bb_w + gap
 
-        c_draw.text((x_cursor, header_h - 18), "3. Full Contour Matrix v2 (256x256)", fill="#00d2d3")
+        c_draw.text((x_cursor, header_h - 18), "3. Perspective Letterbox (256x256)", fill="#00d2d3")
         collage.paste(mat_resized, (x_cursor, header_h))
 
         # Save to media/debug_exports on disk (always writable in Docker)
