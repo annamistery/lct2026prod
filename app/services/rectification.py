@@ -55,34 +55,18 @@ class RectificationService:
         crop_w: int,
         crop_h: int,
     ) -> np.ndarray | None:
-        """Extracts 4 stable boundary corner anchors from the segmentation polygon.
-
-        Uses oriented bounding box (minAreaRect) or convex hull extrema to guarantee
-        that corners never collapse into a single point on vertical/straight boundaries.
-        """
+        """Extracts 4 boundary corner anchors from the segmentation polygon for display."""
         pts = np.array(polygon, dtype=np.float32)
         if len(pts) < 4:
             return None
 
-        # Calculate oriented bounding box
         rect = cv2.minAreaRect(pts)
-        box = cv2.boxPoints(rect)  # 4 points
-        box = self.order_points(box)
+        box = cv2.boxPoints(rect)
+        quad = self.order_points(box)
 
-        # Refine corners by snapping to nearest actual polygon points along direction rays
-        refined_corners = []
-        for c in box:
-            dists = np.linalg.norm(pts - c, axis=1)
-            nearest_idx = int(np.argmin(dists))
-            refined_corners.append(pts[nearest_idx])
-
-        quad = self.order_points(np.array(refined_corners, dtype=np.float32))
-
-        # Clamp points to crop boundaries
         quad[:, 0] = np.clip(quad[:, 0], 0, crop_w - 1)
         quad[:, 1] = np.clip(quad[:, 1], 0, crop_h - 1)
 
-        # Sanity check: area must be at least 2% of crop
         area = abs(float(cv2.contourArea(quad)))
         if area < (crop_w * crop_h * 0.02):
             return None
@@ -90,7 +74,7 @@ class RectificationService:
         return quad
 
     def rectify_crop(self, crop_image: Image.Image, conf_seg: float | None = None) -> RectificationResult:
-        """Rectifies an already cropped label image (e.g. from camera view or manual crop)."""
+        """Rectifies an already cropped label image."""
         started = time.perf_counter()
         crop_w, crop_h = crop_image.size
         seg_started = time.perf_counter()
@@ -101,21 +85,20 @@ class RectificationService:
         warp_started = time.perf_counter()
         if polygon is not None:
             quad = self.extract_quadrilateral(polygon, crop_w, crop_h)
-            if quad is not None:
-                rectified = self.unroll_cylinder_mesh(crop_image, polygon, quad)
-                warp_ms = round((time.perf_counter() - warp_started) * 1000, 2)
-                return RectificationResult(
-                    rectified_image=rectified,
-                    bbox=(0.0, 0.0, float(crop_w), float(crop_h)),
-                    crop_bbox=(0, 0, int(crop_w), int(crop_h)),
-                    seg_polygon_orig=[[float(round(float(p[0]), 1)), float(round(float(p[1]), 1))] for p in polygon],
-                    quad_corners_orig=[[float(round(float(p[0]), 1)), float(round(float(p[1]), 1))] for p in quad],
-                    is_fallback=False,
-                    bbox_ms=0.0,
-                    seg_ms=float(seg_ms),
-                    warp_ms=float(warp_ms),
-                    total_ms=float(round((time.perf_counter() - started) * 1000, 2)),
-                )
+            rectified = self.unroll_cylinder_mesh(crop_image, polygon, quad)
+            warp_ms = round((time.perf_counter() - warp_started) * 1000, 2)
+            return RectificationResult(
+                rectified_image=rectified,
+                bbox=(0.0, 0.0, float(crop_w), float(crop_h)),
+                crop_bbox=(0, 0, int(crop_w), int(crop_h)),
+                seg_polygon_orig=[[float(round(float(p[0]), 1)), float(round(float(p[1]), 1))] for p in polygon],
+                quad_corners_orig=[[float(round(float(p[0]), 1)), float(round(float(p[1]), 1))] for p in quad] if quad is not None else None,
+                is_fallback=False,
+                bbox_ms=0.0,
+                seg_ms=float(seg_ms),
+                warp_ms=float(warp_ms),
+                total_ms=float(round((time.perf_counter() - started) * 1000, 2)),
+            )
 
         # Fallback to direct resize
         rectified = crop_image.convert("RGB").resize((self.target_size, self.target_size), Image.Resampling.LANCZOS)
@@ -139,7 +122,7 @@ class RectificationService:
         conf_detect: float | None = None,
         conf_seg: float | None = None,
     ) -> RectificationResult:
-        """Runs full cascade: BBox detect -> Crop with padding -> Seg on Crop -> 4-point Warp."""
+        """Runs full cascade: BBox detect -> Crop with padding -> Seg on Crop -> Cylinder Unroll."""
         started = time.perf_counter()
         orig_w, orig_h = full_image.size
 
@@ -149,7 +132,6 @@ class RectificationService:
         bbox_ms = round((time.perf_counter() - bbox_started) * 1000, 2)
 
         if box is None:
-            # Fallback on whole image
             return self.rectify_crop(full_image, conf_seg=conf_seg)
 
         xtl, ytl, xbr, ybr = box
@@ -163,35 +145,33 @@ class RectificationService:
         crop_img = full_image.crop((crop_xtl, crop_ytl, crop_xbr, crop_ybr))
         crop_w, crop_h = crop_img.size
 
-        # 2. Segmentation on the clean crop
+        # 2. Segmentation on clean crop
         seg_started = time.perf_counter()
         polygon = self.segmenter.best_polygon(crop_img, conf=conf_seg) if self.segmenter is not None else None
         seg_ms = round((time.perf_counter() - seg_started) * 1000, 2)
 
-        # 3. 4-Corner Extraction & Homography / Mesh Warp
+        # 3. True Cylindrical Unrolling into 256x256 canonical matrix
         warp_started = time.perf_counter()
         if polygon is not None:
             quad = self.extract_quadrilateral(polygon, crop_w, crop_h)
-            if quad is not None:
-                rectified = self.unroll_cylinder_mesh(crop_img, polygon, quad)
-                warp_ms = round((time.perf_counter() - warp_started) * 1000, 2)
+            rectified = self.unroll_cylinder_mesh(crop_img, polygon, quad)
+            warp_ms = round((time.perf_counter() - warp_started) * 1000, 2)
 
-                # Map polygon and corners back to full original image coordinates
-                poly_orig = [[float(round(float(p[0]) + crop_xtl, 1)), float(round(float(p[1]) + crop_ytl, 1))] for p in polygon]
-                quad_orig = [[float(round(float(p[0]) + crop_xtl, 1)), float(round(float(p[1]) + crop_ytl, 1))] for p in quad]
+            poly_orig = [[float(round(float(p[0]) + crop_xtl, 1)), float(round(float(p[1]) + crop_ytl, 1))] for p in polygon]
+            quad_orig = [[float(round(float(p[0]) + crop_xtl, 1)), float(round(float(p[1]) + crop_ytl, 1))] for p in quad] if quad is not None else None
 
-                return RectificationResult(
-                    rectified_image=rectified,
-                    bbox=(float(round(float(xtl), 1)), float(round(float(ytl), 1)), float(round(float(xbr), 1)), float(round(float(ybr), 1))),
-                    crop_bbox=(int(crop_xtl), int(crop_ytl), int(crop_xbr), int(crop_ybr)),
-                    seg_polygon_orig=poly_orig,
-                    quad_corners_orig=quad_orig,
-                    is_fallback=False,
-                    bbox_ms=float(bbox_ms),
-                    seg_ms=float(seg_ms),
-                    warp_ms=float(warp_ms),
-                    total_ms=float(round((time.perf_counter() - started) * 1000, 2)),
-                )
+            return RectificationResult(
+                rectified_image=rectified,
+                bbox=(float(round(float(xtl), 1)), float(round(float(ytl), 1)), float(round(float(xbr), 1)), float(round(float(ybr), 1))),
+                crop_bbox=(int(crop_xtl), int(crop_ytl), int(crop_xbr), int(crop_ybr)),
+                seg_polygon_orig=poly_orig,
+                quad_corners_orig=quad_orig,
+                is_fallback=False,
+                bbox_ms=float(bbox_ms),
+                seg_ms=float(seg_ms),
+                warp_ms=float(warp_ms),
+                total_ms=float(round((time.perf_counter() - started) * 1000, 2)),
+            )
 
         # Fallback to direct BBox crop without segmentation warp
         fallback_crop = full_image.crop((int(xtl), int(ytl), int(xbr), int(ybr)))
@@ -202,7 +182,7 @@ class RectificationService:
             rectified_image=rectified,
             bbox=(float(round(float(xtl), 1)), float(round(float(ytl), 1)), float(round(float(xbr), 1)), float(round(float(ybr), 1))),
             crop_bbox=(int(crop_xtl), int(crop_ytl), int(crop_xbr), int(crop_ybr)),
-            seg_polygon_orig=[[float(round(float(p[0]) + crop_xtl, 1)), float(round(float(p[1]) + crop_ytl, 1))] for p in polygon] if polygon else None,
+            seg_polygon_orig=None,
             quad_corners_orig=None,
             is_fallback=True,
             bbox_ms=float(bbox_ms),
@@ -217,14 +197,11 @@ class RectificationService:
         polygon: list[tuple[float, float]],
         quad: np.ndarray | None = None,
     ) -> Image.Image:
-        """Rectifies the label into a canonical 256x256 matrix preserving true physical aspect ratio.
+        """Truly unrolls the cylindrical label into a flat canonical 256x256 matrix.
 
-        Uses robust perspective homography derived from the oriented bounding box of the segmentation.
-        Guarantees:
-        1. Straight text lines remain strictly straight (no wave or bending distortion).
-        2. Proportions (aspect ratio) are preserved via centered letterboxing on a neutral canvas,
-           preventing unnatural 2x horizontal stretching or vertical squashing.
-        3. 100% sharp, readable typography without interpolation blur.
+        Straightens the top/bottom cylinder curves into horizontal lines,
+        unbends the cylindrical perspective along the horizontal axis,
+        and isolates ONLY the label surface without the bottle background.
         """
         try:
             crop_np = np.array(crop_image.convert("RGB"))
@@ -234,57 +211,108 @@ class RectificationService:
             if len(pts) < 4:
                 return crop_image.convert("RGB").resize((self.target_size, self.target_size), Image.Resampling.LANCZOS)
 
-            # 1. Obtain stable oriented quad from segmentation contour
+            # 1. Orientation via minAreaRect (align upright cylinder axis)
             rect = cv2.minAreaRect(pts)
-            box = cv2.boxPoints(rect)
-            ordered = self.order_points(box)
-
-            # Clamp coordinates to crop boundary
-            ordered[:, 0] = np.clip(ordered[:, 0], 0, cw - 1)
-            ordered[:, 1] = np.clip(ordered[:, 1], 0, ch - 1)
-
-            # 2. Calculate true physical width and height to preserve natural aspect ratio
-            w_top = float(np.linalg.norm(ordered[1] - ordered[0]))
-            w_bot = float(np.linalg.norm(ordered[2] - ordered[3]))
-            h_left = float(np.linalg.norm(ordered[3] - ordered[0]))
-            h_right = float(np.linalg.norm(ordered[2] - ordered[1]))
-
-            real_w = max(10.0, (w_top + w_bot) * 0.5)
-            real_h = max(10.0, (h_left + h_right) * 0.5)
-            aspect = real_w / real_h
-
-            # 3. Fit label proportionally into canonical target_size x target_size (Letterbox)
-            if aspect <= 1.0:
-                # Vertical/tall label: fit height to target_size, scale width proportionally
-                out_h = self.target_size
-                out_w = max(16, min(self.target_size, int(round(self.target_size * aspect))))
-                pad_x = (self.target_size - out_w) // 2
-                pad_y = 0
+            center, (bw, bh), angle = rect
+            if bw < bh:
+                tilt = angle
             else:
-                # Horizontal/wide label: fit width to target_size, scale height proportionally
-                out_w = self.target_size
-                out_h = max(16, min(self.target_size, int(round(self.target_size / aspect))))
-                pad_x = 0
-                pad_y = (self.target_size - out_h) // 2
+                tilt = angle + 90.0 if angle < 0 else angle - 90.0
 
-            dst_pts = np.float32([
-                [pad_x, pad_y],
-                [pad_x + out_w - 1, pad_y],
-                [pad_x + out_w - 1, pad_y + out_h - 1],
-                [pad_x, pad_y + out_h - 1],
-            ])
+            if abs(tilt) > 1.0 and abs(tilt) < 45.0:
+                M_rot = cv2.getRotationMatrix2D(center, tilt, 1.0)
+                crop_rot = cv2.warpAffine(
+                    crop_np, M_rot, (cw, ch), flags=cv2.INTER_LANCZOS4, borderMode=cv2.BORDER_REPLICATE
+                )
+                ones = np.ones((len(pts), 1), dtype=np.float32)
+                pts_rot = np.dot(M_rot, np.hstack([pts, ones]).T).T
+            else:
+                crop_rot = crop_np
+                pts_rot = pts
 
-            # 4. Perspective warp into canonical canvas
-            matrix = cv2.getPerspectiveTransform(ordered, dst_pts)
-            warped = cv2.warpPerspective(
-                crop_np,
-                matrix,
-                (self.target_size, self.target_size),
-                flags=cv2.INTER_LANCZOS4,
-                borderMode=cv2.BORDER_CONSTANT,
-                borderValue=(20, 20, 20),
+            # 2. Raster Mask with spike & notch suppression
+            mask = np.zeros((ch, cw), dtype=np.uint8)
+            cv2.fillPoly(mask, [np.int32(pts_rot)], 255)
+
+            k_w = max(5, int(cw * 0.015) | 1)
+            k_h = max(5, int(ch * 0.015) | 1)
+            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k_w, k_h))
+            mask_clean = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+            mask_clean = cv2.morphologyEx(mask_clean, cv2.MORPH_OPEN, kernel)
+
+            # 3. Detect valid solid columns
+            col_sums = np.sum(mask_clean > 0, axis=0)
+            max_col = np.max(col_sums)
+            valid_cols = np.where(col_sums >= max(20, int(0.15 * max_col)))[0]
+            if len(valid_cols) < 20:
+                if quad is not None:
+                    return self._warp_perspective(crop_image, quad)
+                return crop_image.convert("RGB").resize((self.target_size, self.target_size), Image.Resampling.LANCZOS)
+
+            xmin = int(valid_cols[0])
+            xmax = int(valid_cols[-1])
+            w_label = xmax - xmin
+
+            # 4. Extract clean top and bottom boundary curves per column
+            xs_prof = []
+            y_tops = []
+            y_bots = []
+            for x in range(xmin, xmax + 1):
+                rows = np.where(mask_clean[:, x] > 0)[0]
+                if len(rows) >= 10:
+                    xs_prof.append(x)
+                    y_tops.append(rows[0])
+                    y_bots.append(rows[-1])
+
+            if len(xs_prof) < 15:
+                if quad is not None:
+                    return self._warp_perspective(crop_image, quad)
+                return crop_image.convert("RGB").resize((self.target_size, self.target_size), Image.Resampling.LANCZOS)
+
+            xs_prof = np.array(xs_prof, dtype=np.float32)
+            y_tops = np.array(y_tops, dtype=np.float32)
+            y_bots = np.array(y_bots, dtype=np.float32)
+
+            # 5. Parabolic fitting of top and bottom cylinder arcs
+            x_mid = (xmin + xmax) * 0.5
+            X_rel = xs_prof - x_mid
+
+            poly_top = np.polyfit(X_rel, y_tops, 2)
+            poly_bot = np.polyfit(X_rel, y_bots, 2)
+
+            # 6. Build Remap Grid:
+            # - Straightens top curve into line Y=0
+            # - Straightens bottom curve into line Y=255
+            # - Unbends cylinder compression via sin(theta)/sin(theta_0)
+            cols = np.linspace(0.0, 1.0, self.target_size, dtype=np.float32)
+            theta_0 = 0.82
+            s_norm = 2.0 * cols - 1.0
+            u = np.sin(s_norm * theta_0) / np.sin(theta_0)
+            grid_x_rel = u * (w_label * 0.5)
+            grid_x = x_mid + grid_x_rel
+
+            c_top = np.polyval(poly_top, grid_x_rel)
+            c_bot = np.polyval(poly_bot, grid_x_rel)
+
+            mean_h = float(np.mean(y_bots - y_tops))
+            min_clearance = max(20.0, 0.70 * mean_h)
+            c_bot = np.maximum(c_bot, c_top + min_clearance)
+
+            V = np.linspace(0.0, 1.0, self.target_size, dtype=np.float32)[:, None]
+            map_x = np.tile(grid_x[None, :], (self.target_size, 1)).astype(np.float32)
+            map_y = ((1.0 - V) * c_top[None, :] + V * c_bot[None, :]).astype(np.float32)
+
+            map_x = np.clip(map_x, 0, cw - 1)
+            map_y = np.clip(map_y, 0, ch - 1)
+
+            unrolled = cv2.remap(
+                crop_rot,
+                map_x,
+                map_y,
+                interpolation=cv2.INTER_LANCZOS4,
+                borderMode=cv2.BORDER_REPLICATE,
             )
-            return Image.fromarray(warped)
+            return Image.fromarray(unrolled)
 
         except Exception:
             if quad is not None:
