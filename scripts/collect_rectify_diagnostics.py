@@ -33,6 +33,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from app.core.config import get_settings
 from app.services.detector import DetectorService
+from app.services.rectification import RectificationService
 from app.services.segmenter import SegmenterService
 
 
@@ -40,6 +41,7 @@ def analyze_image_geometry(
     img_path: Path,
     detector: DetectorService,
     segmenter: SegmenterService,
+    rectifier: RectificationService,
     out_dir: Path | None = None,
     target_size: int = 256,
     padding_ratio: float = 0.05,
@@ -260,85 +262,13 @@ def analyze_image_geometry(
     diag["left_sagitta"] = round(calc_sagitta(c_left_raw, pt_tl, pt_bl), 1)
     diag["right_sagitta"] = round(calc_sagitta(c_right_raw, pt_tr, pt_br), 1)
 
-    # 5. Coons Patch Grid Distortion and Jacobian Check
-    def resample_curve(curve_pts: np.ndarray, num_samples: int, cylindrical: bool = False) -> np.ndarray:
-        dists = np.linalg.norm(np.diff(curve_pts, axis=0), axis=1)
-        cum_dist = np.insert(np.cumsum(dists), 0, 0.0)
-        total_len = cum_dist[-1]
-        if total_len < 1e-5:
-            return np.repeat(curve_pts[0:1], num_samples, axis=0)
-
-        t_norm = cum_dist / total_len
-        cols = np.linspace(0.0, 1.0, num_samples, dtype=np.float32)
-
-        if cylindrical:
-            theta_0 = 0.82
-            s_norm = 2.0 * cols - 1.0
-            theta = s_norm * theta_0
-            factor = np.sin(theta) / np.sin(theta_0)
-            u = np.clip((factor + 1.0) * 0.5, 0.0, 1.0)
-        else:
-            u = cols
-
-        x_s = np.interp(u, t_norm, curve_pts[:, 0])
-        y_s = np.interp(u, t_norm, curve_pts[:, 1])
-        return np.column_stack([x_s, y_s])
-
-    W, H = target_size, target_size
-    c_top = resample_curve(c_top_raw, W, cylindrical=True)
-    c_bot = resample_curve(c_bot_raw, W, cylindrical=True)
-    c_left = resample_curve(c_left_raw, H, cylindrical=False)
-    c_right = resample_curve(c_right_raw, H, cylindrical=False)
-
-    p_tl = c_top[0]
-    p_tr = c_top[-1]
-    p_bl = c_bot[0]
-    p_br = c_bot[-1]
-
-    U = np.linspace(0.0, 1.0, W, dtype=np.float32)[None, :, None]
-    V = np.linspace(0.0, 1.0, H, dtype=np.float32)[:, None, None]
-
-    blend_tb = (1.0 - V) * c_top[None, :, :] + V * c_bot[None, :, :]
-    blend_lr = (1.0 - U) * c_left[:, None, :] + U * c_right[:, None, :]
-    blend_corners = (
-        (1.0 - U) * (1.0 - V) * p_tl +
-        U * (1.0 - V) * p_tr +
-        (1.0 - U) * V * p_bl +
-        U * V * p_br
-    )
-    map_grid = blend_tb + blend_lr - blend_corners
-
-    gx_u = np.gradient(map_grid[:, :, 0], axis=1)
-    gy_u = np.gradient(map_grid[:, :, 1], axis=1)
-    gx_v = np.gradient(map_grid[:, :, 0], axis=0)
-    gy_v = np.gradient(map_grid[:, :, 1], axis=0)
-    det_J = gx_u * gy_v - gx_v * gy_u
-    min_det = float(np.min(det_J))
-    diag["grid_min_jacobian"] = round(min_det, 2)
-    diag["grid_jacobian_inverted"] = bool(min_det <= 0.0)
-
-    x_coords = map_grid[:, :, 0]
-    y_coords = map_grid[:, :, 1]
-    x_clip = np.sum((x_coords < 0) | (x_coords >= cw))
-    y_clip = np.sum((y_coords < 0) | (y_coords >= ch))
-    total_grid_pts = W * H
-    diag["grid_x_clipping_pct"] = round(100.0 * float(x_clip) / total_grid_pts, 2)
-    diag["grid_y_clipping_pct"] = round(100.0 * float(y_clip) / total_grid_pts, 2)
-
-    crop_bgr = cv2.cvtColor(np.array(crop_img), cv2.COLOR_RGB2BGR)
-    map_x = np.clip(map_grid[:, :, 0].astype(np.float32), 0, cw - 1)
-    map_y = np.clip(map_grid[:, :, 1].astype(np.float32), 0, ch - 1)
-
+    # 5. Production Rectification via new RectificationService (Column-wise Remap + Spike/Notch filter)
     t_warp0 = time.perf_counter()
-    matrix_bgr = cv2.remap(
-        crop_bgr,
-        map_x,
-        map_y,
-        interpolation=cv2.INTER_LANCZOS4,
-        borderMode=cv2.BORDER_REPLICATE,
-    )
+    quad = np.array([pt_tl, pt_tr, pt_br, pt_bl], dtype=np.float32)
+    rectified_img = rectifier.unroll_cylinder_mesh(crop_img, poly_pts.tolist(), quad=quad)
     t_warp = (time.perf_counter() - t_warp0) * 1000
     diag["timings_ms"]["warp"] = round(t_warp, 2)
+    matrix_bgr = cv2.cvtColor(np.array(rectified_img), cv2.COLOR_RGB2BGR)
 
     diag["status"] = "OK"
 
@@ -503,6 +433,7 @@ def main():
     detector = DetectorService(model_det_path, confidence=args.conf_detect)
     print(f"Loading segmenter: {model_seg_path}")
     segmenter = SegmenterService(model_seg_path, confidence=args.conf_seg)
+    rectifier = RectificationService(detector=detector, segmenter=segmenter, target_size=256)
 
     all_images = []
     for d_str in args.dirs:
@@ -546,6 +477,7 @@ def main():
             img_path,
             detector,
             segmenter,
+            rectifier,
             out_dir=sample_out_dir,
             conf_detect=args.conf_detect,
             conf_seg=args.conf_seg,
