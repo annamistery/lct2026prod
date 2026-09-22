@@ -10,7 +10,8 @@ curl http://localhost:8030/api/ping
 curl http://localhost:8030/api/ready
 ```
 
-`ping` проверяет процесс. `ready` требует PostgreSQL/pgvector и загруженные YOLO/DINO.
+`ping` проверяет процесс. `ready` (итоговый флаг) требует PostgreSQL/pgvector и загруженные YOLO/DINO; поле
+`sommelier` в том же ответе информационное и на итоговый `ready` не влияет (см. `docs/SOMMELIER.md`).
 
 ## Миграции
 

@@ -16,6 +16,7 @@ from app.services.images import ImageService
 from app.services.product_ingestion import ProductIngestionService
 from app.services.rectification import RectificationService
 from app.services.segmenter import SegmenterService
+from app.services.sommelier_service import SommelierService
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,19 @@ async def lifespan(app: FastAPI):
     app.state.ingestion = None
     app.state.batch_import = None
     app.state.import_tasks = set()
+    app.state.sommelier = None
+    try:
+        sommelier_service = await asyncio.to_thread(
+            SommelierService,
+            settings.resolved_sommelier_csv_path,
+            settings.resolved_sommelier_feedback_path,
+            settings.sommelier_max_sessions,
+            settings.sommelier_session_ttl_seconds,
+        )
+        app.state.sommelier = sommelier_service
+        logger.info("Sommelier catalog loaded: %d wines", len(sommelier_service.wines))
+    except Exception:
+        logger.exception("Sommelier service failed to load")
     try:
         detector, embeddings = await asyncio.gather(
             asyncio.to_thread(DetectorService, settings.yolo_model_path, settings.yolo_confidence),

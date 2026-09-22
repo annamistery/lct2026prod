@@ -32,3 +32,5 @@ md/*
 !md/ИНСТРУКЦИЯ_ПРОВЕРКИ.md
 !md/participant_test.sh
 !md/Проверка сканера винных этикеток.md
+app/sommelier/data/catalog.json
+app/sommelier/data/feedback.jsonl

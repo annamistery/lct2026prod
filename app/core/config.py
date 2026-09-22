@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     enable_sift_rerank: bool = Field(False)
     cors_origins: str = ""
     log_level: str = "INFO"
+    sommelier_csv_path: Path = Path("app/sommelier/data/wines_integrated.csv")
+    sommelier_max_sessions: int = Field(500, ge=1, le=100_000)
+    sommelier_session_ttl_seconds: int = Field(3600, ge=60, le=86_400)
 
     @property
     def allowed_origins(self) -> list[str]:
@@ -61,6 +64,20 @@ class Settings(BaseSettings):
         if cand.is_file():
             return cand
         return self.yolo_seg_model_path
+
+    @property
+    def resolved_sommelier_csv_path(self) -> Path:
+        if self.sommelier_csv_path.is_file():
+            return self.sommelier_csv_path
+        cand = Path(__file__).resolve().parent.parent / "sommelier" / "data" / "wines_integrated.csv"
+        if cand.is_file():
+            return cand
+        return self.sommelier_csv_path
+
+    @property
+    def resolved_sommelier_feedback_path(self) -> Path:
+        """Пишем фидбек сомелье в media_dir: app/ в проде смонтирован read-only, media — единственный writable путь."""
+        return self.media_dir / "sommelier" / "feedback.jsonl"
 
 
 @lru_cache

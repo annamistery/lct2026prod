@@ -19,5 +19,10 @@ async def ready(request: Request) -> JSONResponse:
     except Exception:
         database_ready = False
     ml_ready = request.app.state.detector is not None and request.app.state.pipeline_v1 is not None
+    sommelier = request.app.state.sommelier
+    sommelier_ready = bool(sommelier is not None and sommelier.available)
     ready_state = database_ready and ml_ready
-    return JSONResponse({"ready": ready_state, "database": database_ready, "models": ml_ready}, status_code=200 if ready_state else 503)
+    return JSONResponse(
+        {"ready": ready_state, "database": database_ready, "models": ml_ready, "sommelier": sommelier_ready},
+        status_code=200 if ready_state else 503,
+    )

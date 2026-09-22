@@ -60,12 +60,19 @@ docker compose run --rm migrate alembic current
 
 ```text
 {"ok":true}
-{"ready":true,"database":true,"models":true}
+{"ready":true,"database":true,"models":true,"sommelier":true}
 {"products":[]}
 20260916_0001 (head)
 ```
 
-На этом чистый проект развёрнут. БД и media пока пустые.
+На этом чистый проект развёрнут. БД и media пока пустые. Сомелье (`sommelier: true` выше) от БД не зависит,
+собирается из своего CSV при старте API и уже готов:
+
+```bash
+curl -fsS -X POST http://127.0.0.1:8030/api/sommelier/ask -H 'Content-Type: application/json' -d '{"message": "стейк рибай"}'
+```
+
+Подробности API и точка интеграции с распознаванием этикеток: `docs/SOMMELIER.md`.
 
 ## 6. Загрузить датасет заказчика
 
