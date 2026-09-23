@@ -36,6 +36,7 @@ services:
       - ./media:/media
       - ./imports:/imports:ro
       - ./scripts:/srv/app/scripts:ro
+      - ./train:/srv/app/train:ro
       - ./app:/srv/app/app:ro
       - ./web:/srv/app/web:ro
       - ./alembic:/srv/app/alembic:ro
