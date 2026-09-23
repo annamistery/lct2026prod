@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     siglip_v4_base_model_path: Path = Path("models/siglip2-base-patch16-512")
     embedding_model_v4_name: str = "siglip2-v4"
     embedding_dimension_v4: int = 768
-    canonical_size_v4: int = 512
+    canonical_size_v4: int = 518          # server dataset is 518×518 (same letterbox as v3)
     enable_ocr_rerank_v4: bool = True
     ocr_rerank_weight_sim: float = 0.5
     ocr_rerank_weight_vintage: float = 0.3

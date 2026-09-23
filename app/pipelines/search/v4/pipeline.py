@@ -125,13 +125,14 @@ class SearchPipelineV4:
         for idx, (cand, fscore) in enumerate(zip(candidates, final_scores), 1):
             aug_image_url: str | None = None
             try:
-                label_path = self.images.resolve(cand.image_path)
-                label_image = Image.open(label_path).convert("RGB")
-                aug_image_url = self._encode_image(label_image)
+                # Directly read the pre-built augmented file stored in media/images/
+                aug_path = self.images.resolve(cand.image_path)
+                aug_image = Image.open(aug_path).convert("RGB")
+                aug_image_url = self._encode_image(aug_image)
             except Exception:
                 pass
 
-            ocr_vintage_match: bool | None = None  # populated by reranker if active
+            ocr_vintage_match: bool | None = None
 
             results.append(SearchResultV4(
                 product_id=cand.product.id,
