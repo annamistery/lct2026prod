@@ -151,10 +151,11 @@ def finetune(
     resolved_model = ensure_base_model(model_name, local_base_dir)
     processor = AutoImageProcessor.from_pretrained(resolved_model)
 
-    # Override processor to use 518×518 without center crop
+    # Override processor: images are already 518×518 letterbox, skip resize/crop
+    processor.do_resize = False
+    processor.do_center_crop = False
     processor.size = {"height": CANONICAL_SIZE, "width": CANONICAL_SIZE}
     processor.crop_size = {"height": CANONICAL_SIZE, "width": CANONICAL_SIZE}
-    processor.do_center_crop = False
 
     model = AutoModel.from_pretrained(resolved_model)
 
