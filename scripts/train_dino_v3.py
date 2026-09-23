@@ -21,14 +21,15 @@ from pathlib import Path
 from typing import Iterator
 
 import numpy as np
+BASE_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(BASE_DIR))
+
 import torch
 import torch.nn.functional as F
 from PIL import Image
 from transformers import AutoImageProcessor, AutoModel
 
 from train.losses import supervised_contrastive_loss
-
-BASE_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_BASE_MODEL = "facebook/dinov2-base"
 CANONICAL_SIZE = 518
 
