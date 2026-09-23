@@ -66,14 +66,28 @@ def _parse_aug(filename: str) -> tuple[str, int]:
     return stem, 0
 
 
-async def build_v4_catalog(limit: int | None = None, batch_size: int = 32, replace: bool = True):
+async def build_v4_catalog(
+    limit: int | None = None,
+    batch_size: int = 32,
+    replace: bool = True,
+    images_dir: str | None = None,
+):
     settings = get_settings()
     engine = create_async_engine(settings.database_url, echo=False)
     session_factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
-    images_root = settings.media_dir / "images"
-    if not images_root.is_dir():
-        raise FileNotFoundError(f"Dataset directory not found: {images_root}")
+    if images_dir:
+        images_root = Path(images_dir)
+    elif (settings.media_dir / "dataset_v3" / "images").is_dir():
+        images_root = settings.media_dir / "dataset_v3" / "images"
+    elif (settings.media_dir / "images").is_dir():
+        images_root = settings.media_dir / "images"
+    else:
+        raise FileNotFoundError(
+            f"Dataset directory not found: checked {settings.media_dir / 'dataset_v3' / 'images'} and {settings.media_dir / 'images'}"
+        )
+
+    logger.info("Using dataset images directory: %s", images_root)
 
     logger.info("Initialising SigLIP 2 v4 embedding service...")
     embeddings_service = SigLIP2EmbeddingService(
@@ -125,7 +139,7 @@ async def build_v4_catalog(limit: int | None = None, batch_size: int = 32, repla
             images: list[Image.Image] = []
             for fpath in webp_files:
                 aug_name, aug_seed = _parse_aug(fpath.name)
-                rel_path = f"images/{prod_dir.name}/{fpath.name}"
+                rel_path = str(fpath.relative_to(settings.media_dir)).replace("\\", "/")
                 aug_meta.append((aug_name, aug_seed, rel_path))
                 images.append(Image.open(fpath).convert("RGB"))
 
@@ -172,6 +186,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="Build product_embeddings_v4 from media/images/ (SigLIP 2 768d)"
     )
+    parser.add_argument("--images-dir", default=None, help="Path to images directory (overrides auto-detect)")
     parser.add_argument("--limit", type=int, default=None, help="Limit number of products")
     parser.add_argument("--batch-size", type=int, default=32, help="Embedding batch size")
     parser.add_argument(
@@ -180,7 +195,12 @@ def main():
     )
     args = parser.parse_args()
 
-    asyncio.run(build_v4_catalog(limit=args.limit, batch_size=args.batch_size, replace=args.replace))
+    asyncio.run(build_v4_catalog(
+        limit=args.limit,
+        batch_size=args.batch_size,
+        replace=args.replace,
+        images_dir=args.images_dir,
+    ))
 
 
 if __name__ == "__main__":
