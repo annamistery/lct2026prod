@@ -150,13 +150,11 @@ class ProductRepository:
             .order_by(distance)
             .limit(vote_pool)
         ).subquery()
-        # Aggregate per product: best distance, vote count, best aug info
+        # Aggregate per product: vote count
         agg = (
             select(
                 top_embs.c.product_id,
-                func.min(top_embs.c.distance).label("best_distance"),
                 func.count().label("vote_count"),
-                func.min(top_embs.c.embedding_id).label("best_embedding_id"),
             )
             .group_by(top_embs.c.product_id)
             .subquery()
