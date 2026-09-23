@@ -34,19 +34,25 @@ DEFAULT_BASE_MODEL = "facebook/dinov2-base"
 CANONICAL_SIZE = 518
 
 
-def _resolve_paths():
-    """Resolve paths from settings, preferring /models mount inside Docker."""
+def _resolve_paths(base_model_dir: str | None = None, output_dir: str | None = None):
+    """Resolve paths. CLI overrides take precedence, then settings defaults."""
     from app.core.config import get_settings
     settings = get_settings()
-    docker_models = Path("/models")
-    if docker_models.is_dir():
-        local_base = docker_models / "dinov2-base"
-        output = docker_models / "dinov2_label_finetuned_v3"
+
+    if base_model_dir:
+        local_base = Path(base_model_dir)
+    elif Path("/models/dinov2-base").is_dir():
+        local_base = Path("/models/dinov2-base")
     else:
         local_base = BASE_DIR / "models" / "dinov2-base"
-        output = BASE_DIR / "models" / "dinov2_label_finetuned_v3"
+
+    if output_dir:
+        out = Path(output_dir)
+    else:
+        out = BASE_DIR / "models" / "dinov2_label_finetuned_v3"
+
     manifest = settings.media_dir / "dataset_v3" / "v3_manifest.json"
-    return local_base, manifest, output
+    return local_base, manifest, out
 
 
 def ensure_base_model(model_name: str, local_base_dir: Path) -> str:
@@ -116,8 +122,10 @@ def finetune(
     lora_r: int,
     lora_alpha: int,
     seed: int,
+    base_model_dir: str | None = None,
+    output_dir_override: str | None = None,
 ) -> None:
-    local_base_dir, manifest_file, output_dir = _resolve_paths()
+    local_base_dir, manifest_file, output_dir = _resolve_paths(base_model_dir, output_dir_override)
     from app.core.config import get_settings
     settings = get_settings()
     media_dir = settings.media_dir
@@ -237,6 +245,8 @@ def main() -> None:
     parser.add_argument("--lora-r", type=int, default=8)
     parser.add_argument("--lora-alpha", type=int, default=16)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--base-model-dir", default=None, help="Path to base DINOv2 model dir (overrides auto-detect)")
+    parser.add_argument("--output-dir", default=None, help="Path to save fine-tuned model (overrides auto-detect)")
     args = parser.parse_args()
 
     finetune(
@@ -251,6 +261,8 @@ def main() -> None:
         lora_r=args.lora_r,
         lora_alpha=args.lora_alpha,
         seed=args.seed,
+        base_model_dir=args.base_model_dir,
+        output_dir_override=args.output_dir,
     )
 
 
