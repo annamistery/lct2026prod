@@ -9,11 +9,14 @@ from app.db.session import create_engine_and_session_factory
 from app.pipelines.search.v1.pipeline import SearchPipelineV1
 from app.pipelines.search.v1.reranking import SiftReranker
 from app.pipelines.search.v2.pipeline import SearchPipelineV2
+from app.pipelines.search.v3.pipeline import SearchPipelineV3
+from app.pipelines.search.v3.reranking import SiftRerankerV3
 from app.services.batch_import import BatchImportService
 from app.services.detector import DetectorService
 from app.services.embeddings import EmbeddingService
 from app.services.images import ImageService
 from app.services.product_ingestion import ProductIngestionService
+from app.services.query_prep_v3 import QueryPrepV3
 from app.services.rectification import RectificationService
 from app.services.segmenter import SegmenterService
 from app.services.sommelier_service import SommelierService
@@ -34,6 +37,7 @@ async def lifespan(app: FastAPI):
     app.state.rectification = None
     app.state.pipeline_v1 = None
     app.state.pipeline_v2 = None
+    app.state.pipeline_v3 = None
     app.state.ingestion = None
     app.state.batch_import = None
     app.state.import_tasks = set()
@@ -94,6 +98,36 @@ async def lifespan(app: FastAPI):
             candidate_pool_size=settings.candidate_pool_size,
         )
         app.state.pipeline_v2 = pipeline_v2
+
+        # v3 pipeline (DINOv2-base 768d, optional — loads only if model exists)
+        try:
+            v3_model_path = settings.dino_v3_model_path
+            v3_base_path = settings.dino_v3_base_model_path
+            if v3_model_path.is_dir():
+                embeddings_v3 = await asyncio.to_thread(
+                    EmbeddingService, v3_model_path, v3_base_path, settings.embedding_dimension_v3,
+                )
+                query_prep_v3 = QueryPrepV3(
+                    detector=detector, segmenter=segmenter, target_size=settings.canonical_size_v3,
+                )
+                pipeline_v3 = SearchPipelineV3(
+                    embeddings=embeddings_v3,
+                    images=images,
+                    query_prep=query_prep_v3,
+                    reranker=SiftRerankerV3(),
+                    gpu_semaphore=asyncio.Semaphore(settings.gpu_concurrency),
+                    candidate_pool_size=settings.candidate_pool_size,
+                    enable_sift_rerank=settings.enable_sift_rerank_v3,
+                    sift_threshold=settings.sift_rerank_v3_threshold,
+                    vote_pool_size=settings.v3_vote_pool_size,
+                )
+                app.state.pipeline_v3 = pipeline_v3
+                logger.info("v3 pipeline loaded (DINOv2-base 768d, canonical %d)", settings.canonical_size_v3)
+            else:
+                logger.warning("v3 DINOv2 model not found at %s — v3 pipeline disabled", v3_model_path)
+        except Exception:
+            logger.exception("v3 pipeline failed to load")
+
         ingestion = ProductIngestionService(images, detector, pipeline, settings.embedding_model_name)
         app.state.ingestion = ingestion
         batch_import = BatchImportService(settings.import_staging_dir, settings.max_import_items, settings.max_upload_bytes, images, ingestion, session_factory)

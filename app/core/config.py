@@ -20,8 +20,16 @@ class Settings(BaseSettings):
     yolo_seg_model_path: Path = Path("models/yolo_seg.pt")
     embedding_model_name: str = "dinov2-label-v1"
     embedding_model_v2_name: str = "dinov2-label-v2-rectified"
+    dino_v3_model_path: Path = Path("models/dinov2_label_finetuned_v3")
+    dino_v3_base_model_path: Path = Path("models/dinov2-base")
+    embedding_model_v3_name: str = "dinov2-base-label-v3-lora"
     embedding_dimension: int = 384
+    embedding_dimension_v3: int = 768
     canonical_size: int = 256
+    canonical_size_v3: int = 518
+    enable_sift_rerank_v3: bool = True
+    sift_rerank_v3_threshold: float = 0.85
+    v3_vote_pool_size: int = 50
     yolo_confidence: float = Field(0.25, ge=0, le=1)
     yolo_seg_confidence: float = Field(0.25, ge=0, le=1)
     max_upload_bytes: int = Field(10_485_760, ge=1024)
