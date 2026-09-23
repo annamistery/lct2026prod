@@ -376,6 +376,4 @@ class RectificationService:
             seg_ms=float(seg_ms),
             warp_ms=float(warp_ms),
             total_ms=float(total_ms),
-            offset_x=float(crop_xtl),
-            offset_y=float(crop_ytl),
         )
