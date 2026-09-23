@@ -24,41 +24,48 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from PIL import Image
-from transformers import AutoImageProcessor, AutoModel, Dinov2Config
+from transformers import AutoImageProcessor, AutoModel
 
 from train.losses import supervised_contrastive_loss
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_BASE_MODEL = "facebook/dinov2-base"
-LOCAL_BASE_MODEL_DIR = BASE_DIR / "models" / "dinov2-base"
-MANIFEST_FILE = BASE_DIR / "media" / "dataset_v3" / "v3_manifest.json"
-OUTPUT_DIR = BASE_DIR / "models" / "dinov2_label_finetuned_v3"
 CANONICAL_SIZE = 518
 
 
-def ensure_base_model(model_name: str) -> str:
+def _resolve_paths():
+    """Resolve paths from settings (respects MEDIA_DIR, DINO_V3_MODEL_PATH etc.)."""
+    from app.core.config import get_settings
+    settings = get_settings()
+    local_base = Path("/models/dinov2-base") if Path("/models").is_dir() else BASE_DIR / "models" / "dinov2-base"
+    manifest = settings.media_dir / "dataset_v3" / "v3_manifest.json"
+    output = settings.dino_v3_model_path
+    return local_base, manifest, output
+
+
+def ensure_base_model(model_name: str, local_base_dir: Path) -> str:
     """Check for local model, download from HuggingFace if missing. Return resolved path."""
-    if LOCAL_BASE_MODEL_DIR.is_dir() and (LOCAL_BASE_MODEL_DIR / "config.json").is_file():
-        print(f"Using local base model: {LOCAL_BASE_MODEL_DIR}")
-        return str(LOCAL_BASE_MODEL_DIR)
+    if local_base_dir.is_dir() and (local_base_dir / "config.json").is_file():
+        print(f"Using local base model: {local_base_dir}")
+        return str(local_base_dir)
 
-    print(f"Base model not found at {LOCAL_BASE_MODEL_DIR}, downloading {model_name} from HuggingFace...")
-    LOCAL_BASE_MODEL_DIR.mkdir(parents=True, exist_ok=True)
+    print(f"Base model not found at {local_base_dir}, downloading {model_name} from HuggingFace...")
+    local_base_dir.mkdir(parents=True, exist_ok=True)
     model = AutoModel.from_pretrained(model_name)
-    model.save_pretrained(LOCAL_BASE_MODEL_DIR)
+    model.save_pretrained(local_base_dir)
     processor = AutoImageProcessor.from_pretrained(model_name)
-    processor.save_pretrained(LOCAL_BASE_MODEL_DIR)
-    print(f"Base model saved to {LOCAL_BASE_MODEL_DIR}")
-    return str(LOCAL_BASE_MODEL_DIR)
+    processor.save_pretrained(local_base_dir)
+    print(f"Base model saved to {local_base_dir}")
+    return str(local_base_dir)
 
 
-def load_manifest() -> list[dict]:
-    if not MANIFEST_FILE.is_file():
+def load_manifest(manifest_file: Path) -> list[dict]:
+    if not manifest_file.is_file():
         raise FileNotFoundError(
-            f"v3 manifest not found: {MANIFEST_FILE}\n"
+            f"v3 manifest not found: {manifest_file}\n"
             f"Run 'python scripts/build_dataset_v3.py' first."
         )
-    with MANIFEST_FILE.open("r", encoding="utf-8") as f:
+    with manifest_file.open("r", encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -83,10 +90,10 @@ def _class_balanced_batches(
         yield batch
 
 
-def _load_images(indices: list[int], manifest: list[dict]) -> list[Image.Image]:
+def _load_images(indices: list[int], manifest: list[dict], media_dir: Path) -> list[Image.Image]:
     images = []
     for idx in indices:
-        img_path = BASE_DIR / manifest[idx]["image_path"]
+        img_path = media_dir / manifest[idx]["image_path"]
         images.append(Image.open(img_path).convert("RGB"))
     return images
 
@@ -104,9 +111,14 @@ def finetune(
     lora_alpha: int,
     seed: int,
 ) -> None:
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    local_base_dir, manifest_file, output_dir = _resolve_paths()
+    from app.core.config import get_settings
+    settings = get_settings()
+    media_dir = settings.media_dir
 
-    manifest = load_manifest()
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    manifest = load_manifest(manifest_file)
     print(f"Dataset v3: {len(manifest)} images")
 
     product_to_class: dict[str, int] = {}
@@ -122,7 +134,7 @@ def finetune(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
 
-    resolved_model = ensure_base_model(model_name)
+    resolved_model = ensure_base_model(model_name, local_base_dir)
     processor = AutoImageProcessor.from_pretrained(resolved_model)
 
     # Override processor to use 518×518 without center crop
@@ -167,7 +179,7 @@ def finetune(
         epoch_loss = 0.0
         for _ in range(steps_per_epoch):
             idx = next(batch_gen)
-            images = _load_images(idx, manifest)
+            images = _load_images(idx, manifest, media_dir)
             inputs = processor(images=images, return_tensors="pt")["pixel_values"].to(device)
             labels_t = torch.from_numpy(labels[idx]).long().to(device)
 
@@ -195,14 +207,14 @@ def finetune(
 
     stats["final_loss"] = stats["epochs"][-1]["loss"] if stats["epochs"] else 0.0
 
-    model.save_pretrained(OUTPUT_DIR, safe_serialization=False)
-    processor.save_pretrained(OUTPUT_DIR)
+    model.save_pretrained(output_dir, safe_serialization=False)
+    processor.save_pretrained(output_dir)
 
-    stats_file = OUTPUT_DIR / "train_stats.json"
+    stats_file = output_dir / "train_stats.json"
     with stats_file.open("w", encoding="utf-8") as f:
         json.dump(stats, f, indent=2)
 
-    print(f"Model saved to {OUTPUT_DIR}")
+    print(f"Model saved to {output_dir}")
     print(f"Training stats: {stats_file}")
 
 

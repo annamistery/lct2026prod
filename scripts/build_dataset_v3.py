@@ -35,13 +35,24 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger("build_dataset_v3")
 
 CANONICAL_SIZE = 518
-DATASET_DIR = ROOT_DIR / "media" / "dataset_v3"
-MANIFEST_FILE = DATASET_DIR / "v3_manifest.json"
+
+# Resolved at runtime from settings.media_dir (writable mount inside Docker)
+_DATASET_DIR: Path | None = None
+_MANIFEST_FILE: Path | None = None
+
+
+def _init_paths() -> tuple[Path, Path]:
+    global _DATASET_DIR, _MANIFEST_FILE
+    if _DATASET_DIR is None:
+        settings = get_settings()
+        _DATASET_DIR = settings.media_dir / "dataset_v3"
+        _MANIFEST_FILE = _DATASET_DIR / "v3_manifest.json"
+    return _DATASET_DIR, _MANIFEST_FILE
 
 
 def _process_product(args: tuple) -> list[dict]:
     """Worker: generate 116 augmented images for one product."""
-    idx, product_id, label_path_str, seed = args
+    idx, product_id, label_path_str, seed, dataset_dir_str = args
     try:
         sys.stdout.reconfigure(encoding="utf-8")
     except Exception:
@@ -65,8 +76,9 @@ def _process_product(args: tuple) -> list[dict]:
     # Letterbox 518×518 preserving proportions with zero-fill
     canonical = letterbox_pil(label_img, CANONICAL_SIZE)
 
-    # Product directory
-    prod_dir = DATASET_DIR / "images" / product_id
+    # Product directory (inside the writable media mount)
+    dataset_dir = Path(dataset_dir_str)
+    prod_dir = dataset_dir / "images" / product_id
     prod_dir.mkdir(parents=True, exist_ok=True)
 
     # Generate v3 augmented cloud
@@ -81,13 +93,14 @@ def _process_product(args: tuple) -> list[dict]:
         out_path = prod_dir / fname
         aug_img.save(out_path, format="WEBP", quality=95)
 
-        rel_path = str(out_path.relative_to(ROOT_DIR)).replace("\\", "/")
+        # Store path relative to dataset_dir for the manifest
+        rel_path = str(out_path.relative_to(dataset_dir)).replace("\\", "/")
         records.append({
             "image_id": f"{product_id}_{aug_name}_{variant_seed}",
             "group_id": product_id,
             "aug_name": aug_name,
             "aug_seed": variant_seed,
-            "image_path": rel_path,
+            "image_path": f"dataset_v3/{rel_path}",
         })
 
     if idx % 50 == 0:
@@ -98,14 +111,16 @@ def _process_product(args: tuple) -> list[dict]:
 
 async def build_dataset(limit: int | None = None, workers: int | None = None, clean: bool = False):
     settings = get_settings()
+    dataset_dir = settings.media_dir / "dataset_v3"
+    manifest_file = dataset_dir / "v3_manifest.json"
 
-    if clean and DATASET_DIR.exists():
+    if clean and dataset_dir.exists():
         logger.info("Cleaning old dataset_v3...")
-        shutil.rmtree(DATASET_DIR / "images", ignore_errors=True)
-        MANIFEST_FILE.unlink(missing_ok=True)
+        shutil.rmtree(dataset_dir / "images", ignore_errors=True)
+        manifest_file.unlink(missing_ok=True)
 
-    DATASET_DIR.mkdir(parents=True, exist_ok=True)
-    (DATASET_DIR / "images").mkdir(exist_ok=True)
+    dataset_dir.mkdir(parents=True, exist_ok=True)
+    (dataset_dir / "images").mkdir(exist_ok=True)
 
     # Load products from DB
     from sqlalchemy import select
@@ -135,7 +150,7 @@ async def build_dataset(limit: int | None = None, workers: int | None = None, cl
             logger.warning("Skip %s: no label image", product.title[:40])
             continue
         product_id = str(product.id)
-        tasks.append((idx, product_id, str(label_path), 42 + idx))
+        tasks.append((idx, product_id, str(label_path), 42 + idx, str(dataset_dir)))
 
     if workers is None:
         workers = max(1, os.cpu_count() or 1)
@@ -152,13 +167,13 @@ async def build_dataset(limit: int | None = None, workers: int | None = None, cl
             for records in pool.imap(_process_product, tasks, chunksize=1):
                 manifest.extend(records)
 
-    with MANIFEST_FILE.open("w", encoding="utf-8") as f:
+    with manifest_file.open("w", encoding="utf-8") as f:
         json.dump(manifest, f, ensure_ascii=False, indent=2)
 
     elapsed = time.perf_counter() - t0
     logger.info(
         "DONE! %d images for %d products in %.1f min (%.2f s/product). Manifest: %s",
-        len(manifest), len(tasks), elapsed / 60, elapsed / max(1, len(tasks)), MANIFEST_FILE,
+        len(manifest), len(tasks), elapsed / 60, elapsed / max(1, len(tasks)), manifest_file,
     )
 
 
