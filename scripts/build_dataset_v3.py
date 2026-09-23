@@ -1,0 +1,176 @@
+#!/usr/bin/env python3
+"""Build the v3 training dataset: letterbox 518×518 + 116 augmented images per product.
+
+Reads all products from the database, applies letterbox 518 (preserving proportions,
+zero-fill), generates 116 augmentations via v3 augmentation cloud, and writes
+a v3_manifest.json for training.
+
+Usage:
+    python scripts/build_dataset_v3.py [--limit N] [--workers 8] [--clean]
+"""
+
+from __future__ import annotations
+
+import argparse
+import asyncio
+import json
+import logging
+import multiprocessing
+import os
+import shutil
+import sys
+import time
+from pathlib import Path
+
+from PIL import Image
+
+ROOT_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT_DIR))
+
+from app.core.config import get_settings
+from app.services.augment import generate_augmented_cloud_v3
+from app.services.query_prep_v3 import letterbox_pil
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logger = logging.getLogger("build_dataset_v3")
+
+CANONICAL_SIZE = 518
+DATASET_DIR = ROOT_DIR / "media" / "dataset_v3"
+MANIFEST_FILE = DATASET_DIR / "v3_manifest.json"
+
+
+def _process_product(args: tuple) -> list[dict]:
+    """Worker: generate 116 augmented images for one product."""
+    idx, product_id, label_path_str, seed = args
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
+    import cv2
+    cv2.setNumThreads(1)
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    os.environ.setdefault("MKL_NUM_THREADS", "1")
+
+    label_path = Path(label_path_str)
+    if not label_path.is_file():
+        return []
+
+    try:
+        label_img = Image.open(label_path).convert("RGB")
+    except Exception as e:
+        print(f"[skip] {product_id}: {e}")
+        return []
+
+    # Letterbox 518×518 preserving proportions with zero-fill
+    canonical = letterbox_pil(label_img, CANONICAL_SIZE)
+
+    # Product directory
+    prod_dir = DATASET_DIR / "images" / product_id
+    prod_dir.mkdir(parents=True, exist_ok=True)
+
+    # Generate v3 augmented cloud
+    aug_items = generate_augmented_cloud_v3(canonical, variants_per_aug=5, seed=seed)
+
+    records: list[dict] = []
+    for aug_name, variant_seed, aug_img in aug_items:
+        if aug_name == "catalog":
+            fname = "catalog.webp"
+        else:
+            fname = f"{aug_name}_{variant_seed}.webp"
+        out_path = prod_dir / fname
+        aug_img.save(out_path, format="WEBP", quality=95)
+
+        rel_path = str(out_path.relative_to(ROOT_DIR)).replace("\\", "/")
+        records.append({
+            "image_id": f"{product_id}_{aug_name}_{variant_seed}",
+            "group_id": product_id,
+            "aug_name": aug_name,
+            "aug_seed": variant_seed,
+            "image_path": rel_path,
+        })
+
+    if idx % 50 == 0:
+        print(f"[{idx}] {product_id}: {len(records)} images")
+
+    return records
+
+
+async def build_dataset(limit: int | None = None, workers: int | None = None, clean: bool = False):
+    settings = get_settings()
+
+    if clean and DATASET_DIR.exists():
+        logger.info("Cleaning old dataset_v3...")
+        shutil.rmtree(DATASET_DIR / "images", ignore_errors=True)
+        MANIFEST_FILE.unlink(missing_ok=True)
+
+    DATASET_DIR.mkdir(parents=True, exist_ok=True)
+    (DATASET_DIR / "images").mkdir(exist_ok=True)
+
+    # Load products from DB
+    from sqlalchemy import select
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+    from app.db.models.product import Product
+
+    engine = create_async_engine(settings.database_url, echo=False)
+    session_factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+
+    async with session_factory() as session:
+        query = select(Product).order_by(Product.created_at)
+        if limit:
+            query = query.limit(limit)
+        products = list((await session.scalars(query)).all())
+    await engine.dispose()
+
+    logger.info("Found %d products for v3 dataset", len(products))
+
+    # Prepare tasks
+    images_service = __import__("app.services.images", fromlist=["ImageService"]).ImageService
+    img_svc = images_service(settings.media_dir, settings.canonical_size, settings.max_upload_bytes, settings.max_image_pixels)
+
+    tasks: list[tuple] = []
+    for idx, product in enumerate(products):
+        label_path = img_svc.resolve(product.label_image_path) if product.label_image_path else None
+        if label_path is None or not label_path.is_file():
+            logger.warning("Skip %s: no label image", product.title[:40])
+            continue
+        product_id = str(product.id)
+        tasks.append((idx, product_id, str(label_path), 42 + idx))
+
+    if workers is None:
+        workers = max(1, os.cpu_count() or 1)
+
+    logger.info("Generating v3 dataset with %d workers for %d products...", workers, len(tasks))
+    t0 = time.perf_counter()
+
+    manifest: list[dict] = []
+    if workers == 1:
+        for task in tasks:
+            manifest.extend(_process_product(task))
+    else:
+        with multiprocessing.Pool(processes=workers, maxtasksperchild=5) as pool:
+            for records in pool.imap(_process_product, tasks, chunksize=1):
+                manifest.extend(records)
+
+    with MANIFEST_FILE.open("w", encoding="utf-8") as f:
+        json.dump(manifest, f, ensure_ascii=False, indent=2)
+
+    elapsed = time.perf_counter() - t0
+    logger.info(
+        "DONE! %d images for %d products in %.1f min (%.2f s/product). Manifest: %s",
+        len(manifest), len(tasks), elapsed / 60, elapsed / max(1, len(tasks)), MANIFEST_FILE,
+    )
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Build v3 training dataset (letterbox 518 + 116 augmentations)")
+    parser.add_argument("--limit", type=int, default=None, help="Limit number of products")
+    parser.add_argument("--workers", type=int, default=None, help="Number of parallel workers (default: CPU count)")
+    parser.add_argument("--clean", action="store_true", help="Remove old dataset_v3 before building")
+    args = parser.parse_args()
+
+    asyncio.run(build_dataset(limit=args.limit, workers=args.workers, clean=args.clean))
+
+
+if __name__ == "__main__":
+    main()
