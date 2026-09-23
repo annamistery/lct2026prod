@@ -153,10 +153,13 @@ async def lifespan(app: FastAPI):
                         logger.info("OCR reranker initialised for v4")
                     except ImportError:
                         logger.warning("v4 OCR reranker disabled: paddleocr/easyocr not installed")
+                query_prep_v4 = QueryPrepV3(
+                    detector=detector, segmenter=segmenter, target_size=settings.canonical_size_v4,
+                )
                 pipeline_v4 = SearchPipelineV4(
                     embeddings=embeddings_v4,
                     images=images,
-                    query_prep=query_prep_v3,
+                    query_prep=query_prep_v4,
                     ocr_reranker=ocr_reranker,
                     gpu_semaphore=asyncio.Semaphore(settings.gpu_concurrency),
                     candidate_pool_size=settings.v4_candidate_pool_size,

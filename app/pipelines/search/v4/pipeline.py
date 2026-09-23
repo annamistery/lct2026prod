@@ -7,6 +7,7 @@ import base64
 import io
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from PIL import Image
 

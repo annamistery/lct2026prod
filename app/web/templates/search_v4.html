@@ -379,8 +379,16 @@ async function handleFile(file, displayName) {
 
   try {
     const res = await fetch('/api/v4/search', { method: 'POST', body: fd });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || 'Ошибка v4');
+    let data;
+    const contentType = res.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      data = await res.json();
+    } else {
+      const text = await res.text();
+      if (!res.ok) throw new Error(`HTTP ${res.status}: ${text || 'Ошибка сервера'}`);
+      throw new Error(`Неожиданный ответ сервера: ${text.slice(0, 100)}`);
+    }
+    if (!res.ok) throw new Error(data.detail || `Ошибка v4 (HTTP ${res.status})`);
     statusLine.textContent = `v4 (SigLIP 2): ${displayName || file.name} (${data.timings.total_ms} мс)`;
     renderResults(data, currentOrigUrl);
   } catch (err) { statusLine.textContent = `Ошибка: ${err.message}`; }
