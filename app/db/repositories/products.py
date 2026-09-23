@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models.product import Product, ProductEmbedding, ProductEmbeddingV2
+from app.db.models.product import Product, ProductEmbedding, ProductEmbeddingV2, ProductEmbeddingV3
 
 
 @dataclass(frozen=True)
@@ -16,6 +16,18 @@ class ProductCandidate:
     image_path: str
     sample_type: str
     distance: float
+
+
+@dataclass(frozen=True)
+class ProductCandidateV3:
+    product: Product
+    embedding_id: uuid.UUID
+    image_path: str
+    sample_type: str
+    distance: float
+    aug_name: str
+    aug_seed: int
+    vote_count: int
 
 
 class ProductRepository:
@@ -83,3 +95,109 @@ class ProductRepository:
         )
         rows = (await self.session.execute(statement)).all()
         return [ProductCandidate(product=row[0], embedding_id=row[1], image_path=row[2], sample_type=row[3], distance=float(row[4])) for row in rows]
+
+    async def nearest_v3(self, embedding: list[float], limit: int) -> list["ProductCandidateV3"]:
+        distance = ProductEmbeddingV3.embedding.cosine_distance(embedding)
+        ranked = select(
+            ProductEmbeddingV3.id.label("embedding_id"),
+            ProductEmbeddingV3.product_id,
+            ProductEmbeddingV3.image_path,
+            ProductEmbeddingV3.sample_type,
+            ProductEmbeddingV3.aug_name,
+            ProductEmbeddingV3.aug_seed,
+            distance.label("distance"),
+            func.row_number().over(partition_by=ProductEmbeddingV3.product_id, order_by=distance).label("product_rank"),
+        ).subquery()
+        statement = (
+            select(
+                Product,
+                ranked.c.embedding_id,
+                ranked.c.image_path,
+                ranked.c.sample_type,
+                ranked.c.distance,
+                ranked.c.aug_name,
+                ranked.c.aug_seed,
+            )
+            .join(ranked, ranked.c.product_id == Product.id)
+            .where(ranked.c.product_rank == 1)
+            .order_by(ranked.c.distance, Product.id)
+            .limit(limit)
+        )
+        rows = (await self.session.execute(statement)).all()
+        return [
+            ProductCandidateV3(
+                product=row[0], embedding_id=row[1], image_path=row[2],
+                sample_type=row[3], distance=float(row[4]),
+                aug_name=row[5], aug_seed=int(row[6]),
+                vote_count=1,
+            )
+            for row in rows
+        ]
+
+    async def nearest_v3_with_votes(self, embedding: list[float], limit: int, vote_pool: int = 50) -> list["ProductCandidateV3"]:
+        """Extended ranking: count how many of the top-N embeddings belong to each product."""
+        distance = ProductEmbeddingV3.embedding.cosine_distance(embedding)
+        top_embs = (
+            select(
+                ProductEmbeddingV3.product_id,
+                ProductEmbeddingV3.id.label("embedding_id"),
+                ProductEmbeddingV3.image_path,
+                ProductEmbeddingV3.sample_type,
+                ProductEmbeddingV3.aug_name,
+                ProductEmbeddingV3.aug_seed,
+                distance.label("distance"),
+            )
+            .order_by(distance)
+            .limit(vote_pool)
+        ).subquery()
+        # Aggregate per product: best distance, vote count, best aug info
+        agg = (
+            select(
+                top_embs.c.product_id,
+                func.min(top_embs.c.distance).label("best_distance"),
+                func.count().label("vote_count"),
+                func.min(top_embs.c.embedding_id).label("best_embedding_id"),
+            )
+            .group_by(top_embs.c.product_id)
+            .subquery()
+        )
+        # Get the row with best distance per product to get aug_name/aug_seed
+        best_per_product = (
+            select(
+                top_embs.c.product_id,
+                top_embs.c.embedding_id,
+                top_embs.c.image_path,
+                top_embs.c.sample_type,
+                top_embs.c.aug_name,
+                top_embs.c.aug_seed,
+                top_embs.c.distance,
+                func.row_number().over(partition_by=top_embs.c.product_id, order_by=top_embs.c.distance).label("rn"),
+            )
+        ).subquery()
+        statement = (
+            select(
+                Product,
+                best_per_product.c.embedding_id,
+                best_per_product.c.image_path,
+                best_per_product.c.sample_type,
+                best_per_product.c.distance,
+                best_per_product.c.aug_name,
+                best_per_product.c.aug_seed,
+                agg.c.vote_count,
+            )
+            .join(best_per_product, best_per_product.c.product_id == Product.id)
+            .join(agg, agg.c.product_id == Product.id)
+            .where(best_per_product.c.rn == 1)
+            .order_by(best_per_product.c.distance, Product.id)
+            .limit(limit)
+        )
+        rows = (await self.session.execute(statement)).all()
+        return [
+            ProductCandidateV3(
+                product=row[0], embedding_id=row[1], image_path=row[2],
+                sample_type=row[3], distance=float(row[4]),
+                aug_name=row[5], aug_seed=int(row[6]),
+                vote_count=int(row[7]),
+            )
+            for row in rows
+        ]

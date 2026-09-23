@@ -28,6 +28,7 @@ class Product(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     embeddings: Mapped[list["ProductEmbedding"]] = relationship(back_populates="product", cascade="all, delete-orphan")
     embeddings_v2: Mapped[list["ProductEmbeddingV2"]] = relationship(back_populates="product", cascade="all, delete-orphan")
+    embeddings_v3: Mapped[list["ProductEmbeddingV3"]] = relationship(back_populates="product", cascade="all, delete-orphan")
 
 
 class ProductEmbedding(Base):
@@ -64,3 +65,23 @@ class ProductEmbeddingV2(Base):
     embedding_model: Mapped[str] = mapped_column(String(200), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     product: Mapped[Product] = relationship(back_populates="embeddings_v2")
+
+
+class ProductEmbeddingV3(Base):
+    __tablename__ = "product_embeddings_v3"
+    __table_args__ = (
+        CheckConstraint("sample_type IN ('catalog', 'augmented', 'real', 'customer')", name="ck_product_embeddings_v3_sample_type"),
+        Index("ix_product_embeddings_v3_product_id", "product_id"),
+        Index("ix_product_embeddings_v3_sample_type", "sample_type"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    product_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("products.id", ondelete="CASCADE"), nullable=False)
+    image_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    sample_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    aug_name: Mapped[str] = mapped_column(String(50), nullable=False, default="catalog")
+    aug_seed: Mapped[int] = mapped_column(nullable=False, default=0)
+    embedding: Mapped[list[float]] = mapped_column(Vector(768), nullable=False)
+    embedding_model: Mapped[str] = mapped_column(String(200), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    product: Mapped[Product] = relationship(back_populates="embeddings_v3")
