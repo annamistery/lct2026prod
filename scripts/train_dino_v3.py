@@ -35,12 +35,17 @@ CANONICAL_SIZE = 518
 
 
 def _resolve_paths():
-    """Resolve paths from settings (respects MEDIA_DIR, DINO_V3_MODEL_PATH etc.)."""
+    """Resolve paths from settings, preferring /models mount inside Docker."""
     from app.core.config import get_settings
     settings = get_settings()
-    local_base = Path("/models/dinov2-base") if Path("/models").is_dir() else BASE_DIR / "models" / "dinov2-base"
+    docker_models = Path("/models")
+    if docker_models.is_dir():
+        local_base = docker_models / "dinov2-base"
+        output = docker_models / "dinov2_label_finetuned_v3"
+    else:
+        local_base = BASE_DIR / "models" / "dinov2-base"
+        output = BASE_DIR / "models" / "dinov2_label_finetuned_v3"
     manifest = settings.media_dir / "dataset_v3" / "v3_manifest.json"
-    output = settings.dino_v3_model_path
     return local_base, manifest, output
 
 
