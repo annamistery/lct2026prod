@@ -124,24 +124,33 @@ class SearchPipelineV3:
         scored.sort(key=lambda x: -x[0])
         return [cand for _, cand in scored]
 
-    @staticmethod
-    def _build_results(candidates: list[ProductCandidateV3], vote_pool: int) -> list[SearchResultV3]:
-        return [
-            SearchResultV3(
+    def _build_results(self, candidates: list[ProductCandidateV3], vote_pool: int) -> list[SearchResultV3]:
+        results = []
+        for idx, cand in enumerate(candidates, 1):
+            aug_image_url = None
+            try:
+                label_path = self.images.resolve(cand.product.label_image_path)
+                label_image = Image.open(label_path).convert("RGB")
+                aug_image = self.reranker.regenerate_augment(label_image, cand.aug_name, cand.aug_seed)
+                aug_image_url = self.encode_image_data_url(aug_image)
+            except Exception:
+                pass
+
+            results.append(SearchResultV3(
                 product_id=cand.product.id,
                 slug=cand.product.slug,
                 title=cand.product.title,
                 manufacturer=cand.product.manufacturer,
                 description=cand.product.description,
                 image_url=f"/api/media/{cand.image_path}",
+                matched_aug_image=aug_image_url,
                 dino_similarity=round(1.0 - cand.distance, 4),
                 vote_count=cand.vote_count,
                 vote_ratio=round(cand.vote_count / max(1, vote_pool), 4),
                 matched_aug_name=cand.aug_name,
                 rank=idx,
-            )
-            for idx, cand in enumerate(candidates, 1)
-        ]
+            ))
+        return results
 
     @staticmethod
     def encode_image_data_url(image: Image.Image) -> str:

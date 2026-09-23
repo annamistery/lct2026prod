@@ -10,6 +10,7 @@ class SearchResultV3(BaseModel):
     manufacturer: str
     description: str
     image_url: str
+    matched_aug_image: str | None = None
     dino_similarity: float
     vote_count: int
     vote_ratio: float
