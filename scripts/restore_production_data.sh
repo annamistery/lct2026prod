@@ -14,7 +14,7 @@ DUMP_FILE="$DATA_DIR/catalog_dump.sql.gz"
 MEDIA_ARCHIVE="$DATA_DIR/media_catalog.tar.gz"
 
 echo "=== [1/5] Проверка наличия исходных файлов данных ==="
-if [ ! -f "$DUMP_FILE" ]; then
+if [ ! -f "$DUMP_FILE" ] && ! compgen -G "${DUMP_FILE}*" >/dev/null; then
   echo "ОШИБКА: Файл дампа базы не найден: $DUMP_FILE" >&2
   echo "Убедитесь, что репозиторий склонирован с поддержкой Git LFS (git lfs pull)." >&2
   exit 1
@@ -53,7 +53,7 @@ done
 
 echo "=== [3/5] Восстановление базы данных из дампа ==="
 echo "Загрузка таблиц products и 224,000 векторов pgvector в базу данных..."
-gunzip -c "$DUMP_FILE" | docker compose exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -q
+cat "${DUMP_FILE}"* | gunzip -c | docker compose exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -q
 
 # Проверяем количество товаров в базе
 COUNT=$(docker compose exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t -c "SELECT count(*) FROM products;" | tr -d ' \r\n')
