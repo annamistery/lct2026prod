@@ -213,9 +213,13 @@ class ProductRepository:
         ]
 
     async def nearest_v4_with_votes(self, embedding: list[float], limit: int, vote_pool: int = 50) -> list["ProductCandidateV4"]:
-        """Vote-ranked nearest search on product_embeddings_v4 (SigLIP 2 768d)."""
+        """Vote-ranked nearest search on product_embeddings_v4 (SigLIP 2 768d).
+        Guarantees `limit` unique products while counting votes in top `vote_pool` embeddings.
+        """
         distance = ProductEmbeddingV4.embedding.cosine_distance(embedding)
-        top_embs = (
+
+        # 1. Best embedding per unique product
+        all_ranked = (
             select(
                 ProductEmbeddingV4.product_id,
                 ProductEmbeddingV4.id.label("embedding_id"),
@@ -224,46 +228,58 @@ class ProductRepository:
                 ProductEmbeddingV4.aug_name,
                 ProductEmbeddingV4.aug_seed,
                 distance.label("distance"),
+                func.row_number().over(
+                    partition_by=ProductEmbeddingV4.product_id, order_by=distance
+                ).label("rn"),
             )
+        ).subquery()
+
+        top_products = (
+            select(
+                all_ranked.c.product_id,
+                all_ranked.c.embedding_id,
+                all_ranked.c.image_path,
+                all_ranked.c.sample_type,
+                all_ranked.c.aug_name,
+                all_ranked.c.aug_seed,
+                all_ranked.c.distance,
+            )
+            .where(all_ranked.c.rn == 1)
+            .order_by(all_ranked.c.distance)
+            .limit(limit)
+        ).subquery()
+
+        # 2. Count votes across top `vote_pool` embeddings in the whole table
+        top_pool = (
+            select(ProductEmbeddingV4.product_id)
             .order_by(distance)
             .limit(vote_pool)
         ).subquery()
-        agg = (
+
+        votes = (
             select(
-                top_embs.c.product_id,
+                top_pool.c.product_id,
                 func.count().label("vote_count"),
             )
-            .group_by(top_embs.c.product_id)
+            .group_by(top_pool.c.product_id)
             .subquery()
         )
-        best_per_product = (
-            select(
-                top_embs.c.product_id,
-                top_embs.c.embedding_id,
-                top_embs.c.image_path,
-                top_embs.c.sample_type,
-                top_embs.c.aug_name,
-                top_embs.c.aug_seed,
-                top_embs.c.distance,
-                func.row_number().over(partition_by=top_embs.c.product_id, order_by=top_embs.c.distance).label("rn"),
-            )
-        ).subquery()
+
+        # 3. Join top products with Product and votes (outer join preserves all top candidates)
         statement = (
             select(
                 Product,
-                best_per_product.c.embedding_id,
-                best_per_product.c.image_path,
-                best_per_product.c.sample_type,
-                best_per_product.c.distance,
-                best_per_product.c.aug_name,
-                best_per_product.c.aug_seed,
-                agg.c.vote_count,
+                top_products.c.embedding_id,
+                top_products.c.image_path,
+                top_products.c.sample_type,
+                top_products.c.distance,
+                top_products.c.aug_name,
+                top_products.c.aug_seed,
+                func.coalesce(votes.c.vote_count, 1).label("vote_count"),
             )
-            .join(best_per_product, best_per_product.c.product_id == Product.id)
-            .join(agg, agg.c.product_id == Product.id)
-            .where(best_per_product.c.rn == 1)
-            .order_by(best_per_product.c.distance, Product.id)
-            .limit(limit)
+            .join(top_products, top_products.c.product_id == Product.id)
+            .outerjoin(votes, votes.c.product_id == Product.id)
+            .order_by(top_products.c.distance, Product.id)
         )
         rows = (await self.session.execute(statement)).all()
         return [

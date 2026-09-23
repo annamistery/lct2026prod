@@ -204,15 +204,16 @@
       <span style="font-size: 10px; background: #6c5ce7; color: #fff; padding: 2px 6px; border-radius: 4px;">v4</span>
     </div>
     <div style="margin-bottom: 12px;">
-      <label style="font-size: 11px; color: var(--muted); display: block; margin-bottom: 4px;">Источник папки:</label>
-      <select id="source-select" style="width: 100%; padding: 6px 8px; background: var(--surface-2); border: 1px solid var(--border); color: #fff; border-radius: 4px; font-size: 12px;">
-        <option value="test_stage1" selected>test_stage1 (52 фото)</option>
-        <option value="queries">queries (конкурсные)</option>
-        <option value="benchmark">benchmark</option>
+      <label style="font-size: 11px; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; font-weight: 600; display: block;">Каталог тестов:</label>
+      <select id="source-select" style="width: 100%; padding: 8px 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 13px; outline: none; margin-bottom: 10px;">
+        <option value="tmp1">Тест 1 (set48 / 27 фото)</option>
+        <option value="tmp2">Тест 2 (vina / 25 фото)</option>
+        <option value="imports">Каталог (imports/images)</option>
+        <option value="catalog">Кропы базы (media/products)</option>
       </select>
     </div>
     <div style="margin-bottom: 12px;">
-      <input type="text" id="filter-input" placeholder="Фильтр по имени..." style="width: 100%; padding: 6px 8px; background: var(--surface-2); border: 1px solid var(--border); color: #fff; border-radius: 4px; font-size: 12px;">
+      <input type="text" id="filter-input" placeholder="Поиск по имени файла..." style="width: 100%; padding: 8px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 13px; outline: none; margin-bottom: 10px;">
     </div>
     <div id="files-list" style="max-height: 480px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px;">
       <div style="color: var(--muted); font-size: 12px; padding: 8px;">Загрузка списка...</div>
@@ -400,23 +401,19 @@ function renderResults(data, origUrl) {
       <div class="compare-header"><span>1. Оригинал</span><span class="badge-tag">Фото</span></div>
       <div class="compare-img-wrap"><img class="compare-img zoomable" src="${origUrl}" data-caption="Оригинал"></div>
     </div>
-    <div class="compare-card">
-      <div class="compare-header"><span>2. BBox кроп</span><span class="badge-tag">YOLO</span></div>
-      <div class="compare-img-wrap"><img class="compare-img zoomable" src="${bboxUrl}" data-caption="BBox кроп"></div>
-    </div>
     <div class="compare-card" style="border-color: #6c5ce7;">
       <div class="compare-header">
-        <span style="color: #a29bfe;">3. Seg Letterbox 518</span>
+        <span style="color: #a29bfe;">2. Seg Letterbox 518</span>
         <span class="badge-tag" style="background: rgba(108, 92, 231, 0.2); color: #a29bfe;">${data.is_fallback ? 'Fallback' : 'Seg + Hull'}</span>
       </div>
       <div class="compare-img-wrap"><img class="compare-img zoomable" src="${queryUrl}" data-caption="Seg Letterbox 518 (запрос v4)"></div>
     </div>
     <div class="compare-card winner-border">
-      <div class="compare-header"><span style="color: #a29bfe;">4. Эталон Top-1</span><span class="badge-tag accent">Каталог</span></div>
+      <div class="compare-header"><span style="color: #a29bfe;">3. Эталон Top-1</span><span class="badge-tag accent">Каталог</span></div>
       <div class="compare-img-wrap">${wImgUrl ? `<img class="compare-img zoomable" src="${wImgUrl}" data-caption="Каталожный кроп Top-1: ${wTitle}">` : '<div style="color: var(--muted);">Не найдено</div>'}</div>
     </div>
     <div class="compare-card" style="border-color: #f39c12;">
-      <div class="compare-header"><span style="color: #f39c12;">5. Совпавшая аугментация</span><span class="badge-tag" style="background: rgba(243,156,18,0.2); color: #f39c12;">${w ? w.matched_aug_name : ''}</span></div>
+      <div class="compare-header"><span style="color: #f39c12;">4. Совпавшая аугментация</span><span class="badge-tag" style="background: rgba(243,156,18,0.2); color: #f39c12;">${w ? w.matched_aug_name : ''}</span></div>
       <div class="compare-img-wrap">${wAugUrl ? `<img class="compare-img zoomable" src="${wAugUrl}" data-caption="Аугментация: ${w ? w.matched_aug_name : ''} (Top-1)">` : '<div style="color: var(--muted);">Нет данных</div>'}</div>
     </div>
   `;
@@ -427,15 +424,6 @@ function renderResults(data, origUrl) {
     const vr = (w.vote_ratio * 100).toFixed(0);
     winnerBox.innerHTML = `
       <div class="winner-card">
-        <div style="display: flex; flex-direction: column; gap: 6px; flex-shrink: 0;">
-          <div style="text-align: center; font-size: 10px; color: var(--muted); text-transform: uppercase;">Каталог</div>
-          <img class="winner-img zoomable" src="${w.image_url}" data-caption="Каталожный кроп: ${w.title}">
-        </div>
-        ${w.matched_aug_image ? `
-        <div style="display: flex; flex-direction: column; gap: 6px; flex-shrink: 0;">
-          <div style="text-align: center; font-size: 10px; color: #f39c12; text-transform: uppercase;">Aug: ${w.matched_aug_name}</div>
-          <img class="winner-img zoomable" src="${w.matched_aug_image}" data-caption="Совпавшая аугментация: ${w.matched_aug_name}" style="border: 2px solid #f39c12;">
-        </div>` : ''}
         <div style="flex: 1;">
           <span class="winner-badge">Top-1 v4 (SigLIP 2)</span>
           <div style="font-size: 18px; font-weight: 700; color: #fff; margin-bottom: 4px;">
@@ -495,7 +483,19 @@ function renderResults(data, origUrl) {
   }
 }
 
-// Загрузка файлов при старте страницы
-loadFiles();
+// Загрузка источников и файлов при старте
+async function loadSources() {
+  try {
+    const res = await fetch('/api/rectify/sources');
+    const sources = await res.json();
+    if (sources && sources.length) {
+      sourceSelect.innerHTML = sources.map(s => `<option value="${s.id}">${s.label}</option>`).join('');
+    }
+  } catch (err) {
+    console.error('Ошибка загрузки источников', err);
+  }
+}
+
+loadSources().then(loadFiles);
 </script>
 {% endblock %}

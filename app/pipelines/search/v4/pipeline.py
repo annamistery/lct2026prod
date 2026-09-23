@@ -125,12 +125,21 @@ class SearchPipelineV4:
         for idx, (cand, fscore) in enumerate(zip(candidates, final_scores), 1):
             aug_image_url: str | None = None
             try:
-                # Directly read the pre-built augmented file stored in media/images/
+                # Read the pre-built augmented variant that matched
                 aug_path = self.images.resolve(cand.image_path)
                 aug_image = Image.open(aug_path).convert("RGB")
                 aug_image_url = self._encode_image(aug_image)
             except Exception:
                 pass
+
+            # Clean undistorted catalog reference: catalog.webp in product's directory
+            cand_p = Path(cand.image_path)
+            catalog_rel = str(cand_p.parent / "catalog.webp").replace("\\", "/")
+            try:
+                self.images.resolve(catalog_rel)
+                catalog_url = f"/api/media/{catalog_rel}"
+            except Exception:
+                catalog_url = f"/api/media/{cand.image_path}"
 
             ocr_vintage_match: bool | None = None
 
@@ -140,7 +149,7 @@ class SearchPipelineV4:
                 title=cand.product.title,
                 manufacturer=cand.product.manufacturer,
                 description=cand.product.description,
-                image_url=f"/api/media/{cand.image_path}",
+                image_url=catalog_url,
                 matched_aug_image=aug_image_url,
                 dino_similarity=round(1.0 - cand.distance, 4),
                 vote_count=cand.vote_count,
