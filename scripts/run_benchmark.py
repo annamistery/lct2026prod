@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unified benchmark runner: evaluates v1 vs v2 across all test packs.
+"""Unified benchmark runner: evaluates v1 vs v2 vs v3 across all test packs.
 
 Writes predictions and reports to a writable media directory (/media/benchmark),
 preventing read-only filesystem errors in Docker.
@@ -144,10 +144,11 @@ def evaluate_pack(mapping_file: Path, preds_file: Path) -> dict:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Run complete v1 vs v2 evaluation benchmark")
+    parser = argparse.ArgumentParser(description="Run complete v1 vs v2 vs v3 evaluation benchmark")
     parser.add_argument("--host", default="http://127.0.0.1:8030", help="Base URL of backend (default: http://127.0.0.1:8030)")
     parser.add_argument("--out-dir", type=Path, default=None, help="Directory for output predictions (defaults to /media/benchmark)")
     parser.add_argument("--skip-run", action="store_true", help="Skip running participant_test.sh, analyze existing predictions")
+    parser.add_argument("--skip-v3", action="store_true", help="Skip v3 tests (useful if v3 model is not yet loaded)")
     args = parser.parse_args()
 
     pack1 = find_pack_dir("1")
@@ -162,28 +163,47 @@ def main():
 
     p1_v1_out = out_dir / "p1_predictions_v1.jsonl"
     p1_v2_out = out_dir / "p1_predictions_v2.jsonl"
+    p1_v3_out = out_dir / "p1_predictions_v3.jsonl"
     p2_v1_out = out_dir / "p2_predictions_v1.jsonl"
     p2_v2_out = out_dir / "p2_predictions_v2.jsonl"
+    p2_v3_out = out_dir / "p2_predictions_v3.jsonl"
 
     endpoint_v1 = f"{args.host.rstrip('/')}/api/v1/eval/predict"
     endpoint_v2 = f"{args.host.rstrip('/')}/api/v2/eval/predict"
+    endpoint_v3 = f"{args.host.rstrip('/')}/api/v3/eval/predict"
+
+    run_v3 = not args.skip_v3
+    total_steps = 6 if run_v3 else 4
 
     if not args.skip_run:
         print("\n" + "=" * 80)
-        print(f" ЗАПУСК ЕДИНОГО ТЕСТИРОВАНИЯ (v1 vs v2) — хост {args.host}")
+        print(f" ЗАПУСК ЕДИНОГО ТЕСТИРОВАНИЯ (v1 vs v2 vs v3) — хост {args.host}")
         print("=" * 80)
 
-        print("\n[1/4] Пакет 1 (set48 / 27 каталожных фото) -> Версия v1 (чистый DINOv2 без реранка)...")
+        step = 1
+        print(f"\n[{step}/{total_steps}] Пакет 1 (set48 / 27 каталожных фото) -> Версия v1 (чистый DINOv2 без реранка)...")
         run_participant_test(pack1, endpoint_v1, p1_v1_out, cwd=out_dir)
 
-        print("\n[2/4] Пакет 1 (set48 / 27 каталожных фото) -> Версия v2 (каскад + матрицы)...")
+        step += 1
+        print(f"\n[{step}/{total_steps}] Пакет 1 (set48 / 27 каталожных фото) -> Версия v2 (каскад + матрицы)...")
         run_participant_test(pack1, endpoint_v2, p1_v2_out, cwd=out_dir)
 
-        print("\n[3/4] Пакет 2 (vina / 25 полевых фото) -> Версия v1 (чистый DINOv2 без реранка)...")
+        step += 1
+        print(f"\n[{step}/{total_steps}] Пакет 2 (vina / 25 полевых фото) -> Версия v1 (чистый DINOv2 без реранка)...")
         run_participant_test(pack2, endpoint_v1, p2_v1_out, cwd=out_dir)
 
-        print("\n[4/4] Пакет 2 (vina / 25 полевых фото) -> Версия v2 (каскад + матрицы)...")
+        step += 1
+        print(f"\n[{step}/{total_steps}] Пакет 2 (vina / 25 полевых фото) -> Версия v2 (каскад + матрицы)...")
         run_participant_test(pack2, endpoint_v2, p2_v2_out, cwd=out_dir)
+
+        if run_v3:
+            step += 1
+            print(f"\n[{step}/{total_steps}] Пакет 1 (set48 / 27 каталожных фото) -> Версия v3 (DINOv2-base 768d + Seg 518)...")
+            run_participant_test(pack1, endpoint_v3, p1_v3_out, cwd=out_dir)
+
+            step += 1
+            print(f"\n[{step}/{total_steps}] Пакет 2 (vina / 25 полевых фото) -> Версия v3 (DINOv2-base 768d + Seg 518)...")
+            run_participant_test(pack2, endpoint_v3, p2_v3_out, cwd=out_dir)
 
     # Evaluate results
     p1_v1 = evaluate_pack(pack1 / "mapping.json", p1_v1_out)
@@ -191,84 +211,122 @@ def main():
     p2_v1 = evaluate_pack(pack2 / "mapping.json", p2_v1_out)
     p2_v2 = evaluate_pack(pack2 / "mapping.json", p2_v2_out)
 
-    tot_v1_correct = p1_v1["correct"] + p2_v1["correct"]
-    tot_v1_total = p1_v1["total"] + p2_v1["total"]
-    tot_v1_pct = (tot_v1_correct / tot_v1_total * 100.0) if tot_v1_total else 0.0
-    tot_v1_lat = ((p1_v1["avg_lat"] * p1_v1["total"] + p2_v1["avg_lat"] * p2_v1["total"]) / tot_v1_total) if tot_v1_total else 0.0
+    p1_v3 = evaluate_pack(pack1 / "mapping.json", p1_v3_out) if run_v3 else {"total": 0, "correct": 0, "pct": 0.0, "avg_lat": 0.0, "details": {}}
+    p2_v3 = evaluate_pack(pack2 / "mapping.json", p2_v3_out) if run_v3 else {"total": 0, "correct": 0, "pct": 0.0, "avg_lat": 0.0, "details": {}}
 
-    tot_v2_correct = p1_v2["correct"] + p2_v2["correct"]
-    tot_v2_total = p1_v2["total"] + p2_v2["total"]
-    tot_v2_pct = (tot_v2_correct / tot_v2_total * 100.0) if tot_v2_total else 0.0
-    tot_v2_lat = ((p1_v2["avg_lat"] * p1_v2["total"] + p2_v2["avg_lat"] * p2_v2["total"]) / tot_v2_total) if tot_v2_total else 0.0
+    def totals(p1, p2):
+        c = p1["correct"] + p2["correct"]
+        t = p1["total"] + p2["total"]
+        pct = (c / t * 100.0) if t else 0.0
+        lat = ((p1["avg_lat"] * p1["total"] + p2["avg_lat"] * p2["total"]) / t) if t else 0.0
+        return c, t, pct, lat
+
+    tot_v1_correct, tot_v1_total, tot_v1_pct, tot_v1_lat = totals(p1_v1, p2_v1)
+    tot_v2_correct, tot_v2_total, tot_v2_pct, tot_v2_lat = totals(p1_v2, p2_v2)
+    tot_v3_correct, tot_v3_total, tot_v3_pct, tot_v3_lat = totals(p1_v3, p2_v3)
 
     # Print summary table
-    print("\n" + "=" * 92)
-    print(" СВОДНЫЙ ОТЧЁТ СРАВНЕНИЯ ТОЧНОСТИ И СКОРОСТИ: v1 (чистый DINO) vs v2 (каскад + матрицы)")
-    print("=" * 92)
-    header = f"{'Тестовый набор':<28} | {'Версия 1 (чистый DINO)':<24} | {'Версия 2 (каскад v2)':<24} | {'Дельта Hit@1':<10}"
-    print(header)
-    print("-" * 92)
+    col_w = 120 if run_v3 else 92
+    print("\n" + "=" * col_w)
+    title = " СВОДНЫЙ ОТЧЁТ: v1 vs v2 vs v3" if run_v3 else " СВОДНЫЙ ОТЧЁТ: v1 vs v2"
+    print(title)
+    print("=" * col_w)
 
-    def row(label, r1, r2):
-        s1 = f"{r1['correct']}/{r1['total']} ({r1['pct']:.1f}%) [{r1['avg_lat']:.0f}мс]"
-        s2 = f"{r2['correct']}/{r2['total']} ({r2['pct']:.1f}%) [{r2['avg_lat']:.0f}мс]"
-        delta = r2["pct"] - r1["pct"]
-        sign = "+" if delta > 0 else ""
-        d_str = f"{sign}{delta:.1f}%"
-        return f"{label:<28} | {s1:<24} | {s2:<24} | {d_str:<10}"
+    def fmt(r):
+        return f"{r['correct']}/{r['total']} ({r['pct']:.1f}%) [{r['avg_lat']:.0f}мс]"
 
-    print(row("Пакет 1 (set48 / каталог)", p1_v1, p1_v2))
-    print(row("Пакет 2 (vina / полевые)", p2_v1, p2_v2))
-    print("-" * 92)
-    s_tot1 = f"{tot_v1_correct}/{tot_v1_total} ({tot_v1_pct:.1f}%) [{tot_v1_lat:.0f}мс]"
-    s_tot2 = f"{tot_v2_correct}/{tot_v2_total} ({tot_v2_pct:.1f}%) [{tot_v2_lat:.0f}мс]"
-    delta_tot = tot_v2_pct - tot_v1_pct
-    sign_tot = "+" if delta_tot > 0 else ""
-    print(f"{'ИТОГО (52 запроса)':<28} | {s_tot1:<24} | {s_tot2:<24} | {sign_tot}{delta_tot:.1f}%")
-    print("=" * 92)
+    if run_v3:
+        header = f"{'Тестовый набор':<28} | {'v1 (DINO)':<24} | {'v2 (каскад)':<24} | {'v3 (base 768d)':<24} | {'d(v3-v1)':<8}"
+        print(header)
+        print("-" * col_w)
 
-    # Detailed differential analysis
+        def row3(label, r1, r2, r3):
+            delta = r3["pct"] - r1["pct"]
+            sign = "+" if delta > 0 else ""
+            return f"{label:<28} | {fmt(r1):<24} | {fmt(r2):<24} | {fmt(r3):<24} | {sign}{delta:.1f}%"
+
+        print(row3("Пакет 1 (set48 / каталог)", p1_v1, p1_v2, p1_v3))
+        print(row3("Пакет 2 (vina / полевые)", p2_v1, p2_v2, p2_v3))
+        print("-" * col_w)
+        s1 = f"{tot_v1_correct}/{tot_v1_total} ({tot_v1_pct:.1f}%) [{tot_v1_lat:.0f}мс]"
+        s2 = f"{tot_v2_correct}/{tot_v2_total} ({tot_v2_pct:.1f}%) [{tot_v2_lat:.0f}мс]"
+        s3 = f"{tot_v3_correct}/{tot_v3_total} ({tot_v3_pct:.1f}%) [{tot_v3_lat:.0f}мс]"
+        d = tot_v3_pct - tot_v1_pct
+        ds = "+" if d > 0 else ""
+        print(f"{'ИТОГО (52 запроса)':<28} | {s1:<24} | {s2:<24} | {s3:<24} | {ds}{d:.1f}%")
+    else:
+        header = f"{'Тестовый набор':<28} | {'v1 (DINO)':<24} | {'v2 (каскад)':<24} | {'d(v2-v1)':<10}"
+        print(header)
+        print("-" * col_w)
+
+        def row2(label, r1, r2):
+            delta = r2["pct"] - r1["pct"]
+            sign = "+" if delta > 0 else ""
+            return f"{label:<28} | {fmt(r1):<24} | {fmt(r2):<24} | {sign}{delta:.1f}%"
+
+        print(row2("Пакет 1 (set48 / каталог)", p1_v1, p1_v2))
+        print(row2("Пакет 2 (vina / полевые)", p2_v1, p2_v2))
+        print("-" * col_w)
+        s1 = f"{tot_v1_correct}/{tot_v1_total} ({tot_v1_pct:.1f}%) [{tot_v1_lat:.0f}мс]"
+        s2 = f"{tot_v2_correct}/{tot_v2_total} ({tot_v2_pct:.1f}%) [{tot_v2_lat:.0f}мс]"
+        d = tot_v2_pct - tot_v1_pct
+        ds = "+" if d > 0 else ""
+        print(f"{'ИТОГО (52 запроса)':<28} | {s1:<24} | {s2:<24} | {ds}{d:.1f}%")
+
+    print("=" * col_w)
+
+    # Detailed differential analysis: v1 vs v2
     for pack_name, r1, r2 in [("Пакет 1 (каталог)", p1_v1, p1_v2), ("Пакет 2 (полевые фото)", p2_v1, p2_v2)]:
-        print(f"\n--- Детальная динамика: {pack_name} ---")
-        fixed = []
-        broken = []
-        still_fail = []
+        print(f"\n--- Детальная динамика v1->v2: {pack_name} ---")
+        _print_diff(r1, r2, "v1", "v2")
 
-        all_qids = sorted(set(r1["details"].keys()) | set(r2["details"].keys()))
-        for qid in all_qids:
-            d1 = r1["details"].get(qid, {})
-            d2 = r2["details"].get(qid, {})
-            ok1 = d1.get("is_ok", False)
-            ok2 = d2.get("is_ok", False)
-            exp = d1.get("expected") or d2.get("expected")
+    # Detailed differential analysis: v1 vs v3
+    if run_v3:
+        for pack_name, r1, r3 in [("Пакет 1 (каталог)", p1_v1, p1_v3), ("Пакет 2 (полевые фото)", p2_v1, p2_v3)]:
+            print(f"\n--- Детальная динамика v1->v3: {pack_name} ---")
+            _print_diff(r1, r3, "v1", "v3")
 
-            if not ok1 and ok2:
-                fixed.append((qid, exp, d1.get("predicted"), d2.get("predicted")))
-            elif ok1 and not ok2:
-                broken.append((qid, exp, d1.get("predicted"), d2.get("predicted")))
-            elif not ok1 and not ok2:
-                still_fail.append((qid, exp, d1.get("predicted"), d2.get("predicted")))
+    print("\n" + "=" * col_w + "\n")
 
-        if fixed:
-            print(f"  ✓ ИСПРАВЛЕНО в v2 ({len(fixed)} шт.):")
-            for qid, exp, p1, p2 in fixed:
-                print(f"     [+] {qid}: ожидался {exp} | v1 дал '{p1}' ➔ v2 дал '{p2}' (ТОЧНО)")
-        else:
-            print("  - Нет запросов, исправленных в v2.")
 
-        if broken:
-            print(f"  ⚠️ РЕГРЕССИИ в v2 ({len(broken)} шт.):")
-            for qid, exp, p1, p2 in broken:
-                print(f"     [-] {qid}: ожидался {exp} | v1 дал '{p1}' (ОК) ➔ v2 дал '{p2}' (ОШИБКА)")
-        else:
-            print("  ✓ Регрессий в v2 нет.")
+def _print_diff(r1: dict, r2: dict, label1: str, label2: str):
+    fixed = []
+    broken = []
+    still_fail = []
 
-        if still_fail:
-            print(f"  ❌ Ошибки в обеих версиях ({len(still_fail)} шт.):")
-            for qid, exp, p1, p2 in still_fail:
-                print(f"     [x] {qid}: ожидался {exp} | v1='{p1}' | v2='{p2}'")
+    all_qids = sorted(set(r1["details"].keys()) | set(r2["details"].keys()))
+    for qid in all_qids:
+        d1 = r1["details"].get(qid, {})
+        d2 = r2["details"].get(qid, {})
+        ok1 = d1.get("is_ok", False)
+        ok2 = d2.get("is_ok", False)
+        exp = d1.get("expected") or d2.get("expected")
 
-    print("\n" + "=" * 92 + "\n")
+        if not ok1 and ok2:
+            fixed.append((qid, exp, d1.get("predicted"), d2.get("predicted")))
+        elif ok1 and not ok2:
+            broken.append((qid, exp, d1.get("predicted"), d2.get("predicted")))
+        elif not ok1 and not ok2:
+            still_fail.append((qid, exp, d1.get("predicted"), d2.get("predicted")))
+
+    if fixed:
+        print(f"  + ИСПРАВЛЕНО в {label2} ({len(fixed)} шт.):")
+        for qid, exp, p1, p2 in fixed:
+            print(f"     [+] {qid}: ожидался {exp} | {label1}='{p1}' -> {label2}='{p2}'")
+    else:
+        print(f"  - Нет запросов, исправленных в {label2}.")
+
+    if broken:
+        print(f"  ! РЕГРЕССИИ в {label2} ({len(broken)} шт.):")
+        for qid, exp, p1, p2 in broken:
+            print(f"     [-] {qid}: ожидался {exp} | {label1}='{p1}' (OK) -> {label2}='{p2}' (ERR)")
+    else:
+        print(f"  + Регрессий в {label2} нет.")
+
+    if still_fail:
+        print(f"  x Ошибки в обеих ({len(still_fail)} шт.):")
+        for qid, exp, p1, p2 in still_fail:
+            print(f"     [x] {qid}: ожидался {exp} | {label1}='{p1}' | {label2}='{p2}'")
 
 
 if __name__ == "__main__":
