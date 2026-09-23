@@ -75,16 +75,14 @@ class SigLIP2EmbeddingService:
         for i in range(0, len(images), batch_size):
             chunk = images[i : i + batch_size]
             pixels = self.processor(images=chunk, return_tensors="pt")["pixel_values"].to(self.device)
-            outputs = self.model(pixel_values=pixels)
-            if hasattr(outputs, "image_embeds") and outputs.image_embeds is not None:
-                features = outputs.image_embeds
-            elif getattr(outputs, "pooler_output", None) is not None:
-                features = outputs.pooler_output
-            elif getattr(outputs, "vision_model_output", None) is not None:
-                vo = outputs.vision_model_output
+            if hasattr(self.model, "get_image_features"):
+                features = self.model.get_image_features(pixel_values=pixels)
+            elif hasattr(self.model, "vision_model"):
+                vo = self.model.vision_model(pixel_values=pixels)
                 features = vo.pooler_output if getattr(vo, "pooler_output", None) is not None else vo.last_hidden_state[:, 0, :]
             else:
-                features = outputs.last_hidden_state[:, 0, :]
+                outputs = self.model(pixel_values=pixels)
+                features = getattr(outputs, "image_embeds", None) or getattr(outputs, "pooler_output", None) or outputs.last_hidden_state[:, 0, :]
             normalized = (
                 torch.nn.functional.normalize(features, dim=-1).cpu().numpy().astype(np.float32)
             )

@@ -244,12 +244,6 @@ def finetune(
         print("Full fine-tune: all parameters trainable")
 
     model = model.to(device)
-    if hasattr(model, "gradient_checkpointing_enable"):
-        try:
-            model.gradient_checkpointing_enable()
-            print("Gradient checkpointing enabled")
-        except Exception as e:
-            print(f"Gradient checkpointing: {e}")
     model.train()
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
@@ -276,16 +270,14 @@ def finetune(
             labels_t = torch.from_numpy(labels[idx]).long().to(device)
 
             with torch.amp.autocast(device_type=device.type, dtype=amp_dtype, enabled=use_cuda):
-                outputs = model(pixel_values=inputs)
-                if hasattr(outputs, "image_embeds") and outputs.image_embeds is not None:
-                    feats = outputs.image_embeds
-                elif hasattr(outputs, "pooler_output") and outputs.pooler_output is not None:
-                    feats = outputs.pooler_output
-                elif hasattr(outputs, "vision_model_output") and outputs.vision_model_output is not None:
-                    vo = outputs.vision_model_output
+                if hasattr(model, "get_image_features"):
+                    feats = model.get_image_features(pixel_values=inputs)
+                elif hasattr(model, "vision_model"):
+                    vo = model.vision_model(pixel_values=inputs)
                     feats = vo.pooler_output if getattr(vo, "pooler_output", None) is not None else vo.last_hidden_state[:, 0, :]
                 else:
-                    feats = outputs.last_hidden_state[:, 0, :]
+                    outputs = model(pixel_values=inputs)
+                    feats = getattr(outputs, "image_embeds", None) or getattr(outputs, "pooler_output", None) or outputs.last_hidden_state[:, 0, :]
                 feats = F.normalize(feats, dim=-1)
 
                 loss = supervised_contrastive_loss(feats, labels_t, temperature=0.1)
