@@ -13,12 +13,19 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import random
 import sys
 import time
 from collections import defaultdict
 from pathlib import Path
 from typing import Iterator
+
+# Ensure writable cache directories for container execution (same as scripts/import_from_csv.py)
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/matplotlib")
+os.environ.setdefault("HF_HOME", "/tmp/huggingface")
+os.environ.setdefault("TRANSFORMERS_CACHE", "/tmp/huggingface")
+os.environ.setdefault("TORCH_HOME", "/tmp/torch")
 
 import numpy as np
 
@@ -40,19 +47,40 @@ def _resolve_paths(base_model_dir: str | None = None, output_dir: str | None = N
     from app.core.config import get_settings
     settings = get_settings()
 
+    docker_models = Path("/models")
+
+    # Base model directory
     if base_model_dir:
         local_base = Path(base_model_dir)
-    elif Path("/models/siglip2-base-patch16-512").is_dir():
-        local_base = Path("/models/siglip2-base-patch16-512")
+    elif (docker_models / "siglip2-base-patch16-512").is_dir():
+        local_base = docker_models / "siglip2-base-patch16-512"
+    elif docker_models.is_dir() and os.access(str(docker_models), os.W_OK):
+        local_base = docker_models / "siglip2-base-patch16-512"
+    elif docker_models.is_dir():
+        # Inside Docker when /models is mounted read-only, save downloaded base in media/models
+        local_base = settings.media_dir / "models" / "siglip2-base-patch16-512"
     else:
         local_base = BASE_DIR / "models" / "siglip2-base-patch16-512"
 
+    # Output directory
     if output_dir:
         out = Path(output_dir)
+    elif docker_models.is_dir() and os.access(str(docker_models), os.W_OK):
+        out = docker_models / "siglip2_v4_finetuned"
+    elif docker_models.is_dir():
+        # Inside Docker when /models is mounted read-only, write output to media/models
+        out = settings.media_dir / "models" / "siglip2_v4_finetuned"
     else:
         out = BASE_DIR / "models" / "siglip2_v4_finetuned"
 
-    manifest = settings.media_dir / "dataset_v4" / "v4_manifest.json"
+    # Manifest: prefer dataset_v4 if built, otherwise reuse existing dataset_v3
+    if (settings.media_dir / "dataset_v4" / "v4_manifest.json").is_file():
+        manifest = settings.media_dir / "dataset_v4" / "v4_manifest.json"
+    elif (settings.media_dir / "dataset_v3" / "v3_manifest.json").is_file():
+        manifest = settings.media_dir / "dataset_v3" / "v3_manifest.json"
+    else:
+        manifest = settings.media_dir / "dataset_v4" / "v4_manifest.json"
+
     return local_base, manifest, out
 
 

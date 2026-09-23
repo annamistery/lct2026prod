@@ -25,10 +25,17 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import os
 import re
 import sys
 import time
 from pathlib import Path
+
+# Ensure writable cache directories for container execution (same as scripts/import_from_csv.py)
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/matplotlib")
+os.environ.setdefault("HF_HOME", "/tmp/huggingface")
+os.environ.setdefault("TRANSFORMERS_CACHE", "/tmp/huggingface")
+os.environ.setdefault("TORCH_HOME", "/tmp/torch")
 
 from PIL import Image
 from sqlalchemy import delete, select
@@ -70,8 +77,8 @@ async def build_v4_catalog(limit: int | None = None, batch_size: int = 32, repla
 
     logger.info("Initialising SigLIP 2 v4 embedding service...")
     embeddings_service = SigLIP2EmbeddingService(
-        settings.siglip_v4_model_path,
-        settings.siglip_v4_base_model_path,
+        settings.resolved_siglip_v4_model_path,
+        settings.resolved_siglip_v4_base_model_path,
         settings.embedding_dimension_v4,
         skip_resize=True,
     )

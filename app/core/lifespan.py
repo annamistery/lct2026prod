@@ -135,8 +135,8 @@ async def lifespan(app: FastAPI):
 
         # v4 pipeline (SigLIP 2 768d, optional — loads only if model exists)
         try:
-            v4_model_path = settings.siglip_v4_model_path
-            v4_base_path = settings.siglip_v4_base_model_path
+            v4_model_path = settings.resolved_siglip_v4_model_path
+            v4_base_path = settings.resolved_siglip_v4_base_model_path
             if v4_model_path.is_dir():
                 embeddings_v4 = await asyncio.to_thread(
                     SigLIP2EmbeddingService, v4_model_path, v4_base_path,
