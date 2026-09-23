@@ -51,8 +51,12 @@ def _init_paths() -> tuple[Path, Path]:
 
 
 def _process_product(args: tuple) -> list[dict]:
-    """Worker: generate 116 augmented images for one product."""
-    idx, product_id, label_path_str, seed, dataset_dir_str = args
+    """Worker: generate 116 augmented images for one product.
+
+    args: (idx, product_id, source_path_str, bbox_or_none, seed, dataset_dir_str)
+    bbox_or_none: (x1, y1, x2, y2) ints or None (use full image)
+    """
+    idx, product_id, source_path_str, bbox, seed, dataset_dir_str = args
     try:
         sys.stdout.reconfigure(encoding="utf-8")
     except Exception:
@@ -63,18 +67,29 @@ def _process_product(args: tuple) -> list[dict]:
     os.environ.setdefault("OMP_NUM_THREADS", "1")
     os.environ.setdefault("MKL_NUM_THREADS", "1")
 
-    label_path = Path(label_path_str)
-    if not label_path.is_file():
+    source_path = Path(source_path_str)
+    if not source_path.is_file():
         return []
 
     try:
-        label_img = Image.open(label_path).convert("RGB")
+        source_img = Image.open(source_path).convert("RGB")
     except Exception as e:
         print(f"[skip] {product_id}: {e}")
         return []
 
+    # Crop with natural proportions (no squash to square)
+    if bbox is not None:
+        x1, y1, x2, y2 = bbox
+        x1 = max(0, x1)
+        y1 = max(0, y1)
+        x2 = min(source_img.width, x2)
+        y2 = min(source_img.height, y2)
+        label_crop = source_img.crop((x1, y1, x2, y2))
+    else:
+        label_crop = source_img
+
     # Letterbox 518×518 preserving proportions with zero-fill
-    canonical = letterbox_pil(label_img, CANONICAL_SIZE)
+    canonical = letterbox_pil(label_crop, CANONICAL_SIZE)
 
     # Product directory (inside the writable media mount)
     dataset_dir = Path(dataset_dir_str)
@@ -139,18 +154,40 @@ async def build_dataset(limit: int | None = None, workers: int | None = None, cl
 
     logger.info("Found %d products for v3 dataset", len(products))
 
-    # Prepare tasks
-    images_service = __import__("app.services.images", fromlist=["ImageService"]).ImageService
-    img_svc = images_service(settings.media_dir, settings.canonical_size, settings.max_upload_bytes, settings.max_image_pixels)
+    # Prepare tasks: detect label bboxes from source images
+    from app.services.images import ImageService
+    from app.services.detector import DetectorService
+
+    img_svc = ImageService(settings.media_dir, settings.canonical_size, settings.max_upload_bytes, settings.max_image_pixels)
+    detector = DetectorService(settings.yolo_model_path, settings.yolo_confidence)
+    logger.info("YOLO detector loaded — detecting bboxes for %d products...", len(products))
 
     tasks: list[tuple] = []
+    detect_t0 = time.perf_counter()
     for idx, product in enumerate(products):
-        label_path = img_svc.resolve(product.label_image_path) if product.label_image_path else None
-        if label_path is None or not label_path.is_file():
-            logger.warning("Skip %s: no label image", product.title[:40])
+        source_path = img_svc.resolve(product.source_image_path) if product.source_image_path else None
+        if source_path is None or not source_path.is_file():
+            logger.warning("Skip %s: no source image", product.title[:40])
             continue
+
+        # YOLO detect on source image to get bbox with natural proportions
+        try:
+            with Image.open(source_path) as src:
+                src_rgb = src.convert("RGB")
+                box = detector.best_box(src_rgb)
+        except Exception as e:
+            logger.warning("Skip %s: %s", product.title[:40], e)
+            continue
+
+        bbox = None
+        if box is not None:
+            bbox = (int(box[0]), int(box[1]), int(box[2]) + 1, int(box[3]) + 1)
+
         product_id = str(product.id)
-        tasks.append((idx, product_id, str(label_path), 42 + idx, str(dataset_dir)))
+        tasks.append((idx, product_id, str(source_path), bbox, 42 + idx, str(dataset_dir)))
+
+    detect_elapsed = time.perf_counter() - detect_t0
+    logger.info("YOLO detection done in %.1fs — %d products ready", detect_elapsed, len(tasks))
 
     if workers is None:
         workers = max(1, os.cpu_count() or 1)

@@ -28,6 +28,7 @@ sys.path.insert(0, str(ROOT_DIR))
 from app.core.config import get_settings
 from app.db.models.product import Product, ProductEmbeddingV3
 from app.services.augment import generate_augmented_cloud_v3
+from app.services.detector import DetectorService
 from app.services.embeddings import EmbeddingService
 from app.services.images import ImageService
 from app.services.query_prep_v3 import letterbox_pil
@@ -51,6 +52,8 @@ async def build_v3_catalog(limit: int | None = None, batch_size: int = 32, repla
     images_service = ImageService(
         settings.media_dir, settings.canonical_size, settings.max_upload_bytes, settings.max_image_pixels,
     )
+    detector = DetectorService(settings.yolo_model_path, settings.yolo_confidence)
+    logger.info("YOLO detector loaded for v3 crop extraction")
 
     async with session_factory() as session:
         query = select(Product).order_by(Product.created_at)
@@ -73,23 +76,35 @@ async def build_v3_catalog(limit: int | None = None, batch_size: int = 32, repla
         for idx, product in enumerate(products, 1):
             prod_start = time.perf_counter()
 
-            # 1. Load label image
-            label_img = None
-            if product.label_image_path:
-                cand = images_service.resolve(product.label_image_path)
-                if cand.is_file():
+            # 1. Load source image and re-detect label with YOLO
+            source_img = None
+            if product.source_image_path:
+                src_path = images_service.resolve(product.source_image_path)
+                if src_path.is_file():
                     try:
-                        with Image.open(cand) as raw:
-                            label_img = raw.convert("RGB")
+                        with Image.open(src_path) as raw:
+                            source_img = raw.convert("RGB")
                     except Exception:
-                        label_img = None
+                        source_img = None
 
-            if label_img is None:
-                logger.warning("[%d/%d] Skip %s: no label image", idx, total_products, product.title[:40])
+            if source_img is None:
+                logger.warning("[%d/%d] Skip %s: no source image", idx, total_products, product.title[:40])
                 continue
 
-            # 2. Letterbox 518×518 (preserve proportions, zero-fill)
-            canonical = letterbox_pil(label_img, CANONICAL_SIZE)
+            # 2. YOLO detect → crop with natural proportions (no squash to square)
+            box = detector.best_box(source_img)
+            if box is not None:
+                x1, y1, x2, y2 = int(box[0]), int(box[1]), int(box[2]), int(box[3])
+                x1 = max(0, x1)
+                y1 = max(0, y1)
+                x2 = min(source_img.width, x2 + 1)
+                y2 = min(source_img.height, y2 + 1)
+                label_crop = source_img.crop((x1, y1, x2, y2))
+            else:
+                label_crop = source_img
+
+            # 3. Letterbox 518×518 (preserve proportions, zero-fill)
+            canonical = letterbox_pil(label_crop, CANONICAL_SIZE)
 
             # 3. Generate v3 augmented cloud (116 images with reproducible seeds)
             aug_items = generate_augmented_cloud_v3(canonical, variants_per_aug=5, seed=42)

@@ -107,8 +107,9 @@ class SearchPipelineV3:
         scored: list[tuple[float, ProductCandidateV3]] = []
         for cand in candidates:
             try:
-                label_path = self.images.resolve(cand.product.label_image_path)
-                label_image = Image.open(label_path).convert("RGB")
+                # Use v3 letterbox crop (labels_v3/{id}.webp), not the old squashed label
+                v3_label_path = self.images.resolve(cand.image_path)
+                label_image = Image.open(v3_label_path).convert("RGB")
             except Exception:
                 scored.append((1.0 - cand.distance, cand))
                 continue
@@ -129,8 +130,9 @@ class SearchPipelineV3:
         for idx, cand in enumerate(candidates, 1):
             aug_image_url = None
             try:
-                label_path = self.images.resolve(cand.product.label_image_path)
-                label_image = Image.open(label_path).convert("RGB")
+                # Use v3 letterbox crop, not the old squashed label
+                v3_label_path = self.images.resolve(cand.image_path)
+                label_image = Image.open(v3_label_path).convert("RGB")
                 aug_image = self.reranker.regenerate_augment(label_image, cand.aug_name, cand.aug_seed)
                 aug_image_url = self.encode_image_data_url(aug_image)
             except Exception:
