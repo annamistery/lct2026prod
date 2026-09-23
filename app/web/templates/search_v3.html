@@ -1,0 +1,464 @@
+{% extends "base.html" %}
+
+{% block title %}Поиск v3 (DINOv2-base 768d + Seg Letterbox 518) — LCT2026{% endblock %}
+
+{% block content %}
+<style>
+.compare-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.compare-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.compare-card.winner-border {
+  border-color: var(--accent);
+  background: linear-gradient(180deg, rgba(74, 222, 128, 0.06), var(--surface));
+}
+.compare-header {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  margin-bottom: 8px;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.compare-header .badge-tag {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.compare-header .badge-tag.accent {
+  background: var(--accent);
+  color: #000;
+  font-weight: 700;
+}
+.compare-img-wrap {
+  width: 100%;
+  height: 220px;
+  background: #000;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.compare-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.zoomable {
+  cursor: zoom-in;
+  transition: transform 0.15s ease;
+}
+.zoomable:hover {
+  transform: scale(1.02);
+}
+.compare-hint {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 6px;
+}
+.lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.88);
+  backdrop-filter: blur(4px);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 20px;
+}
+.lightbox-content {
+  position: relative;
+  max-width: 92vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.lightbox-img {
+  max-width: 100%;
+  max-height: 82vh;
+  object-fit: contain;
+  border-radius: 6px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7);
+}
+.lightbox-caption {
+  margin-top: 12px;
+  color: #fff;
+  font-size: 14px;
+  text-align: center;
+  background: rgba(0, 0, 0, 0.6);
+  padding: 6px 16px;
+  border-radius: 20px;
+}
+.lightbox-close {
+  position: absolute;
+  top: -36px;
+  right: -10px;
+  color: #fff;
+  font-size: 32px;
+  cursor: pointer;
+}
+.winner-card {
+  display: flex;
+  gap: 20px;
+  background: var(--surface);
+  border: 2px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 24px;
+  align-items: center;
+}
+.winner-img {
+  width: 130px;
+  height: 170px;
+  object-fit: contain;
+  background: #000;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+.winner-badge {
+  display: inline-block;
+  background: var(--accent);
+  color: #000;
+  font-weight: 700;
+  font-size: 11px;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+.scores-row {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.score-badge {
+  background: var(--surface-2);
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #bbb;
+}
+.score-badge strong {
+  color: #fff;
+}
+.section-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+  margin-top: 24px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.file-item {
+  padding: 6px 10px;
+  font-size: 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #ccc;
+  word-break: break-all;
+  transition: background 0.15s;
+}
+.file-item:hover {
+  background: var(--surface-2);
+  color: #fff;
+}
+.file-item.active {
+  background: var(--accent) !important;
+  color: #000 !important;
+  font-weight: 700 !important;
+}
+.vote-bar {
+  display: inline-block;
+  height: 6px;
+  background: var(--accent);
+  border-radius: 3px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+</style>
+
+<div class="page-header">
+  <div>
+    <h1>Поиск v3 (DINOv2-base 768d + Seg Letterbox 518)</h1>
+    <span style="color: var(--muted); font-size: 13px;">
+      Пайплайн v3: BBox Detect -> Seg -> Hull Clean -> Crop -> Letterbox 518 (zero-fill) -> DINOv2-base 768d -> pgvector v3 + Vote Ranking
+    </span>
+  </div>
+</div>
+
+<div style="display: flex; gap: 20px; height: calc(100vh - 130px);">
+  <div style="width: 310px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; display: flex; flex-direction: column; flex-shrink: 0;">
+    <label style="font-size: 11px; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; font-weight: 600;">Каталог тестов:</label>
+    <select id="source-select" style="width: 100%; padding: 8px 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 13px; outline: none; margin-bottom: 10px;">
+      <option value="tmp1">Тест 1 (set48 / 27 каталожных фото)</option>
+      <option value="tmp2">Тест 2 (vina / 25 полевых фото)</option>
+      <option value="imports">Каталог (imports/images)</option>
+      <option value="catalog">Кропы базы (media/products)</option>
+    </select>
+    <input type="text" id="filter-input" placeholder="Поиск по имени файла..." 
+           style="width: 100%; padding: 8px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 13px; outline: none; margin-bottom: 10px;">
+    <div id="files-list" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 3px; margin-bottom: 10px;">
+      <div style="color: var(--muted); padding: 8px; font-size: 12px;">Загрузка файлов...</div>
+    </div>
+    <div class="dropzone" id="dropzone" style="padding: 12px; border: 1px dashed var(--border); border-radius: 6px; text-align: center; cursor: pointer; background: var(--surface-2);">
+      <div style="font-size: 12px; color: #fff; font-weight: 600;">+ Загрузить свой файл</div>
+      <div style="font-size: 10px; color: var(--muted);">кликните или перетащите сюда</div>
+      <input type="file" id="file-input" accept="image/jpeg,image/png,image/webp" style="display: none;">
+    </div>
+  </div>
+
+  <div style="flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; overflow-y: auto;">
+    <div id="status-line" style="font-size: 15px; font-weight: 600; color: #fff; margin-bottom: 16px;">
+      Выберите файл слева для мгновенного поиска v3
+    </div>
+    <div id="loading" style="display: none; text-align: center; padding: 30px;">
+      <div style="font-size: 16px; color: var(--accent); margin-bottom: 8px;">Seg + Letterbox 518 + DINOv2-base 768d...</div>
+      <span style="color: var(--muted); font-size: 12px;">BBox -> Seg -> Hull -> Crop -> Letterbox 518 -> DINOv2-base -> pgvector v3 + Votes</span>
+    </div>
+    <div id="results-area" style="display: none;">
+      <div class="section-title">
+        <span>Сопоставление изображений v3</span>
+        <span style="font-size: 12px; color: var(--muted); font-weight: normal;">(кликните для зума)</span>
+      </div>
+      <div class="compare-grid" id="compare-grid"></div>
+      <div id="winner-box"></div>
+      <div class="section-title">
+        <span>Кандидаты Top-5 v3</span>
+        <span style="font-size: 12px; color: var(--muted); font-weight: normal;">(DINOv2-base 768d + голоса ближайших векторов)</span>
+      </div>
+      <div id="candidates-grid" class="grid"></div>
+    </div>
+  </div>
+</div>
+
+<div id="lightbox" class="lightbox-overlay" style="display: none;">
+  <div class="lightbox-content">
+    <span class="lightbox-close" id="lightbox-close">&times;</span>
+    <img id="lightbox-img" class="lightbox-img" src="" alt="Zoom">
+    <div id="lightbox-caption" class="lightbox-caption"></div>
+  </div>
+</div>
+
+<script>
+const sourceSelect = document.getElementById('source-select');
+const filesList = document.getElementById('files-list');
+const filterInput = document.getElementById('filter-input');
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('file-input');
+const statusLine = document.getElementById('status-line');
+const loading = document.getElementById('loading');
+const resultsArea = document.getElementById('results-area');
+const compareGrid = document.getElementById('compare-grid');
+const winnerBox = document.getElementById('winner-box');
+const candidatesGrid = document.getElementById('candidates-grid');
+const lightbox = document.getElementById('lightbox');
+const lightboxImg = document.getElementById('lightbox-img');
+const lightboxCaption = document.getElementById('lightbox-caption');
+
+let allFiles = [];
+let currentOrigUrl = null;
+
+function openLightbox(src, cap) {
+  lightboxImg.src = src;
+  lightboxCaption.textContent = cap || '';
+  lightbox.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+function closeLightbox() {
+  lightbox.style.display = 'none';
+  lightboxImg.src = '';
+  document.body.style.overflow = '';
+}
+lightbox.addEventListener('click', (e) => { if (e.target === lightbox || e.target === lightboxImg || e.target.id === 'lightbox-close') closeLightbox(); });
+window.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeLightbox(); });
+document.addEventListener('click', (e) => {
+  const z = e.target.closest('.zoomable');
+  if (z) openLightbox(z.getAttribute('data-full-src') || z.src, z.getAttribute('data-caption') || z.alt);
+});
+
+dropzone.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.style.borderColor = 'var(--accent)'; });
+dropzone.addEventListener('dragleave', () => { dropzone.style.borderColor = 'var(--border)'; });
+dropzone.addEventListener('drop', (e) => { e.preventDefault(); dropzone.style.borderColor = 'var(--border)'; if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0], e.dataTransfer.files[0].name); });
+fileInput.addEventListener('change', () => { if (fileInput.files.length) handleFile(fileInput.files[0], fileInput.files[0].name); });
+
+sourceSelect.addEventListener('change', () => loadFiles());
+filterInput.addEventListener('input', () => renderFiles());
+
+async function loadFiles() {
+  filesList.innerHTML = '<div style="color: var(--muted); padding: 8px; font-size: 12px;">Загрузка...</div>';
+  try {
+    const res = await fetch(`/api/rectify/files?source=${sourceSelect.value}`);
+    allFiles = await res.json();
+    renderFiles();
+    if (allFiles.length > 0) selectFile(allFiles[0]);
+    else { statusLine.textContent = 'Нет изображений'; resultsArea.style.display = 'none'; }
+  } catch (err) {
+    filesList.innerHTML = `<div style="color: #ff4757; padding: 8px; font-size: 12px;">${err.message}</div>`;
+  }
+}
+
+function renderFiles() {
+  const q = filterInput.value.trim().toLowerCase();
+  const filtered = q ? allFiles.filter(f => f.toLowerCase().includes(q)) : allFiles;
+  if (!filtered.length) { filesList.innerHTML = '<div style="color: var(--muted); padding: 8px; font-size: 12px;">Ничего</div>'; return; }
+  filesList.innerHTML = filtered.map(f => `<div class="file-item" data-filename="${f}" onclick="selectFile('${f}')">${f}</div>`).join('');
+}
+
+async function selectFile(filename) {
+  document.querySelectorAll('.file-item').forEach(el => el.classList.toggle('active', el.dataset.filename === filename));
+  statusLine.textContent = `Загрузка и поиск v3 для ${filename}...`;
+  try {
+    const res = await fetch(`/api/rectify/image?source=${sourceSelect.value}&filename=${filename}`);
+    if (!res.ok) throw new Error(`Не удалось загрузить ${filename}`);
+    const blob = await res.blob();
+    handleFile(new File([blob], filename, { type: blob.type || 'image/jpeg' }), filename);
+  } catch (err) { statusLine.textContent = `Ошибка: ${err.message}`; }
+}
+
+async function handleFile(file, displayName) {
+  if (currentOrigUrl) URL.revokeObjectURL(currentOrigUrl);
+  currentOrigUrl = URL.createObjectURL(file);
+  statusLine.textContent = `Поиск v3 для: ${displayName || file.name}...`;
+  loading.style.display = 'block';
+  resultsArea.style.display = 'none';
+  compareGrid.innerHTML = '';
+  winnerBox.innerHTML = '';
+  candidatesGrid.innerHTML = '';
+
+  const fd = new FormData();
+  fd.append('image', file);
+  fd.append('k', '5');
+
+  try {
+    const res = await fetch('/api/v3/search', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Ошибка v3');
+    statusLine.textContent = `v3: ${displayName || file.name} (${data.timings.total_ms} мс)`;
+    renderResults(data, currentOrigUrl);
+  } catch (err) { statusLine.textContent = `Ошибка: ${err.message}`; }
+  finally { loading.style.display = 'none'; }
+}
+
+function renderResults(data, origUrl) {
+  resultsArea.style.display = 'block';
+  const w = data.winner;
+  const queryUrl = data.query_crop || origUrl;
+  const bboxUrl = data.bbox_crop || origUrl;
+  const wImgUrl = w ? w.image_url : '';
+  const wTitle = w ? w.title : 'Не найдено';
+
+  compareGrid.innerHTML = `
+    <div class="compare-card">
+      <div class="compare-header"><span>1. Оригинал</span><span class="badge-tag">Фото</span></div>
+      <div class="compare-img-wrap"><img class="compare-img zoomable" src="${origUrl}" data-caption="Оригинал"></div>
+    </div>
+    <div class="compare-card">
+      <div class="compare-header"><span>2. BBox кроп</span><span class="badge-tag">YOLO</span></div>
+      <div class="compare-img-wrap"><img class="compare-img zoomable" src="${bboxUrl}" data-caption="BBox кроп"></div>
+    </div>
+    <div class="compare-card" style="border-color: #00d2d3;">
+      <div class="compare-header">
+        <span style="color: #00d2d3;">3. Seg Letterbox 518</span>
+        <span class="badge-tag" style="background: rgba(0, 210, 211, 0.2); color: #00d2d3;">${data.is_fallback ? 'Fallback' : 'Seg + Hull'}</span>
+      </div>
+      <div class="compare-img-wrap"><img class="compare-img zoomable" src="${queryUrl}" data-caption="Seg Letterbox 518 (query v3)"></div>
+    </div>
+    <div class="compare-card winner-border">
+      <div class="compare-header"><span style="color: var(--accent);">4. Top-1</span><span class="badge-tag accent">v3</span></div>
+      <div class="compare-img-wrap">${wImgUrl ? `<img class="compare-img zoomable" src="${wImgUrl}" data-caption="Top-1: ${wTitle}">` : '<div style="color: var(--muted);">Не найдено</div>'}</div>
+    </div>
+  `;
+
+  if (w) {
+    const sim = (w.dino_similarity * 100).toFixed(1);
+    const vr = (w.vote_ratio * 100).toFixed(0);
+    winnerBox.innerHTML = `
+      <div class="winner-card">
+        <img class="winner-img zoomable" src="${w.image_url}" data-caption="Top-1: ${w.title}">
+        <div style="flex: 1;">
+          <span class="winner-badge">Top-1 v3</span>
+          <div style="font-size: 18px; font-weight: 700; color: #fff; margin-bottom: 4px;">
+            <a href="/products/${w.product_id}" style="color: #fff;">${w.title}</a>
+          </div>
+          <div style="color: var(--muted); font-size: 13px; margin-bottom: 8px;">${w.manufacturer}</div>
+          <div class="scores-row">
+            <div class="score-badge">DINO: <strong style="color: #2ed573;">${sim}%</strong></div>
+            <div class="score-badge">Голоса: <strong>${w.vote_count}</strong> (${vr}%)</div>
+            <div class="score-badge">Aug: <strong>${w.matched_aug_name}</strong></div>
+            ${w.sift_score != null ? `<div class="score-badge">SIFT: <strong>${(w.sift_score * 100).toFixed(1)}%</strong> (${w.sift_inliers} inliers)</div>` : ''}
+            <div class="score-badge">Время: <strong>${data.timings.total_ms}мс</strong> (Prep: ${data.timings.query_prep_ms}мс, DINO: ${data.timings.embedding_ms}мс, DB: ${data.timings.pgvector_ms}мс${data.timings.sift_ms != null ? `, SIFT: ${data.timings.sift_ms}мс` : ''})</div>
+          </div>
+        </div>
+      </div>
+    `;
+  } else {
+    winnerBox.innerHTML = '<div style="padding: 20px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 24px; color: var(--muted);">Совпадений не найдено.</div>';
+  }
+
+  if (data.results && data.results.length) {
+    candidatesGrid.innerHTML = data.results.map((r, i) => {
+      const sim = (r.dino_similarity * 100).toFixed(1);
+      const vr = (r.vote_ratio * 100).toFixed(0);
+      const barW = Math.min(80, r.vote_ratio * 80);
+      return `
+        <div class="card">
+          <div class="card-img-wrap" style="height: 160px; background: #000; overflow: hidden; display: flex; align-items: center; justify-content: center;">
+            <img class="zoomable" src="${r.image_url}" data-caption="#${i+1} v3: ${r.title} | DINO: ${sim}% | Votes: ${r.vote_count}" style="max-width: 100%; max-height: 100%; object-fit: contain;">
+          </div>
+          <div class="card-body">
+            <div style="font-size: 11px; color: var(--accent); font-weight: 600; margin-bottom: 4px;">#${i+1} v3</div>
+            <div class="card-title" style="font-size: 14px;"><a href="/products/${r.product_id}">${r.title}</a></div>
+            <div class="card-meta" style="font-size: 12px; margin-bottom: 8px;">${r.manufacturer}</div>
+            <div style="display: flex; gap: 8px; font-size: 11px; color: var(--muted); flex-wrap: wrap;">
+              <span>DINO: <strong style="color: #fff;">${sim}%</strong></span>
+              <span>Голоса: <strong style="color: #fff;">${r.vote_count}</strong> (${vr}%) <span class="vote-bar" style="width: ${barW}px;"></span></span>
+              <span>Aug: ${r.matched_aug_name}</span>
+              ${r.sift_score != null ? `<span>SIFT: ${(r.sift_score * 100).toFixed(1)}%</span>` : ''}
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  } else {
+    candidatesGrid.innerHTML = '<div style="color: var(--muted); padding: 12px;">Нет кандидатов</div>';
+  }
+}
+
+loadSources().then(loadFiles);
+
+async function loadSources() {
+  try {
+    const res = await fetch('/api/rectify/sources');
+    const sources = await res.json();
+    if (sources && sources.length) {
+      sourceSelect.innerHTML = sources.map(s => `<option value="${s.id}">${s.label}</option>`).join('');
+    }
+  } catch (err) { console.error('loadSources error', err); }
+}
+</script>
+{% endblock %}

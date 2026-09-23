@@ -99,6 +99,17 @@ async def search_v2_page(request: Request):
     )
 
 
+@router.get("/search-v3", response_class=HTMLResponse)
+async def search_v3_page(request: Request):
+    return templates.TemplateResponse(
+        "search_v3.html",
+        {
+            "request": request,
+            "active": "search_v3",
+        },
+    )
+
+
 @router.get("/import", response_class=HTMLResponse)
 async def import_page(
     request: Request,

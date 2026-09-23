@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.router import router
 from app.api.search.v1.router import router as search_v1_router
 from app.api.search.v2.router import router as search_v2_router
+
 from app.core.config import get_settings
 from app.core.lifespan import lifespan
 from app.core.logging import configure_logging
