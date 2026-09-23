@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.pipelines.search.v1.pipeline import SearchPipelineV1
 from app.pipelines.search.v2.pipeline import SearchPipelineV2
 from app.pipelines.search.v3.pipeline import SearchPipelineV3
+from app.pipelines.search.v4.pipeline import SearchPipelineV4
 from app.services.batch_import import BatchImportService
 from app.services.detector import DetectorService
 from app.services.images import ImageService
@@ -80,5 +81,12 @@ def get_pipeline_v3(request: Request) -> SearchPipelineV3:
     pipeline = request.app.state.pipeline_v3
     if pipeline is None:
         raise HTTPException(status_code=503, detail="Search pipeline v3 is not ready (model not loaded)")
+    return pipeline
+
+
+def get_pipeline_v4(request: Request) -> SearchPipelineV4:
+    pipeline = request.app.state.pipeline_v4
+    if pipeline is None:
+        raise HTTPException(status_code=503, detail="Search pipeline v4 is not ready (SigLIP2 model not loaded)")
     return pipeline
 

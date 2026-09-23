@@ -41,6 +41,18 @@ class Settings(BaseSettings):
     enable_sift_rerank: bool = Field(False)
     cors_origins: str = ""
     log_level: str = "INFO"
+    # v4 SigLIP 2 pipeline
+    siglip_v4_model_path: Path = Path("models/siglip2_v4_finetuned")
+    siglip_v4_base_model_path: Path = Path("models/siglip2-base-patch16-512")
+    embedding_model_v4_name: str = "siglip2-v4"
+    embedding_dimension_v4: int = 768
+    canonical_size_v4: int = 512
+    enable_ocr_rerank_v4: bool = True
+    ocr_rerank_weight_sim: float = 0.5
+    ocr_rerank_weight_vintage: float = 0.3
+    ocr_rerank_weight_text: float = 0.2
+    v4_vote_pool_size: int = Field(50, ge=1, le=500)
+    v4_candidate_pool_size: int = Field(20, ge=1, le=100)
     sommelier_csv_path: Path = Path("app/sommelier/data/wines_integrated.csv")
     sommelier_max_sessions: int = Field(500, ge=1, le=100_000)
     sommelier_session_ttl_seconds: int = Field(3600, ge=60, le=86_400)

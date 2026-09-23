@@ -11,14 +11,17 @@ from app.pipelines.search.v1.reranking import SiftReranker
 from app.pipelines.search.v2.pipeline import SearchPipelineV2
 from app.pipelines.search.v3.pipeline import SearchPipelineV3
 from app.pipelines.search.v3.reranking import SiftRerankerV3
+from app.pipelines.search.v4.pipeline import SearchPipelineV4
 from app.services.batch_import import BatchImportService
 from app.services.detector import DetectorService
 from app.services.embeddings import EmbeddingService
 from app.services.images import ImageService
+from app.services.ocr_reranker import OcrReranker
 from app.services.product_ingestion import ProductIngestionService
 from app.services.query_prep_v3 import QueryPrepV3
 from app.services.rectification import RectificationService
 from app.services.segmenter import SegmenterService
+from app.services.siglip_embeddings import SigLIP2EmbeddingService
 from app.services.sommelier_service import SommelierService
 
 logger = logging.getLogger(__name__)
@@ -38,6 +41,7 @@ async def lifespan(app: FastAPI):
     app.state.pipeline_v1 = None
     app.state.pipeline_v2 = None
     app.state.pipeline_v3 = None
+    app.state.pipeline_v4 = None
     app.state.ingestion = None
     app.state.batch_import = None
     app.state.import_tasks = set()
@@ -128,6 +132,43 @@ async def lifespan(app: FastAPI):
                 logger.warning("v3 DINOv2 model not found at %s — v3 pipeline disabled", v3_model_path)
         except Exception:
             logger.exception("v3 pipeline failed to load")
+
+        # v4 pipeline (SigLIP 2 768d, optional — loads only if model exists)
+        try:
+            v4_model_path = settings.siglip_v4_model_path
+            v4_base_path = settings.siglip_v4_base_model_path
+            if v4_model_path.is_dir():
+                embeddings_v4 = await asyncio.to_thread(
+                    SigLIP2EmbeddingService, v4_model_path, v4_base_path,
+                    settings.embedding_dimension_v4, True,
+                )
+                ocr_reranker: OcrReranker | None = None
+                if settings.enable_ocr_rerank_v4:
+                    try:
+                        ocr_reranker = OcrReranker(
+                            w_sim=settings.ocr_rerank_weight_sim,
+                            w_vintage=settings.ocr_rerank_weight_vintage,
+                            w_text=settings.ocr_rerank_weight_text,
+                        )
+                        logger.info("OCR reranker initialised for v4")
+                    except ImportError:
+                        logger.warning("v4 OCR reranker disabled: paddleocr/easyocr not installed")
+                pipeline_v4 = SearchPipelineV4(
+                    embeddings=embeddings_v4,
+                    images=images,
+                    query_prep=query_prep_v3,
+                    ocr_reranker=ocr_reranker,
+                    gpu_semaphore=asyncio.Semaphore(settings.gpu_concurrency),
+                    candidate_pool_size=settings.v4_candidate_pool_size,
+                    vote_pool_size=settings.v4_vote_pool_size,
+                    enable_ocr_rerank=settings.enable_ocr_rerank_v4,
+                )
+                app.state.pipeline_v4 = pipeline_v4
+                logger.info("v4 pipeline loaded (SigLIP2 768d, canonical %d)", settings.canonical_size_v4)
+            else:
+                logger.warning("v4 SigLIP2 model not found at %s — v4 pipeline disabled", v4_model_path)
+        except Exception:
+            logger.exception("v4 pipeline failed to load")
 
         ingestion = ProductIngestionService(images, detector, pipeline, settings.embedding_model_name)
         app.state.ingestion = ingestion
