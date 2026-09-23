@@ -244,10 +244,22 @@ def finetune(
         print("Full fine-tune: all parameters trainable")
 
     model = model.to(device)
+    if hasattr(model, "gradient_checkpointing_enable"):
+        try:
+            model.gradient_checkpointing_enable()
+            print("Gradient checkpointing enabled")
+        except Exception as e:
+            print(f"Gradient checkpointing: {e}")
     model.train()
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
+
+    use_cuda = device.type == "cuda"
+    amp_dtype = torch.bfloat16 if (use_cuda and torch.cuda.is_bf16_supported()) else torch.float16
+    scaler = torch.amp.GradScaler("cuda", enabled=(use_cuda and amp_dtype == torch.float16))
+    if use_cuda:
+        print(f"AMP enabled: {amp_dtype} (scaler={'on' if scaler.is_enabled() else 'off'})")
 
     samples_per_class = max(2, batch_size // classes_per_batch)
     batch_gen = _class_balanced_batches(labels, classes_per_batch, samples_per_class, seed=seed)
@@ -263,24 +275,32 @@ def finetune(
             inputs = processor(images=images, return_tensors="pt")["pixel_values"].to(device)
             labels_t = torch.from_numpy(labels[idx]).long().to(device)
 
-            outputs = model(pixel_values=inputs)
-            if hasattr(outputs, "image_embeds") and outputs.image_embeds is not None:
-                feats = outputs.image_embeds
-            elif hasattr(outputs, "pooler_output") and outputs.pooler_output is not None:
-                feats = outputs.pooler_output
-            elif hasattr(outputs, "vision_model_output") and outputs.vision_model_output is not None:
-                vo = outputs.vision_model_output
-                feats = vo.pooler_output if getattr(vo, "pooler_output", None) is not None else vo.last_hidden_state[:, 0, :]
-            else:
-                feats = outputs.last_hidden_state[:, 0, :]
-            feats = F.normalize(feats, dim=-1)
+            with torch.amp.autocast(device_type=device.type, dtype=amp_dtype, enabled=use_cuda):
+                outputs = model(pixel_values=inputs)
+                if hasattr(outputs, "image_embeds") and outputs.image_embeds is not None:
+                    feats = outputs.image_embeds
+                elif hasattr(outputs, "pooler_output") and outputs.pooler_output is not None:
+                    feats = outputs.pooler_output
+                elif hasattr(outputs, "vision_model_output") and outputs.vision_model_output is not None:
+                    vo = outputs.vision_model_output
+                    feats = vo.pooler_output if getattr(vo, "pooler_output", None) is not None else vo.last_hidden_state[:, 0, :]
+                else:
+                    feats = outputs.last_hidden_state[:, 0, :]
+                feats = F.normalize(feats, dim=-1)
 
-            loss = supervised_contrastive_loss(feats, labels_t, temperature=0.1)
+                loss = supervised_contrastive_loss(feats, labels_t, temperature=0.1)
 
             optimizer.zero_grad()
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-            optimizer.step()
+            if scaler.is_enabled():
+                scaler.scale(loss).backward()
+                scaler.unscale_(optimizer)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+                optimizer.step()
 
             epoch_loss += loss.item()
 
@@ -307,7 +327,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Fine-tune SigLIP 2 LoRA for v4 label embeddings")
     parser.add_argument("--model", default=DEFAULT_BASE_MODEL, help=f"Base model name (default: {DEFAULT_BASE_MODEL})")
     parser.add_argument("--epochs", type=int, default=20)
-    parser.add_argument("--batch-size", type=int, default=32)
+    parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--classes-per-batch", type=int, default=8)
     parser.add_argument("--steps-per-epoch", type=int, default=300)
     parser.add_argument("--lr", type=float, default=1e-4)
