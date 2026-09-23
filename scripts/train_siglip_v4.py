@@ -263,9 +263,14 @@ def finetune(
             inputs = processor(images=images, return_tensors="pt")["pixel_values"].to(device)
             labels_t = torch.from_numpy(labels[idx]).long().to(device)
 
-            outputs = model(inputs)
-            if hasattr(outputs, "pooler_output") and outputs.pooler_output is not None:
+            outputs = model(pixel_values=inputs)
+            if hasattr(outputs, "image_embeds") and outputs.image_embeds is not None:
+                feats = outputs.image_embeds
+            elif hasattr(outputs, "pooler_output") and outputs.pooler_output is not None:
                 feats = outputs.pooler_output
+            elif hasattr(outputs, "vision_model_output") and outputs.vision_model_output is not None:
+                vo = outputs.vision_model_output
+                feats = vo.pooler_output if getattr(vo, "pooler_output", None) is not None else vo.last_hidden_state[:, 0, :]
             else:
                 feats = outputs.last_hidden_state[:, 0, :]
             feats = F.normalize(feats, dim=-1)
