@@ -35,12 +35,14 @@ class RectificationService:
         target_size: int = 256,
         padding_ratio: float = 0.05,
         fill_color: tuple[int, int, int] = (20, 20, 20),
+        bottom_curve_damping: float = 0.90,
     ):
         self.detector = detector
         self.segmenter = segmenter
         self.target_size = target_size
         self.padding_ratio = padding_ratio
         self.fill_color = fill_color
+        self.bottom_curve_damping = bottom_curve_damping
 
     @staticmethod
     def order_points(pts: np.ndarray) -> np.ndarray:
@@ -147,10 +149,7 @@ class RectificationService:
             heights = y_bots_raw - y_tops_raw
             med_h = float(np.median(heights))
 
-            # CRITICAL FIX: Retain ONLY solid body columns where the label spans
-            # at least 65% of its typical median height. This completely discards
-            # outer edge columns where the bottom is missing (which falsely forced y_bot
-            # into the upper half of the label and caused massive upward pinching of the bottom).
+            # Filter out edge columns with incomplete height (<65% of median)
             full_cols = np.where(heights >= 0.65 * med_h)[0]
             if len(full_cols) < 15:
                 full_cols = np.arange(len(xs_raw))
@@ -167,6 +166,11 @@ class RectificationService:
             X_rel = xs_clean - x_mid
             poly_top = np.polyfit(X_rel, y_tops_clean, 2)
             poly_bot = np.polyfit(X_rel, y_bots_clean, 2)
+
+            # Dampen bottom quadratic arch curvature by configured factor (default 0.90 = -10%)
+            # to prevent excessive upward pulling of the lower label content
+            if self.bottom_curve_damping > 0.0:
+                poly_bot[0] *= float(self.bottom_curve_damping)
 
             # 5. Build Remap Grid:
             # - Straightens top curve into line Y=0
@@ -372,4 +376,6 @@ class RectificationService:
             seg_ms=float(seg_ms),
             warp_ms=float(warp_ms),
             total_ms=float(total_ms),
+            offset_x=float(crop_xtl),
+            offset_y=float(crop_ytl),
         )
