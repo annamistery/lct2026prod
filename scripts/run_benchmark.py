@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
-"""Unified benchmark runner: evaluates v1 vs v2 across all test packs."""
+"""Unified benchmark runner: evaluates v1 vs v2 across all test packs.
+
+Writes predictions and reports to a writable media directory (/media/benchmark),
+preventing read-only filesystem errors in Docker.
+"""
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 import time
@@ -11,8 +16,50 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parent.parent
 
 
-def run_participant_test(pack_dir: Path, endpoint: str, output_file: Path) -> bool:
-    """Executes the official participant_test.sh script inside pack_dir."""
+def get_writable_dir(custom_path: Path | None = None) -> Path:
+    """Finds a guaranteed writable directory for benchmark outputs."""
+    if custom_path is not None:
+        custom_path.mkdir(parents=True, exist_ok=True)
+        return custom_path
+
+    candidates = [
+        Path("/media/benchmark"),
+        ROOT_DIR / "media" / "benchmark",
+        Path("/tmp/benchmark"),
+        Path("media/benchmark"),
+    ]
+
+    for cand in candidates:
+        try:
+            cand.mkdir(parents=True, exist_ok=True)
+            # Test write access
+            test_file = cand / ".write_test"
+            test_file.write_text("ok", encoding="utf-8")
+            test_file.unlink(missing_ok=True)
+            return cand
+        except Exception:
+            continue
+
+    # Fallback to current working directory
+    fallback = Path("benchmark_results")
+    fallback.mkdir(parents=True, exist_ok=True)
+    return fallback
+
+
+def find_pack_dir(pack_name: str) -> Path | None:
+    candidates = [
+        ROOT_DIR / "tmp" / pack_name,
+        Path("/srv/app/tmp") / pack_name,
+        Path("tmp") / pack_name,
+    ]
+    for cand in candidates:
+        if cand.is_dir() and (cand / "queries.tsv").is_file():
+            return cand
+    return None
+
+
+def run_participant_test(pack_dir: Path, endpoint: str, output_file: Path, cwd: Path) -> bool:
+    """Executes participant_test.sh inside a writable working directory."""
     script = pack_dir / "participant_test.sh"
     manifest = pack_dir / "queries.tsv"
     images = pack_dir / "queries"
@@ -32,13 +79,13 @@ def run_participant_test(pack_dir: Path, endpoint: str, output_file: Path) -> bo
         str(output_file),
     ]
 
-    print(f"  > Запуск: {cmd[0]} {script.name} -> {endpoint} ...")
+    print(f"  > Запуск: {script.name} -> {endpoint} ...")
     start = time.perf_counter()
-    res = subprocess.run(cmd, cwd=pack_dir, capture_output=True, text=True)
+    res = subprocess.run(cmd, cwd=str(cwd), capture_output=True, text=True)
     elapsed = time.perf_counter() - start
 
     if res.returncode != 0:
-        print(f"  [ОШИБКА] Скрипт завершился с кодом {res.returncode}: {res.stderr.strip()}", file=sys.stderr)
+        print(f"  [ОШИБКА] Скрипт завершился с кодом {res.returncode}:\n{res.stderr.strip()}", file=sys.stderr)
         return False
 
     print(f"  ✓ Завершено за {elapsed:.1f}с. Сохранено в {output_file.name}")
@@ -99,16 +146,24 @@ def evaluate_pack(mapping_file: Path, preds_file: Path) -> dict:
 def main():
     parser = argparse.ArgumentParser(description="Run complete v1 vs v2 evaluation benchmark")
     parser.add_argument("--host", default="http://127.0.0.1:8030", help="Base URL of backend (default: http://127.0.0.1:8030)")
+    parser.add_argument("--out-dir", type=Path, default=None, help="Directory for output predictions (defaults to /media/benchmark)")
     parser.add_argument("--skip-run", action="store_true", help="Skip running participant_test.sh, analyze existing predictions")
     args = parser.parse_args()
 
-    pack1 = ROOT_DIR / "tmp" / "1"
-    pack2 = ROOT_DIR / "tmp" / "2"
+    pack1 = find_pack_dir("1")
+    pack2 = find_pack_dir("2")
 
-    p1_v1_out = pack1 / "predictions_v1.jsonl"
-    p1_v2_out = pack1 / "predictions_v2.jsonl"
-    p2_v1_out = pack2 / "predictions_v1.jsonl"
-    p2_v2_out = pack2 / "predictions_v2.jsonl"
+    if not pack1 or not pack2:
+        print("ОШИБКА: Не найдены директории с тестовыми пакетами tmp/1 или tmp/2!", file=sys.stderr)
+        sys.exit(1)
+
+    out_dir = get_writable_dir(args.out_dir)
+    print(f"Директория для сохранения результатов бенчмарка: {out_dir}")
+
+    p1_v1_out = out_dir / "p1_predictions_v1.jsonl"
+    p1_v2_out = out_dir / "p1_predictions_v2.jsonl"
+    p2_v1_out = out_dir / "p2_predictions_v1.jsonl"
+    p2_v2_out = out_dir / "p2_predictions_v2.jsonl"
 
     endpoint_v1 = f"{args.host.rstrip('/')}/api/v1/eval/predict"
     endpoint_v2 = f"{args.host.rstrip('/')}/api/v2/eval/predict"
@@ -119,16 +174,16 @@ def main():
         print("=" * 80)
 
         print("\n[1/4] Пакет 1 (set48 / 27 каталожных фото) -> Версия v1 (чистый DINOv2 без реранка)...")
-        run_participant_test(pack1, endpoint_v1, p1_v1_out)
+        run_participant_test(pack1, endpoint_v1, p1_v1_out, cwd=out_dir)
 
         print("\n[2/4] Пакет 1 (set48 / 27 каталожных фото) -> Версия v2 (каскад + матрицы)...")
-        run_participant_test(pack1, endpoint_v2, p1_v2_out)
+        run_participant_test(pack1, endpoint_v2, p1_v2_out, cwd=out_dir)
 
         print("\n[3/4] Пакет 2 (vina / 25 полевых фото) -> Версия v1 (чистый DINOv2 без реранка)...")
-        run_participant_test(pack2, endpoint_v1, p2_v1_out)
+        run_participant_test(pack2, endpoint_v1, p2_v1_out, cwd=out_dir)
 
         print("\n[4/4] Пакет 2 (vina / 25 полевых фото) -> Версия v2 (каскад + матрицы)...")
-        run_participant_test(pack2, endpoint_v2, p2_v2_out)
+        run_participant_test(pack2, endpoint_v2, p2_v2_out, cwd=out_dir)
 
     # Evaluate results
     p1_v1 = evaluate_pack(pack1 / "mapping.json", p1_v1_out)
@@ -195,7 +250,7 @@ def main():
                 still_fail.append((qid, exp, d1.get("predicted"), d2.get("predicted")))
 
         if fixed:
-            print(f"  🎉 ИСПРАВЛЕНО в v2 ({len(fixed)} шт.):")
+            print(f"  ✓ ИСПРАВЛЕНО в v2 ({len(fixed)} шт.):")
             for qid, exp, p1, p2 in fixed:
                 print(f"     [+] {qid}: ожидался {exp} | v1 дал '{p1}' ➔ v2 дал '{p2}' (ТОЧНО)")
         else:
