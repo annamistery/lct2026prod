@@ -7,12 +7,16 @@ from transformers import AutoImageProcessor, AutoModel
 
 
 class EmbeddingService:
-    def __init__(self, model_path: Path, base_model_path: Path, expected_dimension: int):
+    def __init__(self, model_path: Path, base_model_path: Path, expected_dimension: int, skip_resize: bool = False):
         if not model_path.is_dir():
             raise FileNotFoundError(f"DINO model not found: {model_path}")
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.skip_resize = skip_resize
         processor_path = model_path if (model_path / "preprocessor_config.json").exists() else base_model_path
         self.processor = AutoImageProcessor.from_pretrained(str(processor_path), local_files_only=True, use_fast=False)
+        if skip_resize:
+            self.processor.do_resize = False
+            self.processor.do_center_crop = False
         if (model_path / "adapter_config.json").exists():
             if not base_model_path.is_dir():
                 raise FileNotFoundError(f"DINO base model not found: {base_model_path}")

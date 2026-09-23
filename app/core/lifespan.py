@@ -106,6 +106,7 @@ async def lifespan(app: FastAPI):
             if v3_model_path.is_dir():
                 embeddings_v3 = await asyncio.to_thread(
                     EmbeddingService, v3_model_path, v3_base_path, settings.embedding_dimension_v3,
+                    skip_resize=True,
                 )
                 query_prep_v3 = QueryPrepV3(
                     detector=detector, segmenter=segmenter, target_size=settings.canonical_size_v3,

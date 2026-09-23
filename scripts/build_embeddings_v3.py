@@ -46,6 +46,7 @@ async def build_v3_catalog(limit: int | None = None, batch_size: int = 32, repla
     logger.info("Initializing DINOv2-base v3 embedding service...")
     embeddings_service = EmbeddingService(
         settings.dino_v3_model_path, settings.dino_v3_base_model_path, settings.embedding_dimension_v3,
+        skip_resize=True,
     )
     images_service = ImageService(
         settings.media_dir, settings.canonical_size, settings.max_upload_bytes, settings.max_image_pixels,
