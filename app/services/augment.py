@@ -327,12 +327,84 @@ def shadow(image: Image.Image, rng: random.Random | None = None) -> Image.Image:
     return _to_pil(img)
 
 
+# --- v3 geometric augmentations (zero-fill borders) ---
+
+@register("view_from_above")
+def view_from_above(image: Image.Image, rng: random.Random | None = None) -> Image.Image:
+    """Trapezoidal distortion: top wider, bottom narrower (camera above label)."""
+    r = _rng(rng)
+    img = _to_array(image)
+    h, w = img.shape[:2]
+    top_shift = r.uniform(0.02, 0.06)
+    bot_shift = r.uniform(0.08, 0.15)
+    src = np.float32([[0, 0], [w, 0], [0, h], [w, h]])
+    dst = np.float32([
+        [-top_shift * w, 0],
+        [w + top_shift * w, 0],
+        [bot_shift * w, h],
+        [w - bot_shift * w, h],
+    ])
+    matrix = cv2.getPerspectiveTransform(src, dst)
+    out = cv2.warpPerspective(img, matrix, (w, h), borderMode=cv2.BORDER_CONSTANT, borderValue=(0, 0, 0))
+    return _to_pil(out)
+
+
+@register("view_from_below")
+def view_from_below(image: Image.Image, rng: random.Random | None = None) -> Image.Image:
+    """Trapezoidal distortion: bottom wider, top narrower (camera below label)."""
+    r = _rng(rng)
+    img = _to_array(image)
+    h, w = img.shape[:2]
+    top_shift = r.uniform(0.08, 0.15)
+    bot_shift = r.uniform(0.02, 0.06)
+    src = np.float32([[0, 0], [w, 0], [0, h], [w, h]])
+    dst = np.float32([
+        [top_shift * w, 0],
+        [w - top_shift * w, 0],
+        [-bot_shift * w, h],
+        [w + bot_shift * w, h],
+    ])
+    matrix = cv2.getPerspectiveTransform(src, dst)
+    out = cv2.warpPerspective(img, matrix, (w, h), borderMode=cv2.BORDER_CONSTANT, borderValue=(0, 0, 0))
+    return _to_pil(out)
+
+
+@register("tilt_small")
+def tilt_small(image: Image.Image, rng: random.Random | None = None) -> Image.Image:
+    """Small rotation up to 5 degrees with zero-fill corners."""
+    r = _rng(rng)
+    angle = r.uniform(-5, 5)
+    return image.rotate(angle, resample=Image.BILINEAR, expand=False, fillcolor=(0, 0, 0))
+
+
+@register("combined_geo_light")
+def combined_geo_light(image: Image.Image, rng: random.Random | None = None) -> Image.Image:
+    """Combined: cylinder_warp + shadow + brightness_down."""
+    r = _rng(rng)
+    image = cylinder_warp(image, r)
+    image = shadow(image, r)
+    image = brightness_down(image, r)
+    return image
+
+
 # Base 23 augmentations used for catalog ingestion (exact 116 images cloud)
 BASE_CATALOG_AUG_NAMES: list[str] = [
     "perspective", "rotate", "brightness_up", "brightness_down", "contrast_up", "contrast_down",
     "jpeg_low", "gaussian_blur", "motion_blur", "noise", "color_jitter", "wb_warm", "wb_cool",
     "glare", "local_overexposure", "gamma_low", "gamma_high", "saturation_down", "saturation_up",
     "combined_1", "combined_2", "combined_4", "combined_5",
+]
+
+# v3 augmentations: emphasis on geometric distortions + zero-fill
+BASE_CATALOG_AUG_NAMES_V3: list[str] = [
+    "perspective", "rotate", "cylinder_warp", "view_from_above", "view_from_below",
+    "tilt_small", "shadow",
+    "brightness_up", "brightness_down", "contrast_up", "contrast_down",
+    "jpeg_low", "gaussian_blur", "motion_blur", "noise",
+    "color_jitter", "wb_warm", "wb_cool",
+    "glare", "local_overexposure",
+    "gamma_low", "gamma_high",
+    "combined_geo_light",
 ]
 
 AUGMENTATION_NAMES: list[str] = BASE_CATALOG_AUG_NAMES
@@ -359,10 +431,41 @@ def generate_augmented_cloud(canonical_label: Image.Image, variants_per_aug: int
     return results
 
 
+def generate_augmented_cloud_v3(
+    canonical_label: Image.Image, variants_per_aug: int = 5, seed: int = 42,
+) -> list[tuple[str, int, Image.Image]]:
+    """Generate v3 augmented cloud from a 518x518 letterbox canonical label.
+
+    Returns:
+        List of tuples: (aug_name, variant_seed, image).
+        The first element is always ('catalog', seed, original_copy).
+        Followed by 23 aug types * variants_per_aug = 115 augmented images.
+        Total = 116 images.
+
+    The variant_seed can be used to reproduce the augmentation deterministically.
+    """
+    results: list[tuple[str, int, Image.Image]] = [("catalog", seed, canonical_label.copy())]
+    rng = random.Random(seed)
+
+    for aug_name in BASE_CATALOG_AUG_NAMES_V3:
+        aug_fn = _AUG_REGISTRY[aug_name]
+        for variant_i in range(variants_per_aug):
+            variant_seed = rng.randint(0, 2**31 - 1)
+            variant_rng = random.Random(variant_seed)
+            aug_img = aug_fn(canonical_label, variant_rng)
+            results.append((aug_name, variant_seed, aug_img))
+
+    return results
+
+
 AUGMENTATION_LABELS_RU: dict[str, str] = {
     "perspective": "3D-перспектива (наклон камеры)",
     "rotate": "Поворот ракурса",
     "cylinder_warp": "Цилиндрический изгиб бутылки",
+    "view_from_above": "Вид сверху (трапеция)",
+    "view_from_below": "Вид снизу (трапеция)",
+    "tilt_small": "Малый наклон (до 5°)",
+    "combined_geo_light": "Цилиндр + тень + затемнение",
     "glare": "Световой блик",
     "shadow": "Падающая тень",
     "local_overexposure": "Локальный засвет",
