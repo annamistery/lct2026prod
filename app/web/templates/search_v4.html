@@ -1,0 +1,501 @@
+{% extends "base.html" %}
+
+{% block title %}Поиск v4 (Google SigLIP 2 768d + OCR Reranker) — LCT2026{% endblock %}
+
+{% block content %}
+<style>
+.compare-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.compare-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.compare-card.winner-border {
+  border-color: #a29bfe;
+  background: linear-gradient(180deg, rgba(162, 155, 254, 0.08), var(--surface));
+}
+.compare-header {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  margin-bottom: 8px;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.compare-header .badge-tag {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.compare-header .badge-tag.accent {
+  background: #a29bfe;
+  color: #000;
+  font-weight: 700;
+}
+.compare-img-wrap {
+  width: 100%;
+  height: 220px;
+  background: #000;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.compare-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.zoomable {
+  cursor: zoom-in;
+  transition: transform 0.15s ease;
+}
+.zoomable:hover {
+  transform: scale(1.02);
+}
+.lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.88);
+  backdrop-filter: blur(4px);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 20px;
+}
+.lightbox-content {
+  position: relative;
+  max-width: 92vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.lightbox-img {
+  max-width: 100%;
+  max-height: 82vh;
+  object-fit: contain;
+  border-radius: 6px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7);
+}
+.lightbox-caption {
+  margin-top: 12px;
+  color: #fff;
+  font-size: 14px;
+  text-align: center;
+  background: rgba(0, 0, 0, 0.6);
+  padding: 6px 16px;
+  border-radius: 20px;
+}
+.lightbox-close {
+  position: absolute;
+  top: -36px;
+  right: -10px;
+  color: #fff;
+  font-size: 32px;
+  cursor: pointer;
+}
+.winner-card {
+  display: flex;
+  gap: 20px;
+  background: var(--surface);
+  border: 2px solid #a29bfe;
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 24px;
+  align-items: center;
+}
+.winner-img {
+  width: 130px;
+  height: 170px;
+  object-fit: contain;
+  background: #000;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+.winner-badge {
+  display: inline-block;
+  background: #a29bfe;
+  color: #000;
+  font-weight: 700;
+  font-size: 11px;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+.scores-row {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.score-badge {
+  background: var(--surface-2);
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #bbb;
+}
+.score-badge strong {
+  color: #fff;
+}
+.section-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+  margin-top: 24px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.file-item {
+  padding: 6px 10px;
+  font-size: 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #ccc;
+  word-break: break-all;
+  transition: background 0.15s;
+}
+.file-item:hover {
+  background: var(--surface-2);
+  color: #fff;
+}
+.file-item.active {
+  background: #a29bfe !important;
+  color: #000 !important;
+  font-weight: 700 !important;
+}
+.vote-bar {
+  display: inline-block;
+  height: 6px;
+  background: #a29bfe;
+  border-radius: 3px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+</style>
+
+<div style="display: flex; gap: 24px; align-items: flex-start;">
+  <!-- Левая колонка: выбор тестового файла -->
+  <div style="width: 280px; flex-shrink: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px;">
+    <div style="font-weight: 700; font-size: 14px; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
+      <span>Тестовые фото</span>
+      <span style="font-size: 10px; background: #6c5ce7; color: #fff; padding: 2px 6px; border-radius: 4px;">v4</span>
+    </div>
+    <div style="margin-bottom: 12px;">
+      <label style="font-size: 11px; color: var(--muted); display: block; margin-bottom: 4px;">Источник папки:</label>
+      <select id="source-select" style="width: 100%; padding: 6px 8px; background: var(--surface-2); border: 1px solid var(--border); color: #fff; border-radius: 4px; font-size: 12px;">
+        <option value="test_stage1" selected>test_stage1 (52 фото)</option>
+        <option value="queries">queries (конкурсные)</option>
+        <option value="benchmark">benchmark</option>
+      </select>
+    </div>
+    <div style="margin-bottom: 12px;">
+      <input type="text" id="filter-input" placeholder="Фильтр по имени..." style="width: 100%; padding: 6px 8px; background: var(--surface-2); border: 1px solid var(--border); color: #fff; border-radius: 4px; font-size: 12px;">
+    </div>
+    <div id="files-list" style="max-height: 480px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px;">
+      <div style="color: var(--muted); font-size: 12px; padding: 8px;">Загрузка списка...</div>
+    </div>
+  </div>
+
+  <!-- Правая колонка: форма поиска и выдача -->
+  <div style="flex: 1; min-width: 0;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+      <h1 style="margin: 0; display: flex; align-items: center; gap: 10px;">
+        <span>Поиск v4</span>
+        <span style="font-size: 12px; background: #6c5ce7; color: #fff; font-weight: 700; padding: 3px 8px; border-radius: 4px;">SigLIP 2 + OCR</span>
+      </h1>
+      <div style="display: flex; gap: 8px;">
+        <a href="/search" class="btn" style="padding: 6px 12px; font-size: 12px; background: var(--surface-2); color: var(--muted); text-decoration: none;">v1 (384d)</a>
+        <a href="/search-v2" class="btn" style="padding: 6px 12px; font-size: 12px; background: var(--surface-2); color: var(--muted); text-decoration: none;">v2 (Матрицы)</a>
+        <a href="/search-v3" class="btn" style="padding: 6px 12px; font-size: 12px; background: var(--surface-2); color: var(--muted); text-decoration: none;">v3 (DINOv2-base)</a>
+      </div>
+    </div>
+
+    <!-- Dropzone загрузки своего файла -->
+    <div id="dropzone" style="border: 2px dashed var(--border); border-radius: var(--radius); padding: 24px; text-align: center; background: var(--surface); cursor: pointer; margin-bottom: 20px; transition: border-color 0.2s;">
+      <input type="file" id="file-input" accept="image/*" style="display: none;">
+      <div style="font-size: 14px; font-weight: 600; color: #fff; margin-bottom: 4px;">Перетащите сюда фото бутылки или кликните для выбора</div>
+      <div style="font-size: 12px; color: var(--muted);">YOLO BBox → Seg Letterbox 518 → SigLIP 2 (768d) → pgvector Top-50 Votes → OCR Reranker</div>
+    </div>
+
+    <div id="status-line" style="font-size: 13px; color: var(--muted); margin-bottom: 12px;"></div>
+    <div id="loading" style="display: none; padding: 16px; text-align: center; color: var(--accent); font-weight: 600;">
+      Поиск по базе векторов SigLIP 2 v4...
+      <br>
+      <span style="color: var(--muted); font-size: 12px;">BBox → Seg → Hull → Crop → Letterbox 518 → SigLIP 2 Vision Tower → pgvector v4 + Votes → OCR</span>
+    </div>
+
+    <div id="results-area" style="display: none;">
+      <div class="section-title">
+        <span>Цепочка нормализации и сопоставления v4</span>
+        <span style="font-size: 12px; color: var(--muted); font-weight: normal;">(кликните для зума)</span>
+      </div>
+      <div class="compare-grid" id="compare-grid"></div>
+
+      <div id="winner-box"></div>
+
+      <div class="section-title">
+        <span>Кандидаты Top-5 v4</span>
+        <span style="font-size: 12px; color: var(--muted); font-weight: normal;">(SigLIP 2 768d + голоса аугментаций + OCR)</span>
+      </div>
+      <div id="candidates-grid" class="grid"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Модальное окно зума (Lightbox) -->
+<div id="lightbox" class="lightbox-overlay" style="display: none;">
+  <div class="lightbox-content">
+    <span class="lightbox-close" id="lightbox-close">&times;</span>
+    <img id="lightbox-img" class="lightbox-img" src="" alt="Zoom">
+    <div id="lightbox-caption" class="lightbox-caption"></div>
+  </div>
+</div>
+
+<script>
+const sourceSelect = document.getElementById('source-select');
+const filesList = document.getElementById('files-list');
+const filterInput = document.getElementById('filter-input');
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('file-input');
+const statusLine = document.getElementById('status-line');
+const loading = document.getElementById('loading');
+const resultsArea = document.getElementById('results-area');
+const compareGrid = document.getElementById('compare-grid');
+const winnerBox = document.getElementById('winner-box');
+const candidatesGrid = document.getElementById('candidates-grid');
+const lightbox = document.getElementById('lightbox');
+const lightboxImg = document.getElementById('lightbox-img');
+const lightboxCaption = document.getElementById('lightbox-caption');
+
+let allFiles = [];
+let currentOrigUrl = null;
+
+function openLightbox(src, cap) {
+  lightboxImg.src = src;
+  lightboxCaption.textContent = cap || '';
+  lightbox.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+function closeLightbox() {
+  lightbox.style.display = 'none';
+  lightboxImg.src = '';
+  document.body.style.overflow = '';
+}
+lightbox.addEventListener('click', (e) => {
+  if (e.target === lightbox || e.target === lightboxImg || e.target.id === 'lightbox-close') closeLightbox();
+});
+window.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeLightbox(); });
+document.addEventListener('click', (e) => {
+  const z = e.target.closest('.zoomable');
+  if (z) openLightbox(z.getAttribute('data-full-src') || z.src, z.getAttribute('data-caption') || z.alt);
+});
+
+dropzone.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.style.borderColor = '#a29bfe'; });
+dropzone.addEventListener('dragleave', () => { dropzone.style.borderColor = 'var(--border)'; });
+dropzone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropzone.style.borderColor = 'var(--border)';
+  if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0], e.dataTransfer.files[0].name);
+});
+fileInput.addEventListener('change', () => {
+  if (fileInput.files.length) handleFile(fileInput.files[0], fileInput.files[0].name);
+});
+
+sourceSelect.addEventListener('change', () => loadFiles());
+filterInput.addEventListener('input', () => renderFiles());
+
+async function loadFiles() {
+  filesList.innerHTML = '<div style="color: var(--muted); padding: 8px; font-size: 12px;">Загрузка...</div>';
+  try {
+    const res = await fetch(`/api/rectify/files?source=${sourceSelect.value}`);
+    allFiles = await res.json();
+    renderFiles();
+    if (allFiles.length > 0) selectFile(allFiles[0]);
+    else { statusLine.textContent = 'Нет изображений'; resultsArea.style.display = 'none'; }
+  } catch (err) {
+    filesList.innerHTML = `<div style="color: #ff4757; padding: 8px; font-size: 12px;">${err.message}</div>`;
+  }
+}
+
+function renderFiles() {
+  const q = filterInput.value.trim().toLowerCase();
+  const filtered = q ? allFiles.filter(f => f.toLowerCase().includes(q)) : allFiles;
+  if (!filtered.length) {
+    filesList.innerHTML = '<div style="color: var(--muted); padding: 8px; font-size: 12px;">Ничего не найдено</div>';
+    return;
+  }
+  filesList.innerHTML = filtered.map(f => `<div class="file-item" data-filename="${f}" onclick="selectFile('${f}')">${f}</div>`).join('');
+}
+
+async function selectFile(filename) {
+  document.querySelectorAll('.file-item').forEach(el => el.classList.toggle('active', el.dataset.filename === filename));
+  statusLine.textContent = `Загрузка и поиск v4 для ${filename}...`;
+  try {
+    const res = await fetch(`/api/rectify/image?source=${sourceSelect.value}&filename=${filename}`);
+    if (!res.ok) throw new Error(`Не удалось загрузить ${filename}`);
+    const blob = await res.blob();
+    handleFile(new File([blob], filename, { type: blob.type || 'image/jpeg' }), filename);
+  } catch (err) { statusLine.textContent = `Ошибка: ${err.message}`; }
+}
+
+async function handleFile(file, displayName) {
+  if (currentOrigUrl) URL.revokeObjectURL(currentOrigUrl);
+  currentOrigUrl = URL.createObjectURL(file);
+  statusLine.textContent = `Поиск v4 для: ${displayName || file.name}...`;
+  loading.style.display = 'block';
+  resultsArea.style.display = 'none';
+  compareGrid.innerHTML = '';
+  winnerBox.innerHTML = '';
+  candidatesGrid.innerHTML = '';
+
+  const fd = new FormData();
+  fd.append('image', file);
+  fd.append('k', '5');
+
+  try {
+    const res = await fetch('/api/v4/search', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Ошибка v4');
+    statusLine.textContent = `v4 (SigLIP 2): ${displayName || file.name} (${data.timings.total_ms} мс)`;
+    renderResults(data, currentOrigUrl);
+  } catch (err) { statusLine.textContent = `Ошибка: ${err.message}`; }
+  finally { loading.style.display = 'none'; }
+}
+
+function renderResults(data, origUrl) {
+  resultsArea.style.display = 'block';
+  const w = data.winner;
+  const queryUrl = data.query_crop || origUrl;
+  const bboxUrl = data.bbox_crop || origUrl;
+  const wImgUrl = w ? w.image_url : '';
+  const wTitle = w ? w.title : 'Не найдено';
+  const wAugUrl = w ? w.matched_aug_image : '';
+
+  compareGrid.innerHTML = `
+    <div class="compare-card">
+      <div class="compare-header"><span>1. Оригинал</span><span class="badge-tag">Фото</span></div>
+      <div class="compare-img-wrap"><img class="compare-img zoomable" src="${origUrl}" data-caption="Оригинал"></div>
+    </div>
+    <div class="compare-card">
+      <div class="compare-header"><span>2. BBox кроп</span><span class="badge-tag">YOLO</span></div>
+      <div class="compare-img-wrap"><img class="compare-img zoomable" src="${bboxUrl}" data-caption="BBox кроп"></div>
+    </div>
+    <div class="compare-card" style="border-color: #6c5ce7;">
+      <div class="compare-header">
+        <span style="color: #a29bfe;">3. Seg Letterbox 518</span>
+        <span class="badge-tag" style="background: rgba(108, 92, 231, 0.2); color: #a29bfe;">${data.is_fallback ? 'Fallback' : 'Seg + Hull'}</span>
+      </div>
+      <div class="compare-img-wrap"><img class="compare-img zoomable" src="${queryUrl}" data-caption="Seg Letterbox 518 (запрос v4)"></div>
+    </div>
+    <div class="compare-card winner-border">
+      <div class="compare-header"><span style="color: #a29bfe;">4. Эталон Top-1</span><span class="badge-tag accent">Каталог</span></div>
+      <div class="compare-img-wrap">${wImgUrl ? `<img class="compare-img zoomable" src="${wImgUrl}" data-caption="Каталожный кроп Top-1: ${wTitle}">` : '<div style="color: var(--muted);">Не найдено</div>'}</div>
+    </div>
+    <div class="compare-card" style="border-color: #f39c12;">
+      <div class="compare-header"><span style="color: #f39c12;">5. Совпавшая аугментация</span><span class="badge-tag" style="background: rgba(243,156,18,0.2); color: #f39c12;">${w ? w.matched_aug_name : ''}</span></div>
+      <div class="compare-img-wrap">${wAugUrl ? `<img class="compare-img zoomable" src="${wAugUrl}" data-caption="Аугментация: ${w ? w.matched_aug_name : ''} (Top-1)">` : '<div style="color: var(--muted);">Нет данных</div>'}</div>
+    </div>
+  `;
+
+  if (w) {
+    const sim = (w.dino_similarity * 100).toFixed(1);
+    const fscore = (w.final_score * 100).toFixed(1);
+    const vr = (w.vote_ratio * 100).toFixed(0);
+    winnerBox.innerHTML = `
+      <div class="winner-card">
+        <div style="display: flex; flex-direction: column; gap: 6px; flex-shrink: 0;">
+          <div style="text-align: center; font-size: 10px; color: var(--muted); text-transform: uppercase;">Каталог</div>
+          <img class="winner-img zoomable" src="${w.image_url}" data-caption="Каталожный кроп: ${w.title}">
+        </div>
+        ${w.matched_aug_image ? `
+        <div style="display: flex; flex-direction: column; gap: 6px; flex-shrink: 0;">
+          <div style="text-align: center; font-size: 10px; color: #f39c12; text-transform: uppercase;">Aug: ${w.matched_aug_name}</div>
+          <img class="winner-img zoomable" src="${w.matched_aug_image}" data-caption="Совпавшая аугментация: ${w.matched_aug_name}" style="border: 2px solid #f39c12;">
+        </div>` : ''}
+        <div style="flex: 1;">
+          <span class="winner-badge">Top-1 v4 (SigLIP 2)</span>
+          <div style="font-size: 18px; font-weight: 700; color: #fff; margin-bottom: 4px;">
+            <a href="/products/${w.product_id}" style="color: #fff;">${w.title}</a>
+          </div>
+          <div style="color: var(--muted); font-size: 13px; margin-bottom: 8px;">${w.manufacturer}</div>
+          <div class="scores-row">
+            <div class="score-badge">Итоговый скор: <strong style="color: #a29bfe;">${fscore}%</strong></div>
+            <div class="score-badge">SigLIP 2: <strong style="color: #2ed573;">${sim}%</strong></div>
+            <div class="score-badge">Голоса: <strong>${w.vote_count}</strong> (${vr}%)</div>
+            <div class="score-badge">Aug: <strong>${w.matched_aug_name}</strong></div>
+            ${data.vintage_detected ? `<div class="score-badge" style="background: rgba(108,92,231,0.25); border: 1px solid #6c5ce7;">OCR винтаж: <strong style="color: #a29bfe;">${data.vintage_detected}</strong></div>` : ''}
+            <div class="score-badge">Время: <strong>${data.timings.total_ms}мс</strong> (Prep: ${data.timings.query_prep_ms}мс, SigLIP: ${data.timings.embedding_ms}мс, DB: ${data.timings.pgvector_ms}мс${data.timings.ocr_ms != null ? `, OCR: ${data.timings.ocr_ms}мс` : ''})</div>
+          </div>
+        </div>
+      </div>
+    `;
+  } else {
+    winnerBox.innerHTML = '<div style="padding: 20px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 24px; color: var(--muted);">Совпадений не найдено.</div>';
+  }
+
+  if (data.results && data.results.length) {
+    candidatesGrid.innerHTML = data.results.map((r, i) => {
+      const sim = (r.dino_similarity * 100).toFixed(1);
+      const fscore = (r.final_score * 100).toFixed(1);
+      const vr = (r.vote_ratio * 100).toFixed(0);
+      const barW = Math.min(80, r.vote_ratio * 80);
+      return `
+        <div class="card">
+          <div style="display: flex; gap: 2px;">
+            <div class="card-img-wrap" style="height: 160px; flex: 1; background: #000; overflow: hidden; display: flex; align-items: center; justify-content: center; position: relative;">
+              <img class="zoomable" src="${r.image_url}" data-caption="#${i+1} Каталог: ${r.title}" style="max-width: 100%; max-height: 100%; object-fit: contain;">
+              <div style="position: absolute; bottom: 2px; left: 2px; font-size: 9px; background: rgba(0,0,0,0.7); color: #aaa; padding: 1px 4px; border-radius: 3px;">Каталог</div>
+            </div>
+            ${r.matched_aug_image ? `
+            <div class="card-img-wrap" style="height: 160px; flex: 1; background: #000; overflow: hidden; display: flex; align-items: center; justify-content: center; border-left: 2px solid #f39c12; position: relative;">
+              <img class="zoomable" src="${r.matched_aug_image}" data-caption="#${i+1} Aug ${r.matched_aug_name}: ${r.title}" style="max-width: 100%; max-height: 100%; object-fit: contain;">
+              <div style="position: absolute; bottom: 2px; left: 2px; font-size: 9px; background: rgba(243,156,18,0.3); color: #f39c12; padding: 1px 4px; border-radius: 3px;">${r.matched_aug_name}</div>
+            </div>` : ''}
+          </div>
+          <div class="card-body">
+            <div style="font-size: 11px; color: #a29bfe; font-weight: 600; margin-bottom: 4px;">#${i+1} v4</div>
+            <div class="card-title" style="font-size: 14px;"><a href="/products/${r.product_id}">${r.title}</a></div>
+            <div class="card-meta" style="font-size: 12px; margin-bottom: 8px;">${r.manufacturer}</div>
+            <div style="display: flex; gap: 8px; font-size: 11px; color: var(--muted); flex-wrap: wrap;">
+              <span>Скор: <strong style="color: #a29bfe;">${fscore}%</strong></span>
+              <span>SigLIP: <strong style="color: #fff;">${sim}%</strong></span>
+              <span>Голоса: <strong style="color: #fff;">${r.vote_count}</strong> (${vr}%) <span class="vote-bar" style="width: ${barW}px;"></span></span>
+              <span>Aug: ${r.matched_aug_name}</span>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  } else {
+    candidatesGrid.innerHTML = '<div style="color: var(--muted);">Нет результатов</div>';
+  }
+}
+
+// Загрузка файлов при старте страницы
+loadFiles();
+</script>
+{% endblock %}
