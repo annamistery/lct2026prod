@@ -96,6 +96,8 @@ async def build_v4_catalog(limit: int | None = None, batch_size: int = 32, repla
 
         for idx, product in enumerate(products, 1):
             prod_dir = images_root / str(product.id)
+            if not prod_dir.is_dir() and product.slug:
+                prod_dir = images_root / product.slug
             if not prod_dir.is_dir():
                 logger.warning("[%d/%d] Skip %s: no directory %s",
                                idx, total_products, product.title[:40], prod_dir)
@@ -116,7 +118,7 @@ async def build_v4_catalog(limit: int | None = None, batch_size: int = 32, repla
             images: list[Image.Image] = []
             for fpath in webp_files:
                 aug_name, aug_seed = _parse_aug(fpath.name)
-                rel_path = f"images/{product.id}/{fpath.name}"
+                rel_path = f"images/{prod_dir.name}/{fpath.name}"
                 aug_meta.append((aug_name, aug_seed, rel_path))
                 images.append(Image.open(fpath).convert("RGB"))
 

@@ -71,14 +71,49 @@ def ensure_base_model(model_name: str, local_base_dir: Path) -> str:
     return str(local_base_dir)
 
 
-def load_manifest(manifest_file: Path) -> list[dict]:
-    if not manifest_file.is_file():
-        raise FileNotFoundError(
-            f"v4 manifest not found: {manifest_file}\n"
-            f"Run 'python scripts/build_dataset_v4.py' first."
-        )
-    with manifest_file.open("r", encoding="utf-8") as f:
-        return json.load(f)
+def load_manifest(manifest_file: Path, media_dir: Path | None = None) -> list[dict]:
+    if manifest_file.is_file():
+        with manifest_file.open("r", encoding="utf-8") as f:
+            return json.load(f)
+
+    # Auto-generate manifest from existing media/images/ if available
+    if media_dir is not None:
+        images_dir = media_dir / "images"
+        if images_dir.is_dir():
+            import re
+
+            print(f"Manifest {manifest_file} not found, but found {images_dir}. Auto-generating manifest...")
+            manifest = []
+            for p_dir in sorted(images_dir.iterdir()):
+                if not p_dir.is_dir():
+                    continue
+                prod_id = p_dir.name
+                for f in sorted(p_dir.glob("*.webp")):
+                    fname = f.name
+                    if fname == "catalog.webp":
+                        aug_name, aug_seed = "catalog", 0
+                    else:
+                        m = re.match(r"^(.+)_(\d+)\.webp$", fname)
+                        aug_name = m.group(1) if m else fname
+                        aug_seed = int(m.group(2)) if m else 0
+                    manifest.append({
+                        "image_id": f"{prod_id}_{aug_name}_{aug_seed}",
+                        "group_id": prod_id,
+                        "aug_name": aug_name,
+                        "aug_seed": aug_seed,
+                        "image_path": f"images/{prod_id}/{fname}",
+                    })
+            if manifest:
+                manifest_file.parent.mkdir(parents=True, exist_ok=True)
+                with manifest_file.open("w", encoding="utf-8") as f:
+                    json.dump(manifest, f, indent=2)
+                print(f"Saved auto-manifest: {len(manifest)} images ({len(set(m['group_id'] for m in manifest))} products) to {manifest_file}")
+                return manifest
+
+    raise FileNotFoundError(
+        f"v4 manifest not found: {manifest_file}\n"
+        "Either place pre-built images in media/images/ or run 'python scripts/build_dataset_v4.py'."
+    )
 
 
 def _class_balanced_batches(
@@ -133,7 +168,7 @@ def finetune(
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    manifest = load_manifest(manifest_file)
+    manifest = load_manifest(manifest_file, media_dir)
     print(f"Dataset v4: {len(manifest)} images")
 
     product_to_class: dict[str, int] = {}
