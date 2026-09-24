@@ -277,3 +277,42 @@ docker compose down
 ```
 
 PostgreSQL volume сохраняется. Команду `docker compose down -v` не выполнять: она удаляет данные БД.
+
+## 19. Раздельный экспорт production-данных и отправка в Git
+
+Для модульного экспорта каталога товаров и версий эмбеддингов в `data/` выполните на сервере:
+
+```bash
+chmod +x scripts/*.sh
+
+# Вариант А: Автоматический экспорт и пошаговый push в Git
+./scripts/export_production_data.sh --push
+
+# Вариант Б: Экспорт без авто-пуша (команды для отправки будут выведены на экран)
+./scripts/export_production_data.sh
+```
+
+Скрипт формирует независимые компактные файлы под лимиты Git LFS:
+- `data/dump_products.sql.gz` — схема и товары (~300 КБ)
+- `data/dump_embeddings_v1.sql.gz` — DINOv2 baseline (~300 МБ)
+- `data/dump_embeddings_v4.sql.gz` — SigLIP 2 SOTA (~600 МБ)
+- `data/media_catalog.tar.gz` — кропы эталонов (~102 МБ)
+
+При ручной отправке с сервера по частям:
+```bash
+# 1. Товары каталога
+git add data/dump_products.sql.gz
+git commit -m "data: update products catalog dump"
+git push origin main
+
+# 2. Векторы v1
+git add data/dump_embeddings_v1.sql.gz
+git commit -m "data: update v1 DINOv2 product embeddings dump"
+git push origin main
+
+# 3. Векторы v4
+git add data/dump_embeddings_v4.sql.gz
+git commit -m "data: update v4 SigLIP 2 product embeddings dump"
+git push origin main
+```
+
