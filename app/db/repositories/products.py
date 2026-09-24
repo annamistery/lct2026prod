@@ -108,7 +108,7 @@ class ProductRepository:
         rows = (await self.session.execute(statement)).all()
         return [ProductCandidate(product=row[0], embedding_id=row[1], image_path=row[2], sample_type=row[3], distance=float(row[4])) for row in rows]
 
-    async def nearest_v3(self, embedding: list[float], limit: int) -> list["ProductCandidateV3"]:
+    async def nearest_v3(self, embedding: list[float], limit: int) -> list[ProductCandidateV3]:
         distance = ProductEmbeddingV3.embedding.cosine_distance(embedding)
         ranked = select(
             ProductEmbeddingV3.id.label("embedding_id"),
@@ -146,7 +146,7 @@ class ProductRepository:
             for row in rows
         ]
 
-    async def nearest_v3_with_votes(self, embedding: list[float], limit: int, vote_pool: int = 50) -> list["ProductCandidateV3"]:
+    async def nearest_v3_with_votes(self, embedding: list[float], limit: int, vote_pool: int = 50) -> list[ProductCandidateV3]:
         """Extended ranking: count how many of the top-N embeddings belong to each product."""
         distance = ProductEmbeddingV3.embedding.cosine_distance(embedding)
         top_embs = (
@@ -212,27 +212,38 @@ class ProductRepository:
             for row in rows
         ]
 
-    async def nearest_v4_with_votes(self, embedding: list[float], limit: int, vote_pool: int = 50) -> list["ProductCandidateV4"]:
+    async def nearest_v4_with_votes(
+        self,
+        embedding: list[float],
+        limit: int,
+        vote_pool: int = 50,
+        product_ids: list[uuid.UUID] | None = None,
+    ) -> list[ProductCandidateV4]:
         """Vote-ranked nearest search on product_embeddings_v4 (SigLIP 2 768d).
         Guarantees `limit` unique products while counting votes in top `vote_pool` embeddings.
+        If `product_ids` is provided, restricts search candidates strictly to that subset.
         """
+        if product_ids is not None and len(product_ids) == 0:
+            return []
+
         distance = ProductEmbeddingV4.embedding.cosine_distance(embedding)
 
-        # 1. Best embedding per unique product
-        all_ranked = (
-            select(
-                ProductEmbeddingV4.product_id,
-                ProductEmbeddingV4.id.label("embedding_id"),
-                ProductEmbeddingV4.image_path,
-                ProductEmbeddingV4.sample_type,
-                ProductEmbeddingV4.aug_name,
-                ProductEmbeddingV4.aug_seed,
-                distance.label("distance"),
-                func.row_number().over(
-                    partition_by=ProductEmbeddingV4.product_id, order_by=distance
-                ).label("rn"),
-            )
-        ).subquery()
+        # 1. Best embedding per unique product (optionally scoped to product_ids)
+        all_ranked_stmt = select(
+            ProductEmbeddingV4.product_id,
+            ProductEmbeddingV4.id.label("embedding_id"),
+            ProductEmbeddingV4.image_path,
+            ProductEmbeddingV4.sample_type,
+            ProductEmbeddingV4.aug_name,
+            ProductEmbeddingV4.aug_seed,
+            distance.label("distance"),
+            func.row_number().over(
+                partition_by=ProductEmbeddingV4.product_id, order_by=distance
+            ).label("rn"),
+        )
+        if product_ids:
+            all_ranked_stmt = all_ranked_stmt.where(ProductEmbeddingV4.product_id.in_(product_ids))
+        all_ranked = all_ranked_stmt.subquery()
 
         top_products = (
             select(
@@ -249,9 +260,12 @@ class ProductRepository:
             .limit(limit)
         ).subquery()
 
-        # 2. Count votes across top `vote_pool` embeddings in the whole table
+        # 2. Count votes across top `vote_pool` embeddings (optionally scoped)
+        top_pool_stmt = select(ProductEmbeddingV4.product_id)
+        if product_ids:
+            top_pool_stmt = top_pool_stmt.where(ProductEmbeddingV4.product_id.in_(product_ids))
         top_pool = (
-            select(ProductEmbeddingV4.product_id)
+            top_pool_stmt
             .order_by(distance)
             .limit(vote_pool)
         ).subquery()
