@@ -35,14 +35,19 @@ class SigLIP2EmbeddingService:
         self.skip_resize = skip_resize
         self.expected_dimension = expected_dimension
 
-        # Processor: prefer model dir, fall back to base dir
-        processor_path = (
-            model_path
-            if (model_path / "preprocessor_config.json").exists()
-            else base_model_path
-        )
+        # Processor: prefer model dir, then base dir, fallback to HF hub
+        processor_path = None
+        for p in (model_path, base_model_path):
+            if (p / "preprocessor_config.json").exists():
+                processor_path = str(p)
+                break
+        if processor_path is None:
+            processor_path = "google/siglip2-base-patch16-512"
+
         self.processor = AutoImageProcessor.from_pretrained(
-            str(processor_path), local_files_only=True, use_fast=False
+            processor_path,
+            local_files_only=(processor_path != "google/siglip2-base-patch16-512"),
+            use_fast=False,
         )
         if skip_resize:
             self.processor.do_resize = False
@@ -50,14 +55,28 @@ class SigLIP2EmbeddingService:
 
         # Model: LoRA adapter or full weights
         if (model_path / "adapter_config.json").exists():
-            if not base_model_path.is_dir():
-                raise FileNotFoundError(f"SigLIP2 base model not found: {base_model_path}")
             from peft import PeftModel
 
-            base = AutoModel.from_pretrained(str(base_model_path), local_files_only=True)
+            has_local_base = (
+                base_model_path.is_dir()
+                and (
+                    (base_model_path / "model.safetensors").exists()
+                    or (base_model_path / "pytorch_model.bin").exists()
+                )
+            )
+            base_src = str(base_model_path) if has_local_base else "google/siglip2-base-patch16-512"
+            base = AutoModel.from_pretrained(base_src, local_files_only=has_local_base)
             self.model = PeftModel.from_pretrained(base, str(model_path), local_files_only=True)
         else:
-            self.model = AutoModel.from_pretrained(str(model_path), local_files_only=True)
+            has_local_model = (
+                model_path.is_dir()
+                and (
+                    (model_path / "model.safetensors").exists()
+                    or (model_path / "pytorch_model.bin").exists()
+                )
+            )
+            model_src = str(model_path) if has_local_model else "google/siglip2-base-patch16-512"
+            self.model = AutoModel.from_pretrained(model_src, local_files_only=has_local_model)
 
         self.model = self.model.to(self.device).eval()
 

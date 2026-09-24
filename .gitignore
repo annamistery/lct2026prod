@@ -39,3 +39,6 @@ app/sommelier/data/feedback.jsonl
 tmp/*
 !tmp/.gitkeep
 uv.lock
+models/siglip2-base-patch16-512/*.safetensors
+models/siglip2-base-patch16-512/*.bin
+
