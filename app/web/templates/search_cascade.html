@@ -4,79 +4,9 @@
 
 {% block content %}
 <style>
-.cascade-status-banner {
-  border-radius: var(--radius);
-  padding: 16px 20px;
-  margin-bottom: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  border: 1px solid transparent;
-}
-.cascade-status-banner.v1-win {
-  background: linear-gradient(90deg, rgba(46, 204, 113, 0.15), rgba(46, 204, 113, 0.05));
-  border-color: rgba(46, 204, 113, 0.4);
-}
-.cascade-status-banner.v4-refined {
-  background: linear-gradient(90deg, rgba(162, 155, 254, 0.18), rgba(108, 92, 231, 0.08));
-  border-color: rgba(162, 155, 254, 0.5);
-}
-.status-title {
-  font-size: 16px;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.status-desc {
-  font-size: 13px;
-  color: var(--text-secondary);
-  margin-top: 4px;
-}
-.pipeline-flow {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 24px;
-  padding: 12px 16px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  overflow-x: auto;
-}
-.flow-step {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-secondary);
-}
-.flow-step.active {
-  color: #fff;
-}
-.flow-step .step-circle {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: var(--surface-2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-}
-.flow-step.active .step-circle {
-  background: var(--primary);
-  color: #000;
-}
-.flow-arrow {
-  color: var(--border);
-  font-size: 16px;
-}
 .compare-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   gap: 16px;
   margin-bottom: 24px;
 }
@@ -95,7 +25,7 @@
 }
 .compare-card.neighbor-border {
   border-color: #a29bfe;
-  background: linear-gradient(180deg, rgba(162, 155, 254, 0.08), var(--surface));
+  background: linear-gradient(180deg, rgba(162, 155, 254, 0.12), var(--surface));
 }
 .compare-header {
   font-size: 13px;
@@ -181,24 +111,67 @@
   color: #fff;
   text-align: center;
 }
-.panel-section {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 16px;
-  margin-bottom: 20px;
+.file-item {
+  padding: 5px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: all 0.1s;
 }
-.panel-section-title {
+.file-item:hover {
+  background: var(--surface-2);
+  color: #fff;
+}
+.file-item.active {
+  background: #f1c40f !important;
+  color: #000 !important;
+  font-weight: 700 !important;
+}
+.cascade-status-banner {
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid transparent;
+}
+.cascade-status-banner.v1-win {
+  background: linear-gradient(90deg, rgba(46, 204, 113, 0.15), rgba(46, 204, 113, 0.05));
+  border-color: rgba(46, 204, 113, 0.4);
+}
+.cascade-status-banner.v4-refined {
+  background: linear-gradient(90deg, rgba(162, 155, 254, 0.18), rgba(108, 92, 231, 0.08));
+  border-color: rgba(162, 155, 254, 0.5);
+}
+.section-title {
   font-size: 15px;
   font-weight: 700;
+  color: #fff;
+  margin-top: 20px;
   margin-bottom: 12px;
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
+.winner-card {
+  display: flex;
+  gap: 20px;
+  background: var(--surface);
+  border: 2px solid #f1c40f;
+  border-radius: var(--radius);
+  padding: 18px;
+  margin-bottom: 20px;
+  align-items: center;
+}
 .metrics-row {
   display: flex;
-  gap: 16px;
+  gap: 12px;
   flex-wrap: wrap;
   margin-top: 8px;
 }
@@ -206,132 +179,136 @@
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 6px 12px;
-  font-size: 12px;
+  padding: 4px 10px;
+  font-size: 11px;
   display: flex;
   flex-direction: column;
 }
 .metric-pill .label {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 9px;
   text-transform: uppercase;
 }
 .metric-pill .val {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   color: #fff;
-  margin-top: 2px;
 }
 </style>
 
-<div class="page-header">
-  <div>
-    <h1>Каскадный поиск вин (Cascade: v1 Coarse + v4 Refinement)</h1>
-    <p class="text-secondary" style="font-size: 13px; margin-top: 4px;">
-      Этап 1: мгновенный DINOv2-small LoRA поиск в оригинальном BBox кропе (~15 мс). При обнаружении кандидатов-соседей автоматически подключается Этап 2: SigLIP 2 Vision Tower (768d) + OCR Reranker, ограниченный <b>строго пулом соседей</b>.
-    </p>
+<div style="display: flex; gap: 24px; align-items: flex-start;">
+  <!-- Левая колонка: выбор тестового каталога и файла -->
+  <div style="width: 280px; flex-shrink: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px;">
+    <div style="font-weight: 700; font-size: 14px; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
+      <span>Тестовые фото</span>
+      <span style="font-size: 10px; background: #f1c40f; color: #000; font-weight: 700; padding: 2px 6px; border-radius: 4px;">Каскад</span>
+    </div>
+    <div style="margin-bottom: 12px;">
+      <label style="font-size: 11px; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; font-weight: 600; display: block;">Каталог тестов:</label>
+      <select id="source-select" style="width: 100%; padding: 8px 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 13px; outline: none; margin-bottom: 10px;">
+        <option value="tmp1">Тест 1 (set48 / 27 фото)</option>
+        <option value="tmp2">Тест 2 (vina / 25 фото)</option>
+        <option value="imports">Каталог (imports/images)</option>
+        <option value="catalog">Кропы базы (media/products)</option>
+      </select>
+    </div>
+    <div style="margin-bottom: 12px;">
+      <input type="text" id="filter-input" placeholder="Поиск по имени файла..." style="width: 100%; padding: 8px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 13px; outline: none; margin-bottom: 10px;">
+    </div>
+    <div id="files-list" style="max-height: 480px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px;">
+      <div style="color: var(--muted); font-size: 12px; padding: 8px;">Загрузка списка...</div>
+    </div>
+  </div>
+
+  <!-- Правая колонка: форма поиска и каскадная выдача -->
+  <div style="flex: 1; min-width: 0;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+      <h1 style="margin: 0; display: flex; align-items: center; gap: 10px;">
+        <span>Каскадный поиск</span>
+        <span style="font-size: 12px; background: #f1c40f; color: #000; font-weight: 700; padding: 3px 8px; border-radius: 4px;">v1 + v4 (SOTA)</span>
+      </h1>
+      <div style="display: flex; gap: 8px;">
+        <a href="/search" class="btn" style="padding: 6px 12px; font-size: 12px; background: var(--surface-2); color: var(--muted); text-decoration: none;">v1 (384d)</a>
+        <a href="/search-v4" class="btn" style="padding: 6px 12px; font-size: 12px; background: var(--surface-2); color: var(--muted); text-decoration: none;">v4 (SigLIP 2)</a>
+      </div>
+    </div>
+
+    <!-- Dropzone загрузки своего файла -->
+    <div id="dropzone" style="border: 2px dashed var(--border); border-radius: var(--radius); padding: 20px; text-align: center; background: var(--surface); cursor: pointer; margin-bottom: 20px; transition: border-color 0.2s;">
+      <input type="file" id="file-input" accept="image/*" style="display: none;">
+      <div style="font-size: 14px; font-weight: 600; color: #fff; margin-bottom: 4px;">Кликните для выбора файла или перетащите фото сюда</div>
+      <div style="font-size: 12px; color: var(--muted);">BBox оригинал → v1 DINOv2 coarse (~15 мс) → при обнаружении соседей: v4 SigLIP 2/OCR среди отобранных кандидатов</div>
+    </div>
+
+    <div id="status-line" style="font-size: 13px; color: var(--muted); margin-bottom: 12px;">Выберите тестовый файл слева или загрузите свой</div>
+    <div id="loading" style="display: none; padding: 20px; text-align: center; color: var(--accent); font-weight: 600;">
+      Поиск в каскадном пайплайне...
+      <br>
+      <span style="color: var(--muted); font-size: 12px;">YOLO BBox ➔ DINOv2 Coarse ➔ Decision Engine ➔ Scoped SigLIP 2 / OCR</span>
+    </div>
+
+    <!-- Результаты -->
+    <div id="results-area" style="display: none;">
+
+      <!-- Баннер статуса каскада -->
+      <div id="statusBanner" class="cascade-status-banner">
+        <div>
+          <div id="statusTitle" style="font-size: 15px; font-weight: 700;"></div>
+          <div id="statusDesc" style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;"></div>
+        </div>
+        <div id="timingsSummary" class="metrics-row" style="margin-top: 0;"></div>
+      </div>
+
+      <!-- Цепочка кропов -->
+      <div class="section-title">
+        <span>Цепочка изображений каскада</span>
+        <span style="font-size: 11px; color: var(--muted); font-weight: normal;">(кликните для зума)</span>
+      </div>
+      <div class="compare-grid" id="cropsGrid">
+        <div class="compare-card">
+          <div class="compare-header"><span>1. Оригинал</span></div>
+          <div class="compare-img-wrap"><img id="origImg" class="compare-img zoomable" alt="Оригинал"></div>
+        </div>
+        <div class="compare-card">
+          <div class="compare-header"><span>2. BBox кроп (оригинал)</span><span class="badge-tag accent-v1">Этап 1</span></div>
+          <div class="compare-img-wrap"><img id="bboxImg" class="compare-img zoomable" alt="BBox Crop"></div>
+        </div>
+        <div class="compare-card" id="v4CropCard" style="display: none;">
+          <div class="compare-header"><span>3. v4 Seg Letterbox</span><span class="badge-tag accent-v4">Этап 2</span></div>
+          <div class="compare-img-wrap"><img id="v4Img" class="compare-img zoomable" alt="v4 Crop"></div>
+        </div>
+      </div>
+
+      <!-- Карточка победителя Top-1 -->
+      <div id="winner-box"></div>
+
+      <!-- Выдача Этапа 1 (v1 DINOv2) -->
+      <div class="section-title">
+        <span>Этап 1: Выдача DINOv2-small LoRA</span>
+        <span id="v1Badge" style="font-size: 11px; color: var(--muted); font-weight: normal;"></span>
+      </div>
+      <div id="v1Cards" class="compare-grid"></div>
+
+      <!-- Выдача Этапа 2 (v4 SigLIP 2) -->
+      <div id="stage2Section" style="display: none;">
+        <div class="section-title">
+          <span>Этап 2: Арбитраж соседей (SigLIP 2 768d + OCR Reranker)</span>
+          <span id="v4Badge" style="font-size: 11px; color: var(--muted); font-weight: normal;"></span>
+        </div>
+        <div id="v4Cards" class="compare-grid"></div>
+      </div>
+
+      <!-- Финальный Top-K -->
+      <div class="section-title">
+        <span>Итоговый результат каскада (Top-K)</span>
+      </div>
+      <div id="finalCards" class="compare-grid"></div>
+
+    </div>
   </div>
 </div>
 
-<!-- Upload form -->
-<div class="panel-section">
-  <form id="cascadeSearchForm" enctype="multipart/form-data">
-    <div style="display: flex; gap: 16px; align-items: flex-end; flex-wrap: wrap;">
-      <div style="flex: 1; min-width: 280px;">
-        <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px;">
-          Фото бутылки или этикетки
-        </label>
-        <input type="file" id="imageInput" name="image" accept="image/*" required class="input" style="width: 100%;">
-      </div>
-      <div style="width: 100px;">
-        <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px;">
-          Top-K
-        </label>
-        <input type="number" id="kInput" name="k" value="5" min="1" max="20" class="input" style="width: 100%;">
-      </div>
-      <div>
-        <button type="submit" id="searchBtn" class="btn btn-primary" style="height: 40px; padding: 0 24px; font-weight: 600;">
-          Найти каскадом
-        </button>
-      </div>
-    </div>
-  </form>
-</div>
-
-<!-- Results container -->
-<div id="resultsWrapper" style="display: none;">
-
-  <!-- Status banner -->
-  <div id="statusBanner" class="cascade-status-banner">
-    <div>
-      <div id="statusTitle" class="status-title"></div>
-      <div id="statusDesc" class="status-desc"></div>
-    </div>
-    <div id="timingsSummary" class="metrics-row" style="margin-top: 0;"></div>
-  </div>
-
-  <!-- Crops preview -->
-  <div class="panel-section">
-    <div class="panel-section-title">Цепочка подготовки изображений</div>
-    <div class="compare-grid" id="cropsGrid">
-      <div class="compare-card">
-        <div class="compare-header">
-          <span>Оригинальное фото</span>
-        </div>
-        <div class="compare-img-wrap">
-          <img id="queryPreview" class="compare-img zoomable" alt="Query">
-        </div>
-      </div>
-      <div class="compare-card">
-        <div class="compare-header">
-          <span>BBox кроп (оригинал)</span>
-          <span class="badge-tag accent-v1">Этап 1</span>
-        </div>
-        <div class="compare-img-wrap">
-          <img id="bboxCropPreview" class="compare-img zoomable" alt="BBox Crop">
-        </div>
-      </div>
-      <div class="compare-card" id="v4CropCard" style="display: none;">
-        <div class="compare-header">
-          <span>v4 Seg Letterbox</span>
-          <span class="badge-tag accent-v4">Этап 2</span>
-        </div>
-        <div class="compare-img-wrap">
-          <img id="v4CropPreview" class="compare-img zoomable" alt="v4 Crop">
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Stage 1 Details -->
-  <div class="panel-section">
-    <div class="panel-section-title">
-      <span>Этап 1: Выдача DINOv2-small LoRA (v1 Coarse)</span>
-      <span id="v1TimingBadge" style="font-size: 12px; color: var(--muted); font-weight: normal;"></span>
-    </div>
-    <div id="v1Cards" class="compare-grid"></div>
-  </div>
-
-  <!-- Stage 2 Details (v4) -->
-  <div class="panel-section" id="stage2Section" style="display: none;">
-    <div class="panel-section-title">
-      <span>Этап 2: Арбитраж соседей SigLIP 2 (768d) + OCR Reranker</span>
-      <span id="v4TimingBadge" style="font-size: 12px; color: var(--muted); font-weight: normal;"></span>
-    </div>
-    <div id="v4Cards" class="compare-grid"></div>
-  </div>
-
-  <!-- Final Winner and Top-5 -->
-  <div class="panel-section">
-    <div class="panel-section-title">
-      <span>Итоговый результат каскада (Top-K)</span>
-    </div>
-    <div id="finalCards" class="compare-grid"></div>
-  </div>
-
-</div>
-
-<!-- Lightbox Modal -->
+<!-- Модальное окно Lightbox -->
 <div id="lightbox" class="lightbox-overlay" style="display: none;" onclick="closeLightbox()">
   <div class="lightbox-content" onclick="event.stopPropagation()">
     <img id="lightboxImg" class="lightbox-img" src="" alt="Enlarged">
@@ -340,77 +317,104 @@
 </div>
 
 <script>
-function openLightbox(src, caption) {
-  const overlay = document.getElementById('lightbox');
-  const img = document.getElementById('lightboxImg');
-  const cap = document.getElementById('lightboxCaption');
-  img.src = src;
-  cap.textContent = caption || '';
-  overlay.style.display = 'flex';
-}
+let allFiles = [];
+let currentOrigUrl = null;
 
-function closeLightbox() {
-  document.getElementById('lightbox').style.display = 'none';
-}
+const sourceSelect = document.getElementById('source-select');
+const filterInput = document.getElementById('filter-input');
+const filesList = document.getElementById('files-list');
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('file-input');
+const statusLine = document.getElementById('status-line');
+const loading = document.getElementById('loading');
+const resultsArea = document.getElementById('results-area');
 
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') closeLightbox();
-});
+sourceSelect.addEventListener('change', loadFiles);
+filterInput.addEventListener('input', renderFiles);
 
-document.querySelectorAll('.zoomable').forEach(img => {
-  img.addEventListener('click', () => {
-    if (img.src) openLightbox(img.src, img.alt);
-  });
-});
-
-document.getElementById('imageInput').addEventListener('change', function(e) {
-  const file = e.target.files[0];
-  if (file) {
-    const reader = new FileReader();
-    reader.onload = function(evt) {
-      document.getElementById('queryPreview').src = evt.target.result;
-    };
-    reader.readAsDataURL(file);
-  }
-});
-
-document.getElementById('cascadeSearchForm').addEventListener('submit', async function(e) {
+dropzone.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.style.borderColor = '#f1c40f'; });
+dropzone.addEventListener('dragleave', () => { dropzone.style.borderColor = 'var(--border)'; });
+dropzone.addEventListener('drop', (e) => {
   e.preventDefault();
-  const fileInput = document.getElementById('imageInput');
-  if (!fileInput.files.length) return;
+  dropzone.style.borderColor = 'var(--border)';
+  if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0], e.dataTransfer.files[0].name);
+});
+fileInput.addEventListener('change', () => {
+  if (fileInput.files.length) handleFile(fileInput.files[0], fileInput.files[0].name);
+});
 
-  const btn = document.getElementById('searchBtn');
-  btn.disabled = true;
-  btn.textContent = 'Поиск в каскаде...';
+async function loadFiles() {
+  filesList.innerHTML = '<div style="color: var(--muted); padding: 8px; font-size: 12px;">Загрузка...</div>';
+  try {
+    const res = await fetch(`/api/rectify/files?source=${sourceSelect.value}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    allFiles = await res.json();
+    renderFiles();
+  } catch (err) {
+    filesList.innerHTML = `<div style="color: #ff4757; padding: 8px; font-size: 12px;">${err.message}</div>`;
+  }
+}
 
-  const formData = new FormData();
-  formData.append('image', fileInput.files[0]);
-  formData.append('k', document.getElementById('kInput').value);
+function renderFiles() {
+  const q = filterInput.value.trim().toLowerCase();
+  const filtered = q ? allFiles.filter(f => f.toLowerCase().includes(q)) : allFiles;
+  if (!filtered.length) {
+    filesList.innerHTML = '<div style="color: var(--muted); padding: 8px; font-size: 12px;">Ничего не найдено</div>';
+    return;
+  }
+  filesList.innerHTML = filtered.map(f => `<div class="file-item" data-filename="${f}" onclick="selectFile('${f}')">${f}</div>`).join('');
+}
+
+async function selectFile(filename) {
+  document.querySelectorAll('.file-item').forEach(el => el.classList.toggle('active', el.dataset.filename === filename));
+  statusLine.textContent = `Загрузка и поиск в каскаде для ${filename}...`;
+  try {
+    const res = await fetch(`/api/rectify/image?source=${sourceSelect.value}&filename=${filename}`);
+    if (!res.ok) throw new Error(`Не удалось загрузить ${filename}`);
+    const blob = await res.blob();
+    handleFile(new File([blob], filename, { type: blob.type || 'image/jpeg' }), filename);
+  } catch (err) {
+    statusLine.textContent = `Ошибка: ${err.message}`;
+  }
+}
+
+async function handleFile(file, displayName) {
+  if (currentOrigUrl) URL.revokeObjectURL(currentOrigUrl);
+  currentOrigUrl = URL.createObjectURL(file);
+  statusLine.textContent = `Каскадный поиск для: ${displayName || file.name}...`;
+  loading.style.display = 'block';
+  resultsArea.style.display = 'none';
+
+  const fd = new FormData();
+  fd.append('image', file);
+  fd.append('k', '5');
 
   try {
-    const resp = await fetch('/api/cascade/search', {
-      method: 'POST',
-      body: formData,
-    });
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({ detail: resp.statusText }));
-      alert('Ошибка поиска: ' + (err.detail || resp.statusText));
-      return;
+    const res = await fetch('/api/cascade/search', { method: 'POST', body: fd });
+    let data;
+    const contentType = res.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      data = await res.json();
+    } else {
+      const text = await res.text();
+      if (!res.ok) throw new Error(`HTTP ${res.status}: ${text || 'Ошибка сервера'}`);
+      throw new Error(`Неожиданный ответ сервера: ${text.slice(0, 100)}`);
     }
-    const data = await resp.json();
-    renderCascadeResults(data);
+    if (!res.ok) throw new Error(data.detail || `Ошибка каскада (HTTP ${res.status})`);
+    statusLine.textContent = `Готово: ${displayName || file.name} (${data.timings.total_ms} мс)`;
+    renderResults(data, currentOrigUrl);
   } catch (err) {
-    alert('Сетевая ошибка: ' + err.message);
+    statusLine.textContent = `Ошибка поиска: ${err.message}`;
   } finally {
-    btn.disabled = false;
-    btn.textContent = 'Найти каскадом';
+    loading.style.display = 'none';
   }
-});
+}
 
-function renderCascadeResults(data) {
-  document.getElementById('resultsWrapper').style.display = 'block';
+function renderResults(data, origUrl) {
+  resultsArea.style.display = 'block';
 
-  // 1. Status Banner
+  // 1. Статус баннер
   const banner = document.getElementById('statusBanner');
   const title = document.getElementById('statusTitle');
   const desc = document.getElementById('statusDesc');
@@ -422,10 +426,10 @@ function renderCascadeResults(data) {
   } else {
     banner.className = 'cascade-status-banner v4-refined';
     title.innerHTML = '<span style="color: #a29bfe;">⚡ ЭТАП 2: Арбитраж соседей (v4 SigLIP 2 + OCR)</span>';
-    desc.textContent = data.decision.reason + ` → Отобрано соседей: ${data.v1_neighbors.length}, победил v4`;
+    desc.textContent = data.decision.reason + ` → Отобрано соседей: ${data.v1_neighbors.length}, арбитраж провел v4`;
   }
 
-  // Timings
+  // Тайминги
   const tSummary = document.getElementById('timingsSummary');
   tSummary.innerHTML = `
     <div class="metric-pill"><span class="label">BBox YOLO</span><span class="val">${data.timings.bbox_detect_ms || 0} ms</span></div>
@@ -434,24 +438,56 @@ function renderCascadeResults(data) {
     <div class="metric-pill" style="border-color: #f1c40f;"><span class="label" style="color: #f1c40f;">Итого</span><span class="val" style="color: #f1c40f;">${data.timings.total_ms} ms</span></div>
   `;
 
-  // 2. BBox Crop preview
+  // 2. Изображения цепочки
+  document.getElementById('origImg').src = origUrl;
+  document.getElementById('origImg').onclick = () => openLightbox(origUrl, 'Оригинал');
+
   if (data.bbox_crop) {
-    const bboxImg = document.getElementById('bboxCropPreview');
-    bboxImg.src = data.bbox_crop;
-    bboxImg.onclick = () => openLightbox(data.bbox_crop, 'BBox кроп (оригинальное разрешение)');
+    document.getElementById('bboxImg').src = data.bbox_crop;
+    document.getElementById('bboxImg').onclick = () => openLightbox(data.bbox_crop, 'BBox кроп (оригинальное разрешение)');
   }
+
   const v4Card = document.getElementById('v4CropCard');
   if (data.v4_query_crop) {
     v4Card.style.display = 'flex';
-    const v4Img = document.getElementById('v4CropPreview');
-    v4Img.src = data.v4_query_crop;
-    v4Img.onclick = () => openLightbox(data.v4_query_crop, 'v4 Letterbox 518x518 кроп');
+    document.getElementById('v4Img').src = data.v4_query_crop;
+    document.getElementById('v4Img').onclick = () => openLightbox(data.v4_query_crop, 'v4 Letterbox 518x518 кроп');
   } else {
     v4Card.style.display = 'none';
   }
 
-  // 3. Render Stage 1 cards
-  document.getElementById('v1TimingBadge').textContent = `Время: ${data.timings.v1_total_ms} ms`;
+  // 3. Карточка победителя Top-1
+  const w = data.winner;
+  const winnerBox = document.getElementById('winner-box');
+  if (w) {
+    const wScore = w.final_score ? w.final_score.toFixed(4) : (w.dino_similarity || '-');
+    winnerBox.innerHTML = `
+      <div class="winner-card">
+        <img class="zoomable" src="${w.image_url}" alt="${w.title}" style="width: 120px; height: 160px; object-fit: contain; background: #000; border-radius: 6px;" onclick="openLightbox('${w.image_url}', '${w.title}')">
+        <div style="flex: 1;">
+          <div style="font-size: 11px; background: #f1c40f; color: #000; font-weight: 700; padding: 2px 8px; border-radius: 4px; display: inline-block; margin-bottom: 6px;">Победитель каскада (#1)</div>
+          <div style="font-size: 18px; font-weight: 700; color: #fff;">${w.title}</div>
+          <div style="color: var(--muted); font-size: 13px; margin-top: 2px;">${w.manufacturer || ''}</div>
+          <div class="metrics-row" style="margin-top: 10px;">
+            <div class="metric-pill"><span class="label">Итоговый скор</span><span class="val" style="color: #f1c40f;">${wScore}</span></div>
+            ${w.vote_count !== undefined ? `<div class="metric-pill"><span class="label">Голосов v4</span><span class="val">${w.vote_count}</span></div>` : ''}
+            ${w.ocr_vintage_match !== undefined && w.ocr_vintage_match !== null ? `<div class="metric-pill"><span class="label">Винтаж OCR</span><span class="val" style="color: ${w.ocr_vintage_match ? '#2ecc71' : '#e74c3c'};">${w.ocr_vintage_match ? '✓ ' + (data.vintage_detected || '') : '✗ Не совпал'}</span></div>` : ''}
+          </div>
+          ${w.slug ? `
+          <div style="margin-top: 12px;">
+            <a href="/api/sommelier/wine/${w.slug}" target="_blank" class="btn btn-primary" style="font-size: 12px; padding: 6px 16px; text-decoration: none; display: inline-block;">
+              Справка AI-сомелье ↗
+            </a>
+          </div>` : ''}
+        </div>
+      </div>
+    `;
+  } else {
+    winnerBox.innerHTML = '<div style="color: var(--muted); padding: 12px;">Победитель не определен</div>';
+  }
+
+  // 4. Выдача v1
+  document.getElementById('v1Badge').textContent = `Время: ${data.timings.v1_total_ms} ms`;
   const v1Cards = document.getElementById('v1Cards');
   v1Cards.innerHTML = '';
   const neighborIds = new Set(data.v1_neighbors.map(n => n.product_id));
@@ -462,7 +498,7 @@ function renderCascadeResults(data) {
     card.className = 'compare-card' + (isNeighbor ? ' neighbor-border' : '');
     card.innerHTML = `
       <div class="compare-header">
-        <span>#${idx + 1} ${item.title.substring(0, 24)}...</span>
+        <span>#${idx + 1} ${item.title.substring(0, 20)}...</span>
         ${isNeighbor ? '<span class="badge-tag accent-v4">Сосед → v4</span>' : ''}
       </div>
       <div class="compare-img-wrap">
@@ -480,11 +516,11 @@ function renderCascadeResults(data) {
     v1Cards.appendChild(card);
   });
 
-  // 4. Render Stage 2 cards (v4)
+  // 5. Выдача v4 (если была)
   const stage2Sec = document.getElementById('stage2Section');
   if (data.v4_results && data.v4_results.length > 0) {
     stage2Sec.style.display = 'block';
-    document.getElementById('v4TimingBadge').textContent = `Время: ${data.timings.v4_total_ms} ms | Винтаж: ${data.vintage_detected || 'нет'}`;
+    document.getElementById('v4Badge').textContent = `Время: ${data.timings.v4_total_ms} ms | Винтаж: ${data.vintage_detected || 'нет'}`;
     const v4Cards = document.getElementById('v4Cards');
     v4Cards.innerHTML = '';
     data.v4_results.forEach((item, idx) => {
@@ -493,7 +529,7 @@ function renderCascadeResults(data) {
       card.className = 'compare-card' + (isWinner ? ' winner-border' : '');
       card.innerHTML = `
         <div class="compare-header">
-          <span>#${idx + 1} ${item.title.substring(0, 24)}...</span>
+          <span>#${idx + 1} ${item.title.substring(0, 20)}...</span>
           ${isWinner ? '<span class="badge-tag accent-v4" style="background:#f1c40f;">Победитель v4</span>' : ''}
         </div>
         <div class="compare-img-wrap">
@@ -508,13 +544,8 @@ function renderCascadeResults(data) {
           </div>
           <div style="display: flex; justify-content: space-between; font-size: 11px;">
             <span style="color: var(--muted);">Голосов:</span>
-            <span>${item.vote_count} (${(item.vote_ratio * 100).toFixed(0)}%)</span>
+            <span>${item.vote_count}</span>
           </div>
-          ${item.ocr_vintage_match !== null ? `
-          <div style="display: flex; justify-content: space-between; font-size: 11px;">
-            <span style="color: var(--muted);">OCR Винтаж:</span>
-            <span style="color: ${item.ocr_vintage_match ? '#2ecc71' : '#e74c3c'};">${item.ocr_vintage_match ? '✓ Совпал' : '✗ Не совпал'}</span>
-          </div>` : ''}
         </div>
       `;
       v4Cards.appendChild(card);
@@ -523,7 +554,7 @@ function renderCascadeResults(data) {
     stage2Sec.style.display = 'none';
   }
 
-  // 5. Final Top-K Results
+  // 6. Итоговый Top-K
   const finalCards = document.getElementById('finalCards');
   finalCards.innerHTML = '';
   data.final_results.forEach((item, idx) => {
@@ -545,16 +576,28 @@ function renderCascadeResults(data) {
           <span style="color: var(--muted);">Скор:</span>
           <span style="font-weight: 700; color: #f1c40f;">${scoreVal}</span>
         </div>
-        ${item.slug ? `
-        <div style="margin-top: 8px;">
-          <a href="/api/sommelier/wine/${item.slug}" target="_blank" class="btn btn-secondary" style="font-size: 11px; padding: 4px 8px; width: 100%; text-align: center; display: block;">
-            AI-сомелье ↗
-          </a>
-        </div>` : ''}
       </div>
     `;
     finalCards.appendChild(card);
   });
 }
+
+function openLightbox(src, caption) {
+  const overlay = document.getElementById('lightbox');
+  document.getElementById('lightboxImg').src = src;
+  document.getElementById('lightboxCaption').textContent = caption || '';
+  overlay.style.display = 'flex';
+}
+
+function closeLightbox() {
+  document.getElementById('lightbox').style.display = 'none';
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeLightbox();
+});
+
+// Загрузка файлов при открытии страницы
+loadFiles();
 </script>
 {% endblock %}

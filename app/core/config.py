@@ -96,32 +96,36 @@ class Settings(BaseSettings):
 
     @property
     def resolved_siglip_v4_model_path(self) -> Path:
-        if self.siglip_v4_model_path.is_dir():
-            return self.siglip_v4_model_path
-        if Path("/models/siglip2_v4_finetuned").is_dir():
-            return Path("/models/siglip2_v4_finetuned")
-        media_cand = self.media_dir / "models" / "siglip2_v4_finetuned"
-        if media_cand.is_dir():
-            return media_cand
         base = Path(__file__).resolve().parent.parent.parent
-        cand = base / "models" / "siglip2_v4_finetuned"
-        if cand.is_dir():
-            return cand
+        candidates = [
+            self.siglip_v4_model_path,
+            Path("/models/siglip2_v4_finetuned"),
+            self.media_dir / "models" / "siglip2_v4_finetuned",
+            base / "models" / "siglip2_v4_finetuned",
+        ]
+        for cand in candidates:
+            if cand.is_dir() and ((cand / "adapter_model.bin").is_file() or (cand / "adapter_model.safetensors").is_file()):
+                return cand
+        for cand in candidates:
+            if cand.is_dir():
+                return cand
         return self.siglip_v4_model_path
 
     @property
     def resolved_siglip_v4_base_model_path(self) -> Path:
-        if self.siglip_v4_base_model_path.is_dir():
-            return self.siglip_v4_base_model_path
-        if Path("/models/siglip2-base-patch16-512").is_dir():
-            return Path("/models/siglip2-base-patch16-512")
-        media_cand = self.media_dir / "models" / "siglip2-base-patch16-512"
-        if media_cand.is_dir():
-            return media_cand
         base = Path(__file__).resolve().parent.parent.parent
-        cand = base / "models" / "siglip2-base-patch16-512"
-        if cand.is_dir():
-            return cand
+        candidates = [
+            self.siglip_v4_base_model_path,
+            Path("/models/siglip2-base-patch16-512"),
+            self.media_dir / "models" / "siglip2-base-patch16-512",
+            base / "models" / "siglip2-base-patch16-512",
+        ]
+        for cand in candidates:
+            if cand.is_dir() and ((cand / "model.safetensors").is_file() or (cand / "pytorch_model.bin").is_file()):
+                return cand
+        for cand in candidates:
+            if cand.is_dir():
+                return cand
         return self.siglip_v4_base_model_path
 
     @property

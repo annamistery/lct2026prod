@@ -173,11 +173,11 @@ async def lifespan(app: FastAPI):
         except Exception:
             logger.exception("v4 pipeline failed to load")
 
-        # Cascade search pipeline (v1 Coarse + v4 Refinement)
+        # Cascade search pipeline (v1 Coarse + optional v4 Refinement)
         try:
             p1 = getattr(app.state, "pipeline_v1", None)
             p4 = getattr(app.state, "pipeline_v4", None)
-            if p1 is not None and p4 is not None:
+            if p1 is not None:
                 from app.pipelines.search.cascade.decision import CascadeDecisionEngine
                 from app.pipelines.search.cascade.pipeline import CascadeSearchPipeline
 
@@ -190,7 +190,10 @@ async def lifespan(app: FastAPI):
                     images=images,
                 )
                 app.state.pipeline_cascade = pipeline_cascade
-                logger.info("Cascade search pipeline loaded (v1 Coarse + v4 Refinement)")
+                if p4 is not None:
+                    logger.info("Cascade search pipeline loaded (v1 Coarse + v4 Refinement)")
+                else:
+                    logger.warning("Cascade search pipeline loaded in fallback mode (v1 Coarse only, v4 unavailable)")
             else:
                 app.state.pipeline_cascade = None
         except Exception:

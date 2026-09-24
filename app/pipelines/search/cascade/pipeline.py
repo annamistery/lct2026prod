@@ -30,7 +30,7 @@ from app.services.images import ImageService
 class CascadeSearchPipeline:
     detector: DetectorService
     pipeline_v1: SearchPipelineV1
-    pipeline_v4: SearchPipelineV4
+    pipeline_v4: SearchPipelineV4 | None
     decision_engine: CascadeDecisionEngine
     images: ImageService
 
@@ -78,10 +78,12 @@ class CascadeSearchPipeline:
         v4_query_crop: str | None = None
         vintage_detected: str | None = None
 
-        if decision.is_confident or not v1_neighbors:
+        if decision.is_confident or not v1_neighbors or self.pipeline_v4 is None:
             stage_reached = "v1_confident"
             winner = v1_results[0] if v1_results else None
             final_results: list[Any] = v1_results[:k]
+            if self.pipeline_v4 is None and not decision.is_confident:
+                decision.reason += " (v4 модель недоступна, возврат лучшего из v1)"
         else:
             stage_reached = "v4_refined"
             v4_started = time.perf_counter()
