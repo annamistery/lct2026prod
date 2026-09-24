@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import io
 import random
-from typing import Callable
+from collections.abc import Callable
 
 import cv2
 import numpy as np
@@ -449,7 +449,7 @@ def generate_augmented_cloud_v3(
 
     for aug_name in BASE_CATALOG_AUG_NAMES_V3:
         aug_fn = _AUG_REGISTRY[aug_name]
-        for variant_i in range(variants_per_aug):
+        for _variant_i in range(variants_per_aug):
             variant_seed = rng.randint(0, 2**31 - 1)
             variant_rng = random.Random(variant_seed)
             aug_img = aug_fn(canonical_label, variant_rng)

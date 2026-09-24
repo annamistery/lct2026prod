@@ -11,7 +11,6 @@ import numpy as np
 from PIL import Image
 
 from app.services.augment import _AUG_REGISTRY
-from app.services.images import ImageService
 from app.services.query_prep_v3 import letterbox_pil
 
 

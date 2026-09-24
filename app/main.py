@@ -1,22 +1,21 @@
 import logging
 import time
 import uuid
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.api.router import router
 from app.api.search.v1.router import router as search_v1_router
 from app.api.search.v2.router import router as search_v2_router
-
 from app.core.config import get_settings
 from app.core.lifespan import lifespan
 from app.core.logging import configure_logging
-from app.web.router import router as web_router
 from app.web.detect_router import router as detect_router
 from app.web.rectify_router import router as rectify_router
-from fastapi.staticfiles import StaticFiles
-from pathlib import Path
+from app.web.router import router as web_router
 
 BASE_DIR = Path(__file__).resolve().parent
 

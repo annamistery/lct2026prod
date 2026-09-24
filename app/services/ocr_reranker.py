@@ -106,9 +106,9 @@ class OcrReranker:
     def rerank(
         self,
         query_image: Image.Image,
-        candidates: list["ProductCandidateV4"],
+        candidates: list[ProductCandidateV4],
         dino_similarities: list[float],
-    ) -> tuple[list["ProductCandidateV4"], str | None, list[float]]:
+    ) -> tuple[list[ProductCandidateV4], str | None, list[float]]:
         """Return (reranked_candidates, vintage_detected, final_scores)."""
         if not candidates:
             return candidates, None, []
@@ -121,10 +121,10 @@ class OcrReranker:
         vintage_query = _extract_vintage(query_text)
         query_tokens = _tokenise(query_text)
 
-        scored: list[tuple[float, "ProductCandidateV4"]] = []
+        scored: list[tuple[float, ProductCandidateV4]] = []
         final_scores: list[float] = []
 
-        for cand, sim in zip(candidates, dino_similarities):
+        for cand, sim in zip(candidates, dino_similarities, strict=False):
             prod_text = cand.product.description or ""
             vintage_prod = _extract_vintage(prod_text)
             prod_tokens = _tokenise(prod_text + " " + (cand.product.title or ""))

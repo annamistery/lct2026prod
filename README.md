@@ -7,10 +7,11 @@
 - **FastAPI**: каталог, добавление товаров, распознавание этикетки (v1, v2, v3, v4), диалог с AI-сомелье — один процесс, один порт `8030`.
 - **PostgreSQL 16 + pgvector**: таблицы `products`, `product_embeddings` (DINOv2, vector 384) и `product_embeddings_v4` (SigLIP 2, vector 768), быстрый поиск ближайших векторов.
 - **Поисковые пайплайны**:
-  - **v1**: BBox YOLO detection + DINOv2-small (LoRA) + SIFT reranker (`/api/v1/search`, `/api/v1/search-from-crop`).
+  - **v1**: BBox YOLO detection + DINOv2-small (LoRA) cosine search (`/api/v1/search`, `/api/v1/search-from-crop`).
   - **v2**: Ректификация контура + DINOv2-small (`/api/v2/search`, `/api/v2/search-from-crop`).
   - **v3**: YOLO сегментация маски + DINOv2-base (768d) Letterbox 518×518 + SIFT (`/api/v3/search`).
   - **v4 (SOTA)**: YOLO сегментация + Google SigLIP 2 Vision Tower (768d, LoRA) Letterbox 518×518 + pgvector vote counting + OCR Vintage & Text Reranker (`/api/v4/search`, подробнее в [`docs/SEARCH_V4_API.md`](docs/SEARCH_V4_API.md)).
+  - **Cascade (Финальный каскад)**: Двухэтапный гибридный поиск: быстрый v1 DINOv2 (~15 мс) на уникальных этикетках + адаптивный арбитраж соседей через v4 SigLIP 2/OCR (`/api/cascade/search`, `/api/cascade/predict`, подробнее в [`docs/SEARCH_CASCADE_API.md`](docs/SEARCH_CASCADE_API.md)).
 - **AI-сомелье** (`app/sommelier`, см. [`app/sommelier/README.md`](app/sommelier/README.md)): детерминированный движок подбора вин к блюду по каталогу `wines_integrated.csv` — независимый от БД и GPU, собирается из CSV при старте API. `GET /api/sommelier/wine/{slug}` — точка интеграции с результатом распознавания этикетки.
 
 Search API версионируется (`/api/v1/*`, `/api/v4/*`). Health, products, media и sommelier не версионируются.
@@ -77,6 +78,7 @@ curl -fsS http://127.0.0.1:8030/api/ready
 
 ## Веб-интерфейсы и Swagger
 
+- **Интерактивный каскадный сканер (Cascade v1+v4):** `http://<server-ip>:8030/search-cascade` (полная диагностика всех шагов: v1 DINOv2, логика отбора соседей, v4 арбитраж SigLIP 2/OCR, Lightbox).
 - **Интерактивный сканер v4 (веб):** `http://<server-ip>:8030/search-v4` (загрузка фото, визуализация BBox/маски, 4 карточки цепочки поиска и Lightbox).
 - **Мобильный сканер с камеры:** `http://<server-ip>:8030/mobi/`
 - **Swagger API документация:** `http://<server-ip>:8030/api/docs`

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import uuid
 from collections import defaultdict
 from typing import Annotated
-import uuid
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
@@ -76,7 +76,7 @@ async def list_twin_clusters(
 
     # Compute max pairwise similarity per cluster
     cluster_max_sim: dict[uuid.UUID, float] = defaultdict(float)
-    for p1_id, p2_id, distance in rows:
+    for p1_id, _p2_id, distance in rows:
         root = find(p1_id)
         sim = max(0.0, min(1.0, 1.0 - float(distance)))
         if sim > cluster_max_sim[root]:
