@@ -6,7 +6,7 @@
 <style>
 .compare-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 16px;
   margin-bottom: 24px;
 }
@@ -18,6 +18,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  transition: border-color 0.2s;
 }
 .compare-card.winner-border {
   border-color: #f1c40f;
@@ -55,6 +56,11 @@
   color: #000;
   font-weight: 700;
 }
+.badge-tag.accent-winner {
+  background: #f1c40f;
+  color: #000;
+  font-weight: 700;
+}
 .compare-img-wrap {
   width: 100%;
   height: 220px;
@@ -77,6 +83,14 @@
 }
 .zoomable:hover {
   transform: scale(1.02);
+}
+.compare-hint {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 .lightbox-overlay {
   position: fixed;
@@ -153,7 +167,7 @@
   font-size: 15px;
   font-weight: 700;
   color: #fff;
-  margin-top: 20px;
+  margin-top: 24px;
   margin-bottom: 12px;
   display: flex;
   align-items: center;
@@ -247,10 +261,20 @@
       <span style="color: var(--muted); font-size: 12px;">YOLO BBox ➔ DINOv2 Coarse ➔ Decision Engine ➔ Scoped SigLIP 2 / OCR</span>
     </div>
 
-    <!-- Результаты -->
+    <!-- Область результатов -->
     <div id="results-area" style="display: none;">
 
-      <!-- Баннер статуса каскада -->
+      <!-- ТРИПТИХ В САМОМ ВЕРХУ: Оригинал - Кроп - Финальный победитель -->
+      <div class="section-title" style="margin-top: 0;">
+        <span>Сопоставление: Оригинал ➔ Кроп ➔ Финальный победитель</span>
+        <span style="font-size: 11px; color: var(--muted); font-weight: normal;">(кликните для зума)</span>
+      </div>
+      <div class="compare-grid" id="triptychGrid"></div>
+
+      <!-- Карточка победителя Top-1 -->
+      <div id="winner-box"></div>
+
+      <!-- Баннер статуса каскада и таймингов -->
       <div id="statusBanner" class="cascade-status-banner">
         <div>
           <div id="statusTitle" style="font-size: 15px; font-weight: 700;"></div>
@@ -259,48 +283,27 @@
         <div id="timingsSummary" class="metrics-row" style="margin-top: 0;"></div>
       </div>
 
-      <!-- Цепочка кропов -->
-      <div class="section-title">
-        <span>Цепочка изображений каскада</span>
-        <span style="font-size: 11px; color: var(--muted); font-weight: normal;">(кликните для зума)</span>
-      </div>
-      <div class="compare-grid" id="cropsGrid">
-        <div class="compare-card">
-          <div class="compare-header"><span>1. Оригинал</span></div>
-          <div class="compare-img-wrap"><img id="origImg" class="compare-img zoomable" alt="Оригинал"></div>
-        </div>
-        <div class="compare-card">
-          <div class="compare-header"><span>2. BBox кроп (оригинал)</span><span class="badge-tag accent-v1">Этап 1</span></div>
-          <div class="compare-img-wrap"><img id="bboxImg" class="compare-img zoomable" alt="BBox Crop"></div>
-        </div>
-        <div class="compare-card" id="v4CropCard" style="display: none;">
-          <div class="compare-header"><span>3. v4 Seg Letterbox</span><span class="badge-tag accent-v4">Этап 2</span></div>
-          <div class="compare-img-wrap"><img id="v4Img" class="compare-img zoomable" alt="v4 Crop"></div>
-        </div>
-      </div>
+      <!-- ВТОРИЧНЫЕ ЭТАПЫ (ДИАГНОСТИКА) -->
 
-      <!-- Карточка победителя Top-1 -->
-      <div id="winner-box"></div>
-
-      <!-- Выдача Этапа 1 (v1 DINOv2) -->
+      <!-- Секция Этапа 1 (v1 DINOv2) -->
       <div class="section-title">
-        <span>Этап 1: Выдача DINOv2-small LoRA</span>
+        <span>Этап 1: Первичная выдача DINOv2-small LoRA</span>
         <span id="v1Badge" style="font-size: 11px; color: var(--muted); font-weight: normal;"></span>
       </div>
       <div id="v1Cards" class="compare-grid"></div>
 
-      <!-- Выдача Этапа 2 (v4 SigLIP 2) -->
+      <!-- Секция Этапа 2 (v4 SigLIP 2 / OCR среди соседей) -->
       <div id="stage2Section" style="display: none;">
         <div class="section-title">
-          <span>Этап 2: Арбитраж соседей (SigLIP 2 768d + OCR Reranker)</span>
+          <span>Этап 2: Соревнование кандидатов-соседей (SigLIP 2 768d + OCR)</span>
           <span id="v4Badge" style="font-size: 11px; color: var(--muted); font-weight: normal;"></span>
         </div>
         <div id="v4Cards" class="compare-grid"></div>
       </div>
 
-      <!-- Финальный Top-K -->
+      <!-- Все кандидаты (Top-K) -->
       <div class="section-title">
-        <span>Итоговый результат каскада (Top-K)</span>
+        <span>Итоговый пул кандидатов (Top-K)</span>
       </div>
       <div id="finalCards" class="compare-grid"></div>
 
@@ -413,61 +416,67 @@ async function handleFile(file, displayName) {
 
 function renderResults(data, origUrl) {
   resultsArea.style.display = 'block';
+  const w = data.winner;
+  const wImgUrl = w ? w.image_url : '';
+  const wTitle = w ? w.title : 'Не найдено';
+  const wScore = w ? (w.final_score ? w.final_score.toFixed(4) : (w.dino_similarity || '-')) : '-';
+  const cropUrl = data.bbox_crop || origUrl;
 
-  // 1. Статус баннер
-  const banner = document.getElementById('statusBanner');
-  const title = document.getElementById('statusTitle');
-  const desc = document.getElementById('statusDesc');
+  // 1. ТРИПТИХ В САМОМ ВЕРХУ: 1. Оригинал | 2. Кроп | 3. Финальный победитель
+  const triptych = document.getElementById('triptychGrid');
+  triptych.innerHTML = `
+    <!-- Карточка 1: Оригинал -->
+    <div class="compare-card">
+      <div class="compare-header">
+        <span>1. Загруженный оригинал</span>
+        <span class="badge-tag">Фото</span>
+      </div>
+      <div class="compare-img-wrap">
+        <img class="compare-img zoomable" src="${origUrl}" alt="Оригинал" onclick="openLightbox('${origUrl}', 'Загруженный оригинал (полный кадр)')">
+      </div>
+      <div class="compare-hint">Кликните для зума</div>
+    </div>
 
-  if (data.stage_reached === 'v1_confident') {
-    banner.className = 'cascade-status-banner v1-win';
-    title.innerHTML = '<span style="color: #2ecc71;">✓ ЭТАП 1: Уверенный победитель Top-1 (v1 DINOv2)</span>';
-    desc.textContent = data.decision.reason + ' (v4 не вызывался, экономия ресурсов)';
-  } else {
-    banner.className = 'cascade-status-banner v4-refined';
-    title.innerHTML = '<span style="color: #a29bfe;">⚡ ЭТАП 2: Арбитраж соседей (v4 SigLIP 2 + OCR)</span>';
-    desc.textContent = data.decision.reason + ` → Отобрано соседей: ${data.v1_neighbors.length}, арбитраж провел v4`;
-  }
+    <!-- Карточка 2: Кроп этикетки (YOLO) -->
+    <div class="compare-card">
+      <div class="compare-header">
+        <span>2. Кроп этикетки (YOLO)</span>
+        <span class="badge-tag accent-v1">BBox</span>
+      </div>
+      <div class="compare-img-wrap">
+        <img class="compare-img zoomable" src="${cropUrl}" alt="Кроп этикетки" onclick="openLightbox('${cropUrl}', 'BBox кроп этикетки (оригинальное разрешение)')">
+      </div>
+      <div class="compare-hint">Кликните для зума</div>
+    </div>
 
-  // Тайминги
-  const tSummary = document.getElementById('timingsSummary');
-  tSummary.innerHTML = `
-    <div class="metric-pill"><span class="label">BBox YOLO</span><span class="val">${data.timings.bbox_detect_ms || 0} ms</span></div>
-    <div class="metric-pill"><span class="label">v1 DINOv2</span><span class="val">${data.timings.v1_total_ms} ms</span></div>
-    <div class="metric-pill"><span class="label">v4 SigLIP2</span><span class="val">${data.timings.v4_total_ms ? data.timings.v4_total_ms + ' ms' : 'Пропущен'}</span></div>
-    <div class="metric-pill" style="border-color: #f1c40f;"><span class="label" style="color: #f1c40f;">Итого</span><span class="val" style="color: #f1c40f;">${data.timings.total_ms} ms</span></div>
+    <!-- Карточка 3: Финальный победитель -->
+    <div class="compare-card winner-border">
+      <div class="compare-header">
+        <span style="color: #f1c40f;">3. Финальный победитель</span>
+        <span class="badge-tag accent-winner">Top-1</span>
+      </div>
+      <div class="compare-img-wrap">
+        ${wImgUrl ? `
+          <img class="compare-img zoomable" src="${wImgUrl}" alt="${wTitle}" onclick="openLightbox('${wImgUrl}', 'Победитель Top-1: ${wTitle}')">
+        ` : `
+          <div style="color: var(--muted); font-size: 12px;">Не найдено</div>
+        `}
+      </div>
+      <div class="compare-hint" style="color: #f1c40f; font-weight: 600;">Скор: ${wScore}</div>
+    </div>
   `;
 
-  // 2. Изображения цепочки
-  document.getElementById('origImg').src = origUrl;
-  document.getElementById('origImg').onclick = () => openLightbox(origUrl, 'Оригинал');
-
-  if (data.bbox_crop) {
-    document.getElementById('bboxImg').src = data.bbox_crop;
-    document.getElementById('bboxImg').onclick = () => openLightbox(data.bbox_crop, 'BBox кроп (оригинальное разрешение)');
-  }
-
-  const v4Card = document.getElementById('v4CropCard');
-  if (data.v4_query_crop) {
-    v4Card.style.display = 'flex';
-    document.getElementById('v4Img').src = data.v4_query_crop;
-    document.getElementById('v4Img').onclick = () => openLightbox(data.v4_query_crop, 'v4 Letterbox 518x518 кроп');
-  } else {
-    v4Card.style.display = 'none';
-  }
-
-  // 3. Карточка победителя Top-1
-  const w = data.winner;
+  // 2. Карточка победителя Top-1 (подробные данные)
   const winnerBox = document.getElementById('winner-box');
   if (w) {
-    const wScore = w.final_score ? w.final_score.toFixed(4) : (w.dino_similarity || '-');
     winnerBox.innerHTML = `
       <div class="winner-card">
-        <img class="zoomable" src="${w.image_url}" alt="${w.title}" style="width: 120px; height: 160px; object-fit: contain; background: #000; border-radius: 6px;" onclick="openLightbox('${w.image_url}', '${w.title}')">
+        <img class="zoomable" src="${w.image_url}" alt="${w.title}" style="width: 120px; height: 160px; object-fit: contain; background: #000; border-radius: 6px; flex-shrink: 0;" onclick="openLightbox('${w.image_url}', '${w.title}')">
         <div style="flex: 1;">
-          <div style="font-size: 11px; background: #f1c40f; color: #000; font-weight: 700; padding: 2px 8px; border-radius: 4px; display: inline-block; margin-bottom: 6px;">Победитель каскада (#1)</div>
+          <div style="font-size: 11px; background: #f1c40f; color: #000; font-weight: 700; padding: 2px 8px; border-radius: 4px; display: inline-block; margin-bottom: 6px;">Победитель каскада (Top-1 Match)</div>
           <div style="font-size: 18px; font-weight: 700; color: #fff;">${w.title}</div>
           <div style="color: var(--muted); font-size: 13px; margin-top: 2px;">${w.manufacturer || ''}</div>
+          <div style="font-size: 12px; color: #aaa; margin-top: 6px;">${w.description || ''}</div>
           <div class="metrics-row" style="margin-top: 10px;">
             <div class="metric-pill"><span class="label">Итоговый скор</span><span class="val" style="color: #f1c40f;">${wScore}</span></div>
             ${w.vote_count !== undefined ? `<div class="metric-pill"><span class="label">Голосов v4</span><span class="val">${w.vote_count}</span></div>` : ''}
@@ -486,7 +495,30 @@ function renderResults(data, origUrl) {
     winnerBox.innerHTML = '<div style="color: var(--muted); padding: 12px;">Победитель не определен</div>';
   }
 
-  // 4. Выдача v1
+  // 3. Баннер решения каскада и тайминги
+  const banner = document.getElementById('statusBanner');
+  const title = document.getElementById('statusTitle');
+  const desc = document.getElementById('statusDesc');
+
+  if (data.stage_reached === 'v1_confident') {
+    banner.className = 'cascade-status-banner v1-win';
+    title.innerHTML = '<span style="color: #2ecc71;">✓ ЭТАП 1: Уверенный победитель Top-1 (v1 DINOv2)</span>';
+    desc.textContent = data.decision.reason + ' (v4 не вызывался, экономия ресурсов)';
+  } else {
+    banner.className = 'cascade-status-banner v4-refined';
+    title.innerHTML = '<span style="color: #a29bfe;">⚡ ЭТАП 2: Арбитраж соседей (v4 SigLIP 2 + OCR)</span>';
+    desc.textContent = data.decision.reason + ` → Отобрано соседей: ${data.v1_neighbors.length}, арбитраж провел v4`;
+  }
+
+  const tSummary = document.getElementById('timingsSummary');
+  tSummary.innerHTML = `
+    <div class="metric-pill"><span class="label">BBox YOLO</span><span class="val">${data.timings.bbox_detect_ms || 0} ms</span></div>
+    <div class="metric-pill"><span class="label">v1 DINOv2</span><span class="val">${data.timings.v1_total_ms} ms</span></div>
+    <div class="metric-pill"><span class="label">v4 SigLIP2</span><span class="val">${data.timings.v4_total_ms ? data.timings.v4_total_ms + ' ms' : 'Пропущен'}</span></div>
+    <div class="metric-pill" style="border-color: #f1c40f;"><span class="label" style="color: #f1c40f;">Итого</span><span class="val" style="color: #f1c40f;">${data.timings.total_ms} ms</span></div>
+  `;
+
+  // 4. ВТОРИЧНАЯ ДИАГНОСТИКА: Выдача v1
   document.getElementById('v1Badge').textContent = `Время: ${data.timings.v1_total_ms} ms`;
   const v1Cards = document.getElementById('v1Cards');
   v1Cards.innerHTML = '';
@@ -516,7 +548,7 @@ function renderResults(data, origUrl) {
     v1Cards.appendChild(card);
   });
 
-  // 5. Выдача v4 (если была)
+  // 5. ВТОРИЧНАЯ ДИАГНОСТИКА: Выдача v4 среди соседей
   const stage2Sec = document.getElementById('stage2Section');
   if (data.v4_results && data.v4_results.length > 0) {
     stage2Sec.style.display = 'block';
