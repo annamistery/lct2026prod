@@ -4,33 +4,96 @@
 
 ## Архитектура
 
-- FastAPI: каталог, добавление товаров, распознавание этикетки, диалог с AI-сомелье — один процесс, один порт.
-- PostgreSQL 16 + pgvector: отдельные `products` и `product_embeddings`, несколько `vector(384)` на товар и exact cosine candidate search.
-- DINOv2: глобальный embedding каждого эталонного изображения.
-- SIFT/RANSAC: единственный финальный reranker.
-- YOLO: серверный crop полного кадра; браузерный ONNX используется при возможности.
-- AI-сомелье (`app/sommelier`, см. [`app/sommelier/README.md`](app/sommelier/README.md)): детерминированный движок подбора вин к блюду по каталогу `wines_integrated.csv` — независимый от БД и GPU, собирается из CSV при старте API. `GET /api/sommelier/wine/{slug}` — точка интеграции с результатом распознавания этикетки (slug товара из поиска → справка сомелье и, если передать блюдо, оценка сочетания).
+- **FastAPI**: каталог, добавление товаров, распознавание этикетки (v1, v2, v3, v4), диалог с AI-сомелье — один процесс, один порт `8030`.
+- **PostgreSQL 16 + pgvector**: таблицы `products`, `product_embeddings` (DINOv2, vector 384) и `product_embeddings_v4` (SigLIP 2, vector 768), быстрый поиск ближайших векторов.
+- **Поисковые пайплайны**:
+  - **v1**: BBox YOLO detection + DINOv2-small (LoRA) + SIFT reranker (`/api/v1/search`, `/api/v1/search-from-crop`).
+  - **v2**: Ректификация контура + DINOv2-small (`/api/v2/search`, `/api/v2/search-from-crop`).
+  - **v3**: YOLO сегментация маски + DINOv2-base (768d) Letterbox 518×518 + SIFT (`/api/v3/search`).
+  - **v4 (SOTA)**: YOLO сегментация + Google SigLIP 2 Vision Tower (768d, LoRA) Letterbox 518×518 + pgvector vote counting + OCR Vintage & Text Reranker (`/api/v4/search`, подробнее в [`docs/SEARCH_V4_API.md`](docs/SEARCH_V4_API.md)).
+- **AI-сомелье** (`app/sommelier`, см. [`app/sommelier/README.md`](app/sommelier/README.md)): детерминированный движок подбора вин к блюду по каталогу `wines_integrated.csv` — независимый от БД и GPU, собирается из CSV при старте API. `GET /api/sommelier/wine/{slug}` — точка интеграции с результатом распознавания этикетки.
 
-Search API версионируется: `/api/v1/search`, `/api/v1/search-from-crop`. Health, products, media и sommelier не версионируются. pgvector выбирает ближайший embedding каждого уникального товара, после чего SIFT формирует финальный порядок. Изображения и кропы в Git не поставляются: PostgreSQL и media наполняются из датасета заказчика.
+Search API версионируется (`/api/v1/*`, `/api/v4/*`). Health, products, media и sommelier не версионируются.
 
-## Запуск
+---
 
-Интегрированный пайплайн — один `docker compose up`: поднимает БД, применяет миграции, затем в одном API-контейнере параллельно загружает ML-модели (YOLO/DINOv2) и каталог сомелье (CSV → в памяти), после чего обслуживает и распознавание, и диалог с сомелье на одном порту.
+## Запуск «из коробки» (Docker)
 
-1. Установить Docker, NVIDIA Container Toolkit и Git LFS.
-2. Выполнить `git lfs pull` — production YOLO, ONNX, базовая DINOv2 и финальный LoRA adapter поставляются из Git LFS.
-3. Проверить модели: `sha256sum --check models/MODEL_MANIFEST.sha256`.
-4. Скопировать `.env.example` в `.env` и заменить пароль БД и CORS origin.
-5. Запустить `docker compose up --build`.
-6. Проверить `http://localhost:8030/api/ping`, затем `/api/ready` — в ответе `sommelier: true` означает, что каталог сомелье (2103 вина) собрался и `/api/sommelier/*` готов; на итоговый флаг `ready` это поле не влияет (сомелье не зависит от БД/GPU).
-7. Проверить сомелье:
-   ```bash
-   curl -fsS -X POST http://localhost:8030/api/sommelier/ask -H 'Content-Type: application/json' -d '{"message": "стейк рибай, не люблю дуб"}'
-   ```
+Проект полностью разворачивается и запускается в Docker на чистом сервере одной цепочкой команд:
 
-Swagger: `/api/docs`. Web-каталог `web/` обслуживается внешним Apache по HTTPS. Одиночная загрузка выполняется через `POST /api/products`, пакетная JSON/CSV загрузка — через фоновый `POST /api/imports`; формат описан в [`docs/BATCH_IMPORT.md`](docs/BATCH_IMPORT.md). Диалог, справка по вину и конфигурация сомелье — в [`docs/SOMMELIER.md`](docs/SOMMELIER.md).
+### 1. Клонирование репозитория и загрузка моделей / данных через Git LFS
+
+Для работы требуются Docker, NVIDIA Container Toolkit и Git LFS:
+```bash
+git clone https://github.com/vadfe/lct2026prod.git
+cd lct2026prod
+
+# Загрузка бинарных файлов (модели и дамп базы данных)
+git lfs pull
+sha256sum --check models/MODEL_MANIFEST.sha256
+```
+
+### 2. Конфигурация окружения
+
+```bash
+cp .env.example .env
+sed -i "s/^APP_UID=.*/APP_UID=$(id -u)/; s/^APP_GID=.*/APP_GID=$(id -g)/" .env
+```
+*(При необходимости укажите свой пароль PostgreSQL в `.env`)*
+
+### 3. Восстановление базы данных и медиа-каталога
+
+В репозитории поставляется полный боевой дамп базы данных (товары + pgvector эмбеддинги) и эталонные медиа-кропы в папке `data/`. Для автоматического восстановления «из коробки» выполните:
+```bash
+chmod +x scripts/*.sh
+./scripts/restore_production_data.sh
+```
+Скрипт автоматически:
+1. Запустит контейнер базы данных PostgreSQL (`pgvector`).
+2. Дождется готовности PostgreSQL.
+3. Зальет полный SQL-дамп каталога и всех векторов `product_embeddings` / `product_embeddings_v4`.
+4. Применит миграции Alembic (`alembic upgrade head`).
+5. Распакует кропы эталонов в папку `./media`.
+6. Перезапустит API и проверит доступность эндпоинта здоровья `/api/ping`.
+
+### 4. Запуск всех сервисов
+
+```bash
+docker compose up -d --build
+```
+
+### 5. Проверка готовности системы
+
+```bash
+curl -fsS http://127.0.0.1:8030/api/ping
+curl -fsS http://127.0.0.1:8030/api/ready
+```
+Ожидаемый ответ:
+```json
+{"ready":true,"database":true,"models":true,"sommelier":true}
+```
+
+---
+
+## Веб-интерфейсы и Swagger
+
+- **Интерактивный сканер v4 (веб):** `http://<server-ip>:8030/search-v4` (загрузка фото, визуализация BBox/маски, 4 карточки цепочки поиска и Lightbox).
+- **Мобильный сканер с камеры:** `http://<server-ip>:8030/mobi/`
+- **Swagger API документация:** `http://<server-ip>:8030/api/docs`
+
+---
+
+## Ручная загрузка моделей (если не используется Git LFS)
+
+Все модели (DINOv2, SigLIP 2, YOLO) отслеживаются в Git через Git LFS. Если по какой-то причине Git LFS недоступен, базовые веса можно загрузить напрямую из Hugging Face:
+- DINOv2-small: `facebook/dinov2-small` → в `models/dinov2-small/`
+- SigLIP 2: `google/siglip2-base-patch16-512` → в `models/siglip2-base-patch16-512/`
+Файлы весов LoRA-адаптеров (`models/dinov2_label_finetuned/` и `models/siglip2_v4_finetuned/`), а также детекторы YOLO (`models/yolo_label.pt`, `models/yolo_seg.pt`) поставляются в составе Git LFS репозитория.
+
+---
 
 ## Проверки
+
 
 ```bash
 python -m pip install -e ".[dev]"

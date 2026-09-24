@@ -18,6 +18,8 @@ imports/staging/*
 !imports/staging/.gitkeep
 imports/images/*
 !imports/images/.gitkeep
+imports/*.csv
+
 logs/
 *.log
 log.txt
@@ -34,3 +36,6 @@ md/*
 !md/Проверка сканера винных этикеток.md
 app/sommelier/data/catalog.json
 app/sommelier/data/feedback.jsonl
+tmp/*
+!tmp/.gitkeep
+uv.lock
