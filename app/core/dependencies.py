@@ -3,6 +3,7 @@ from collections.abc import AsyncIterator
 from fastapi import HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.pipelines.search.cascade.pipeline import CascadeSearchPipeline
 from app.pipelines.search.v1.pipeline import SearchPipelineV1
 from app.pipelines.search.v2.pipeline import SearchPipelineV2
 from app.pipelines.search.v3.pipeline import SearchPipelineV3
@@ -89,4 +90,12 @@ def get_pipeline_v4(request: Request) -> SearchPipelineV4:
     if pipeline is None:
         raise HTTPException(status_code=503, detail="Search pipeline v4 is not ready (SigLIP2 model not loaded)")
     return pipeline
+
+
+def get_pipeline_cascade(request: Request) -> CascadeSearchPipeline:
+    pipeline = getattr(request.app.state, "pipeline_cascade", None)
+    if pipeline is None:
+        raise HTTPException(status_code=503, detail="Cascade search pipeline is not ready")
+    return pipeline
+
 

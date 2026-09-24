@@ -173,6 +173,29 @@ async def lifespan(app: FastAPI):
         except Exception:
             logger.exception("v4 pipeline failed to load")
 
+        # Cascade search pipeline (v1 Coarse + v4 Refinement)
+        try:
+            p1 = getattr(app.state, "pipeline_v1", None)
+            p4 = getattr(app.state, "pipeline_v4", None)
+            if p1 is not None and p4 is not None:
+                from app.pipelines.search.cascade.decision import CascadeDecisionEngine
+                from app.pipelines.search.cascade.pipeline import CascadeSearchPipeline
+
+                decision_engine = CascadeDecisionEngine()
+                pipeline_cascade = CascadeSearchPipeline(
+                    detector=detector,
+                    pipeline_v1=p1,
+                    pipeline_v4=p4,
+                    decision_engine=decision_engine,
+                    images=images,
+                )
+                app.state.pipeline_cascade = pipeline_cascade
+                logger.info("Cascade search pipeline loaded (v1 Coarse + v4 Refinement)")
+            else:
+                app.state.pipeline_cascade = None
+        except Exception:
+            logger.exception("Cascade pipeline failed to load")
+
         ingestion = ProductIngestionService(images, detector, pipeline, settings.embedding_model_name)
         app.state.ingestion = ingestion
         batch_import = BatchImportService(settings.import_staging_dir, settings.max_import_items, settings.max_upload_bytes, images, ingestion, session_factory)
