@@ -36,6 +36,7 @@ class SearchPipelineV4:
         repository: ProductRepository,
         k: int = 5,
         is_already_crop: bool = False,
+        product_ids: list[Path | str] | None = None,  # UUID list optionally scoping candidate search
     ) -> SearchResponseV4:
         started = time.perf_counter()
 
@@ -53,10 +54,11 @@ class SearchPipelineV4:
             embedding = await asyncio.to_thread(self.embeddings.embed, prep_result.image)
             emb_ms = self._elapsed(emb_started)
 
-        # 3. pgvector nearest search with vote counting
+        # 3. pgvector nearest search with vote counting (optionally scoped to product_ids)
         db_started = time.perf_counter()
+        pool_limit = max(k, self.candidate_pool_size) if not product_ids else len(product_ids)
         candidates = await repository.nearest_v4_with_votes(
-            embedding, max(k, self.candidate_pool_size), vote_pool=self.vote_pool_size,
+            embedding, pool_limit, vote_pool=self.vote_pool_size, product_ids=product_ids,
         )
         pgvector_ms = self._elapsed(db_started)
 
@@ -123,7 +125,7 @@ class SearchPipelineV4:
             final_scores.append(1.0 - candidates[len(final_scores)].distance)
 
         results: list[SearchResultV4] = []
-        for idx, (cand, fscore) in enumerate(zip(candidates, final_scores), 1):
+        for idx, (cand, fscore) in enumerate(zip(candidates, final_scores, strict=False), 1):
             aug_image_url: str | None = None
             try:
                 # Read the pre-built augmented variant that matched
