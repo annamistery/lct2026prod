@@ -121,6 +121,17 @@ async def search_v4_page(request: Request):
     )
 
 
+@router.get("/search-cascade", response_class=HTMLResponse)
+async def search_cascade_page(request: Request):
+    return templates.TemplateResponse(
+        "search_cascade.html",
+        {
+            "request": request,
+            "active": "search_cascade",
+        },
+    )
+
+
 @router.get("/import", response_class=HTMLResponse)
 async def import_page(
     request: Request,
