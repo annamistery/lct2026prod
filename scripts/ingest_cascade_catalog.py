@@ -172,22 +172,29 @@ def _evaluate_product_status(
     tm_to_id: dict[tuple[str, str], uuid.UUID],
     v1_counts: dict[uuid.UUID, int],
     v4_counts: dict[uuid.UUID, int],
-) -> tuple[uuid.UUID | None, bool, bool]:
-    """Return (product_id, is_repair, is_complete)."""
+) -> tuple[uuid.UUID | None, str, bool]:
+    """Return (product_id, match_by, is_complete).
+
+    Uniqueness is enforced primarily by slug. If slug is empty, fall back to
+    (title.lower(), manufacturer.lower()).
+    """
     prod_id: uuid.UUID | None = None
-    if slug and slug in slug_to_id:
-        prod_id = slug_to_id[slug]
+    match_by = "new"
+    if slug:
+        match_by = "slug"
+        prod_id = slug_to_id.get(slug)
     else:
         key = (title.strip().lower(), manufacturer.strip().lower())
         if key in tm_to_id:
+            match_by = "title+manufacturer"
             prod_id = tm_to_id[key]
 
     if prod_id is None:
-        return None, False, False
+        return None, match_by, False
 
     c_v1 = v1_counts.get(prod_id, 0)
     c_v4 = v4_counts.get(prod_id, 0)
-    return prod_id, False, c_v1 == 116 and c_v4 == 116
+    return prod_id, match_by, c_v1 == 116 and c_v4 == 116
 
 
 def _dry_run_summary(rows: list[dict[str, str]], images_dir: Path) -> int:
@@ -310,7 +317,7 @@ async def ingest_cascade_catalog(
             failed += 1
             continue
 
-        prod_id, _, is_complete = _evaluate_product_status(
+        prod_id, match_by, is_complete = _evaluate_product_status(
             slug, title, manufacturer, slug_to_id, tm_to_id, v1_counts, v4_counts
         )
 
@@ -319,14 +326,18 @@ async def ingest_cascade_catalog(
         if prod_id is not None and not force_rebuild:
             if is_complete:
                 skipped += 1
+                logger.info(
+                    "[%d/%d] SKIP '%s' (already complete, matched by %s)",
+                    idx, total, title[:40], match_by,
+                )
                 needs_processing = False
             else:
                 is_repair = True
                 c_v1 = v1_counts.get(prod_id, 0)
                 c_v4 = v4_counts.get(prod_id, 0)
                 logger.info(
-                    "[%d/%d] Repairing incomplete product %s (v1=%d/116, v4=%d/116)...",
-                    idx, total, title[:35], c_v1, c_v4,
+                    "[%d/%d] Repairing incomplete product %s (matched by %s, v1=%d/116, v4=%d/116)...",
+                    idx, total, title[:35], match_by, c_v1, c_v4,
                 )
 
         if not needs_processing:
