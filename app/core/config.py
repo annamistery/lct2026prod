@@ -129,6 +129,40 @@ class Settings(BaseSettings):
         return self.siglip_v4_base_model_path
 
     @property
+    def resolved_dino_model_path(self) -> Path:
+        base = Path(__file__).resolve().parent.parent.parent
+        candidates = [
+            self.dino_model_path,
+            Path("/models/dinov2_label_finetuned"),
+            self.media_dir / "models" / "dinov2_label_finetuned",
+            base / "models" / "dinov2_label_finetuned",
+        ]
+        for cand in candidates:
+            if cand.is_dir() and ((cand / "adapter_model.bin").is_file() or (cand / "adapter_model.safetensors").is_file()):
+                return cand
+        for cand in candidates:
+            if cand.is_dir():
+                return cand
+        return self.dino_model_path
+
+    @property
+    def resolved_dino_base_model_path(self) -> Path:
+        base = Path(__file__).resolve().parent.parent.parent
+        candidates = [
+            self.dino_base_model_path,
+            Path("/models/dinov2-small"),
+            self.media_dir / "models" / "dinov2-small",
+            base / "models" / "dinov2-small",
+        ]
+        for cand in candidates:
+            if cand.is_dir() and ((cand / "model.safetensors").is_file() or (cand / "pytorch_model.bin").is_file()):
+                return cand
+        for cand in candidates:
+            if cand.is_dir():
+                return cand
+        return self.dino_base_model_path
+
+    @property
     def resolved_sommelier_feedback_path(self) -> Path:
         """Пишем фидбек сомелье в media_dir: app/ в проде смонтирован read-only, media — единственный writable путь."""
         return self.media_dir / "sommelier" / "feedback.jsonl"
