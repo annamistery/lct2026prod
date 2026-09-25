@@ -36,7 +36,7 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
 from app.core.config import get_settings  # noqa: E402
-from app.db.models import Product, ProductEmbedding, ProductEmbeddingV4  # noqa: E402
+from app.db.models.product import Product, ProductEmbedding, ProductEmbeddingV4  # noqa: E402
 from app.pipelines.search.v4.query_prep import QueryPrepV3  # noqa: E402
 from app.services.detector import DetectorService  # noqa: E402
 from app.services.embeddings import EmbeddingService  # noqa: E402
