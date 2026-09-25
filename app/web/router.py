@@ -150,6 +150,17 @@ async def import_page(
     )
 
 
+@router.get("/mobi-cascade", response_class=HTMLResponse)
+async def mobi_cascade_page(request: Request):
+    return templates.TemplateResponse(
+        "mobi_cascade.html",
+        {
+            "request": request,
+            "active": "mobi_cascade",
+        },
+    )
+
+
 @router.get("/twins", response_class=HTMLResponse)
 async def twins_page(request: Request):
     return templates.TemplateResponse(

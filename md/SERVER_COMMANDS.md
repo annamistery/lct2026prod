@@ -316,3 +316,43 @@ git commit -m "data: update v4 SigLIP 2 product embeddings dump"
 git push origin main
 ```
 
+
+
+## 20. Управление каталогом и векторами каскада (Cascade v1 + v4)
+
+Для полного цикла управления базой данных (очистка, скачивание недостающих изображений по URL и единый расчет эмбеддингов DINOv2 v1 + SigLIP 2 v4):
+
+```bash
+# 1. Очистка каталога и векторов (при необходимости)
+docker compose exec api python scripts/manage_catalog_cascade.py clear --yes
+
+# 2. Скачивание исходных изображений из CSV
+docker compose exec api python scripts/manage_catalog_cascade.py download \
+    --csv data/wines_integrated.csv \
+    --output media/catalog_sources \
+    --concurrency 10
+
+# 3. Единый импорт каталога и расчет векторов каскада v1 + v4
+docker compose exec api python scripts/manage_catalog_cascade.py import \
+    --csv data/wines_integrated.csv \
+    --images-dir media/catalog_sources
+```
+
+## 21. Запуск финального бенчмарка каскада (для отчёта заказчику)
+
+Для комплексной проверки точности и скорости финального каскада по всем тестовым наборам (`tmp1`, `tmp2`, `imports`) и генерации итогового отчета в Markdown:
+
+```bash
+docker compose exec api python scripts/eval_cascade_final.py \
+    --packs tmp1 tmp2 imports \
+    --output-dir artifacts
+```
+
+Результаты тестирования сохраняются в:
+- `artifacts/cascade_final_report.md` — итоговая сводная таблица с разбивкой по точности, раннему выходу v1, арбитражу v4 и перцентилям задержек (P50, P90, P95).
+- `artifacts/cascade_final_results.json` — детальные метрики по каждому проверенному изображению.
+
+## 22. Мобильный сканер каскада
+
+- **Внутренний интерфейс (через FastAPI):** `http://<server-ip>:8030/mobi-cascade` (или `http://<server-ip>:8030/export/mobitest_cascade.html`).
+- **Автономный клиент (для внешнего веб-сервера / папки `export`):** скопируйте каталог `export/` на внешний сервер Nginx/Apache и укажите адрес бэкенда в `export/config.js` (`window.MOBI_API_BASE = "http://<server-ip>:8030"`).

@@ -79,6 +79,7 @@ curl -fsS http://127.0.0.1:8030/api/ready
 ## Веб-интерфейсы и Swagger
 
 - **Интерактивный каскадный сканер (Cascade v1+v4):** `http://<server-ip>:8030/search-cascade` (полная диагностика всех шагов: v1 DINOv2, логика отбора соседей, v4 арбитраж SigLIP 2/OCR, Lightbox).
+- **Мобильный сканер каскада (Cascade v1+v4):** `http://<server-ip>:8030/mobi-cascade` (встроенный) и автономная сборка в `export/mobitest_cascade.html`.
 - **Интерактивный сканер v4 (веб):** `http://<server-ip>:8030/search-v4` (загрузка фото, визуализация BBox/маски, 4 карточки цепочки поиска и Lightbox).
 - **Мобильный сканер с камеры:** `http://<server-ip>:8030/mobi/`
 - **Swagger API документация:** `http://<server-ip>:8030/api/docs`

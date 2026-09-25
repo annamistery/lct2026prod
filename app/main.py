@@ -30,6 +30,7 @@ if settings.allowed_origins:
 # Mount static and mobile client
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "web" / "static")), name="static")
 app.mount("/mobi", StaticFiles(directory=str(BASE_DIR.parent / "web"), html=True), name="mobi")
+app.mount("/export", StaticFiles(directory=str(BASE_DIR.parent / "export"), html=True), name="export")
 
 app.include_router(router)
 app.include_router(search_v1_router)
