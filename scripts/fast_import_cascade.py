@@ -180,11 +180,11 @@ async def run_fast_import(
                 crop_img = source_image
 
             # 2. Embedding v1 (DINOv2, 384d)
-            v1_vec = await asyncio.to_thread(v1_embeddings.embed_image, crop_img)
+            v1_vec = await asyncio.to_thread(v1_embeddings.embed, crop_img)
 
             # 3. Embedding v4 (SigLIP 2, 768d, Letterbox 518)
             v4_prep = query_prep_v4.prepare_from_crop(crop_img)
-            v4_vec = await asyncio.to_thread(v4_embeddings.embed_image, v4_prep)
+            v4_vec = await asyncio.to_thread(v4_embeddings.embed, v4_prep)
 
             # 4. Save media images to media/products/{product_id}/
             prod_id = uuid.uuid4()
