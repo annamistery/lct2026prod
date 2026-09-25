@@ -94,8 +94,58 @@ async def clear_database(confirm: bool = False) -> None:
     logger.info("Clear operation completed successfully.")
 
 
-async def download_images_from_csv(csv_path: Path, output_dir: Path, concurrency: int = 10) -> None:
-    import aiohttp
+def transform_to_high_res(url: str) -> str:
+    """Transform low-res preview URL to high-res full bottle URL (1600/1600)."""
+    if not url:
+        return ""
+    import re
+    return re.sub(r"/\d+/\d+/resize/", "/1600/1600/resize/", url)
+
+
+def _download_single_image(url: str, dest: Path, timeout: int = 20) -> tuple[bool, str]:
+    import urllib.error
+    import urllib.request
+
+    url = transform_to_high_res(url)
+    if not url:
+        return False, "Empty URL"
+
+    if dest.exists() and dest.stat().st_size > 0:
+        return True, "Already exists"
+
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    temp_target = dest.with_suffix(f"{dest.suffix}.tmp")
+    req = urllib.request.Request(
+        url,
+        headers={"User-Agent": "Mozilla/5.0 (compatible; LCT2026-ImageDownloader/1.0)"},
+    )
+
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as response:
+                content = response.read()
+                if not content:
+                    return False, "Downloaded 0 bytes"
+                with temp_target.open("wb") as f:
+                    f.write(content)
+                temp_target.replace(dest)
+                return True, "Downloaded"
+        except urllib.error.HTTPError as e:
+            if temp_target.exists():
+                temp_target.unlink(missing_ok=True)
+            if e.code in (404, 410):
+                return False, f"HTTP {e.code}"
+        except Exception:
+            if temp_target.exists():
+                temp_target.unlink(missing_ok=True)
+            if attempt == 2:
+                return False, "Network timeout"
+            time.sleep(1.0)
+    return False, "Failed"
+
+
+def download_images_from_csv(csv_path: Path, output_dir: Path, concurrency: int = 10) -> None:
+    from concurrent.futures import ThreadPoolExecutor, as_completed
 
     if not csv_path.is_file():
         logger.error("CSV file not found: %s", csv_path)
@@ -114,36 +164,39 @@ async def download_images_from_csv(csv_path: Path, output_dir: Path, concurrency
         url = (r.get("Ссылка на фото") or r.get("image_url") or "").strip()
         fname = resolve_image_filename(r)
         dest = output_dir / fname
-        if not dest.is_file() and url.startswith("http"):
+        if not (dest.is_file() and dest.stat().st_size > 0) and url.startswith("http"):
             tasks.append((url, dest))
 
     if not tasks:
         logger.info("All images already exist in %s (%d files).", output_dir, len(rows))
         return
 
-    logger.info("%d images need to be downloaded with concurrency %d...", len(tasks), concurrency)
-    sem = asyncio.Semaphore(concurrency)
+    logger.info("%d images need to be downloaded with %d worker threads...", len(tasks), concurrency)
+    downloaded = 0
+    failed = 0
+    t0 = time.perf_counter()
 
-    async def _fetch(session: aiohttp.ClientSession, url: str, dest: Path) -> None:
-        async with sem:
-            for attempt in range(3):
-                try:
-                    async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
-                        if resp.status == 200:
-                            data = await resp.read()
-                            await asyncio.to_thread(dest.write_bytes, data)
-                            return
-                        logger.warning("HTTP %d for %s (attempt %d)", resp.status, url, attempt + 1)
-                except Exception as e:
-                    if attempt == 2:
-                        logger.error("Failed to download %s: %s", url, e)
-                    await asyncio.sleep(1.0)
+    with ThreadPoolExecutor(max_workers=concurrency) as executor:
+        future_map = {executor.submit(_download_single_image, u, d): (u, d) for u, d in tasks}
+        for idx, fut in enumerate(as_completed(future_map), 1):
+            success, reason = fut.result()
+            if success:
+                downloaded += 1
+            else:
+                failed += 1
+            if idx % 50 == 0 or idx == len(tasks):
+                elapsed = time.perf_counter() - t0
+                rate = idx / elapsed if elapsed > 0 else 0
+                logger.info(
+                    "Download progress: %d/%d (Success: %d, Failed: %d, %.1f img/s)",
+                    idx,
+                    len(tasks),
+                    downloaded,
+                    failed,
+                    rate,
+                )
 
-    connector = aiohttp.TCPConnector(limit=concurrency)
-    async with aiohttp.ClientSession(connector=connector) as session:
-        await asyncio.gather(*[_fetch(session, u, d) for u, d in tasks])
-
-    logger.info("Download completed.")
+    logger.info("Download completed: %d downloaded, %d failed.", downloaded, failed)
 
 
 async def import_cascade_catalog(
@@ -362,7 +415,7 @@ def main() -> int:
         asyncio.run(clear_database(confirm=args.yes))
         return 0
     elif args.command == "download":
-        asyncio.run(download_images_from_csv(args.csv, args.output, args.concurrency))
+        download_images_from_csv(args.csv, args.output, args.concurrency)
         return 0
     elif args.command == "import":
         return asyncio.run(import_cascade_catalog(args.csv, args.images_dir, args.limit))
