@@ -161,7 +161,13 @@ def download_images_from_csv(csv_path: Path, output_dir: Path, concurrency: int 
     logger.info("Found %d rows in CSV. Checking images in %s...", len(rows), output_dir)
     tasks: list[tuple[str, Path]] = []
     for r in rows:
-        url = (r.get("Ссылка на фото") or r.get("image_url") or "").strip()
+        url = (
+            r.get("Ссылка на изображение")
+            or r.get("Ссылка на фото")
+            or r.get("image_url")
+            or r.get("url")
+            or ""
+        ).strip()
         fname = resolve_image_filename(r)
         dest = output_dir / fname
         if not (dest.is_file() and dest.stat().st_size > 0) and url.startswith("http"):
