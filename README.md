@@ -76,6 +76,85 @@ curl -fsS http://127.0.0.1:8030/api/ready
 
 ---
 
+## Загрузка и обновление каталога товаров
+
+Каталог импортируется единым скриптом `scripts/ingest_cascade_catalog.py`, который готовит векторы сразу для финального каскадного поиска (v1 DINOv2 + v4 SigLIP 2).
+
+### Подготовка файлов
+
+1. **CSV-каталог** — положите файл в `./imports/wines_integrated_cleared.csv` (внутри контейнера он будет доступен по пути `/imports/wines_integrated_cleared.csv`).  
+   Поддерживаемые колонки:
+   - `title` или `Название вина`
+   - `manufacturer` или `Винодельня`
+   - `description` или `Описание` (опционально)
+   - `Slug` (опционально, уникальный идентификатор)
+   - `Название фото` / `local_image_path` (опционально, имя файла изображения)
+
+2. **Исходные фото бутылок** — положите WebP/JPEG/PNG в `./media/catalog_sources/` (внутри контейнера `/media/catalog_sources/`).  
+   Имена файлов должны совпадать со значением в колонке фото, либо скрипт попытается подобрать файл по `Slug`.
+
+### Проверка перед заливкой (dry-run)
+
+```bash
+docker compose exec api python scripts/ingest_cascade_catalog.py \
+    --csv /imports/wines_integrated_cleared.csv \
+    --images-dir /media/catalog_sources \
+    --dry-run
+```
+
+Выведет сводку: сколько строк в CSV, для скольких найдены изображения, сколько отсутствуют.
+
+### Тестовый прогон на 2 товарах
+
+```bash
+docker compose exec api python scripts/ingest_cascade_catalog.py \
+    --csv /imports/wines_integrated_cleared.csv \
+    --images-dir /media/catalog_sources \
+    --limit 2
+```
+
+Проверяет, что для товаров создаются по 116 векторов в каждой таблице (`product_embeddings` и `product_embeddings_v4`).
+
+### Полная заливка каталога
+
+```bash
+docker compose exec api python scripts/ingest_cascade_catalog.py \
+    --csv /imports/wines_integrated_cleared.csv \
+    --images-dir /media/catalog_sources
+```
+
+Скрипт идемпотентен: повторный запуск пропускает уже полностью загруженные товары, а оборванные (если предыдущий запуск упал) автоматически восстанавливает.
+
+### Принудительная перезапись
+
+```bash
+docker compose exec api python scripts/ingest_cascade_catalog.py \
+    --csv /imports/wines_integrated_cleared.csv \
+    --images-dir /media/catalog_sources \
+    --force-rebuild
+```
+
+### Что делает скрипт
+
+Для каждой строки CSV выполняется один проход:
+
+1. **Вход**: исходное фото из `/media/catalog_sources/<имя файла>`.
+2. **Детекция**: YOLO (`models/yolo_label.pt`) находит bounding box этикетки.
+3. **Кроп + Letterbox**: вырезается этикетка и приводится к размеру `518×518` с сохранением пропорций и чёрными полями (`letterbox_pil`).
+4. **Аугментации**: из Letterbox-кропа в RAM генерируется ровно 116 изображений (`generate_augmented_cloud_v3`): 1 оригинал + 23 типа аугментаций × 5 вариантов каждого.
+5. **Эмбеддинги**:
+   - **v1**: DINOv2-small LoRA (`models/dinov2_label_finetuned`, 384d) → таблица `product_embeddings`.
+   - **v4**: SigLIP 2 Vision Tower LoRA (`models/siglip2_v4_finetuned`, 768d) → таблица `product_embeddings_v4`.
+   Инференс выполняется батчами по 32 изображения.
+6. **Сохранение медиа**: в `media/products/<uuid>/` записываются два файла:
+   - `source.webp` — исходное фото,
+   - `label.webp` — Letterbox-кроп 518×518.
+7. **Атомарный коммит в БД**: в одной транзакции создаётся/обновляется запись в `products` и добавляется ровно по 116 строк в `product_embeddings` и `product_embeddings_v4`.
+
+Если на каком-то этапе происходит ошибка, созданные в этом запуске медиа-файлы удаляются, а транзакция откатывается.
+
+---
+
 ## Веб-интерфейсы и Swagger
 
 - **Интерактивный каскадный сканер (Cascade v1+v4):** `http://<server-ip>:8030/search-cascade` (полная диагностика всех шагов: v1 DINOv2, логика отбора соседей, v4 арбитраж SigLIP 2/OCR, Lightbox).
