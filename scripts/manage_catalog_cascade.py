@@ -298,16 +298,16 @@ async def import_cascade_catalog(
                 source_image = img.convert("RGB")
 
             # 1. Detect label crop using YOLO
-            detection = await detector.best_box(source_image)
-            if detection is not None:
-                bx = detection.box
+            box = await asyncio.to_thread(detector.best_box, source_image)
+            if box is not None:
+                x1, y1, x2, y2 = box
                 w, h = source_image.size
-                x1 = max(0, int(bx.x_min * w))
-                y1 = max(0, int(bx.y_min * h))
-                x2 = min(w, int(bx.x_max * w))
-                y2 = min(h, int(bx.y_max * h))
-                if x2 > x1 and y2 > y1:
-                    crop_img = source_image.crop((x1, y1, x2, y2))
+                ix1 = max(0, min(w - 1, int(x1)))
+                iy1 = max(0, min(h - 1, int(y1)))
+                ix2 = max(0, min(w, int(x2)))
+                iy2 = max(0, min(h, int(y2)))
+                if ix2 > ix1 and iy2 > iy1:
+                    crop_img = source_image.crop((ix1, iy1, ix2, iy2))
                 else:
                     crop_img = source_image
             else:
