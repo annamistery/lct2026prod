@@ -19,6 +19,7 @@ imports/staging/*
 imports/images/*
 !imports/images/.gitkeep
 imports/*.csv
+data/*.csv
 
 logs/
 *.log

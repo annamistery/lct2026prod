@@ -320,23 +320,38 @@ git push origin main
 
 ## 20. Управление каталогом и векторами каскада (Cascade v1 + v4)
 
-Для полного цикла управления базой данных (очистка, скачивание недостающих изображений по URL и единый расчет эмбеддингов DINOv2 v1 + SigLIP 2 v4):
+Единый оптимизированный скрипт `scripts/ingest_cascade_catalog.py` выполняет один проход на товар:
+YOLO-детекция → Letterbox 518×518 → 116 аугментаций в RAM → DINOv2 v1 (384d) + SigLIP 2 v4 (768d) → атомарная запись в БД.
+
+Перед запуском CSV и исходные изображения должны быть доступны внутри контейнера (например, через `/imports` и `/media/catalog_sources`).
 
 ```bash
-# 1. Очистка каталога и векторов (при необходимости)
-docker compose exec api python scripts/manage_catalog_cascade.py clear --yes
+# 1. Проверить CSV и сопоставление изображений без записи в БД
+docker compose exec api python scripts/ingest_cascade_catalog.py \
+    --csv /imports/wines_integrated_cleared.csv \
+    --images-dir /media/catalog_sources \
+    --dry-run
 
-# 2. Скачивание исходных изображений из CSV
-docker compose exec api python scripts/manage_catalog_cascade.py download \
-    --csv data/wines_integrated.csv \
-    --output media/catalog_sources \
-    --concurrency 10
+# 2. Тестовый прогон на 2 товарах
+docker compose exec api python scripts/ingest_cascade_catalog.py \
+    --csv /imports/wines_integrated_cleared.csv \
+    --images-dir /media/catalog_sources \
+    --limit 2
 
-# 3. Единый импорт каталога и расчет векторов каскада v1 + v4
-docker compose exec api python scripts/manage_catalog_cascade.py import \
-    --csv data/wines_integrated.csv \
-    --images-dir media/catalog_sources
+# 3. Полная заливка каталога
+docker compose exec api python scripts/ingest_cascade_catalog.py \
+    --csv /imports/wines_integrated_cleared.csv \
+    --images-dir /media/catalog_sources
+
+# 4. Принудительная перезапись всех векторов и медиа
+docker compose exec api python scripts/ingest_cascade_catalog.py \
+    --csv /imports/wines_integrated_cleared.csv \
+    --images-dir /media/catalog_sources \
+    --force-rebuild
 ```
+
+Скрипт идемпотентен: повторный запуск пропускает товары, у которых уже есть ровно 116 векторов в обеих таблицах (`product_embeddings` и `product_embeddings_v4`).
+При обрыве предыдущего запуска или частичных данных автоматически очищает «битые» векторы и перезаписывает их.
 
 ## 21. Запуск финального бенчмарка каскада (для отчёта заказчику)
 
