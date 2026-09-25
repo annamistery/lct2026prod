@@ -17,6 +17,7 @@ RUN python -m pip install --no-cache-dir .
 # Layer 4: Application code and configs (fast layer)
 COPY app ./app
 COPY web ./web
+COPY export ./export
 COPY alembic ./alembic
 COPY alembic.ini ./
 RUN python -m pip install --no-cache-dir --no-deps -e . && \
