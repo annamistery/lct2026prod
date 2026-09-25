@@ -37,9 +37,9 @@ sys.path.insert(0, str(ROOT_DIR))
 
 from app.core.config import get_settings  # noqa: E402
 from app.db.models.product import Product, ProductEmbedding, ProductEmbeddingV4  # noqa: E402
-from app.pipelines.search.v4.query_prep import QueryPrepV3  # noqa: E402
 from app.services.detector import DetectorService  # noqa: E402
 from app.services.embeddings import EmbeddingService  # noqa: E402
+from app.services.query_prep_v3 import QueryPrepV3  # noqa: E402
 from app.services.siglip_embeddings import SigLIP2EmbeddingService  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
