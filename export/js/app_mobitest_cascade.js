@@ -73,7 +73,7 @@ function confidenceText(sim) {
   return 'Совпадение неясно — попробуйте переснять';
 }
 
-export function initCascadeMobile(modelUrl = 'models/yolov8_label.onnx') {
+function initCascadeMobile(modelUrl = 'models/yolov8_label.onnx') {
   const video = document.getElementById('camera-video');
   const shutter = document.getElementById('camera-shutter');
   const cameraWrap = document.getElementById('camera-wrap');
@@ -376,20 +376,46 @@ export function initCascadeMobile(modelUrl = 'models/yolov8_label.onnx') {
 
   async function loadModel() {
     if (modelStatus) {
-      modelStatus.textContent = 'Инициализация INT8 детектора…';
+      modelStatus.textContent = 'Ожидание ONNX Runtime…';
       modelStatus.classList.remove('ready', 'error');
     }
 
-    const ok = await loadDetector({ modelUrl });
-    if (modelStatus) {
-      if (ok) {
-        const stats = getDetectorStats();
-        modelStatus.textContent = `Детектор готов (${stats.provider.toUpperCase()})`;
-        modelStatus.classList.add('ready');
-      } else {
-        modelStatus.textContent = 'Детектор не загрузился — будет серверная детекция';
+    // Wait for ONNX Runtime to load from CDN
+    let ortWait = 0;
+    while (typeof window.ort === 'undefined' && ortWait < 5000) {
+      await new Promise(r => setTimeout(r, 100));
+      ortWait += 100;
+    }
+    if (typeof window.ort === 'undefined') {
+      if (modelStatus) {
+        modelStatus.textContent = 'ONNX Runtime не загрузился. Проверьте интернет / CDN.';
         modelStatus.classList.add('error');
       }
+      return;
+    }
+
+    if (modelStatus) {
+      modelStatus.textContent = 'Инициализация INT8 детектора…';
+    }
+
+    try {
+      const ok = await loadDetector({ modelUrl });
+      if (modelStatus) {
+        if (ok) {
+          const stats = getDetectorStats();
+          modelStatus.textContent = `Детектор готов (${stats.provider.toUpperCase()})`;
+          modelStatus.classList.add('ready');
+        } else {
+          modelStatus.textContent = 'Детектор не загрузился — будет серверная детекция';
+          modelStatus.classList.add('error');
+        }
+      }
+    } catch (e) {
+      if (modelStatus) {
+        modelStatus.textContent = 'Ошибка детектора: ' + (e.message || String(e));
+        modelStatus.classList.add('error');
+      }
+      console.error('[loadModel]', e);
     }
   }
 
@@ -584,4 +610,10 @@ export function initCascadeMobile(modelUrl = 'models/yolov8_label.onnx') {
   startCamera();
   startDetection();
   loadModel();
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initCascadeMobile);
+} else {
+  initCascadeMobile();
 }

@@ -187,9 +187,6 @@
 
   <script src="config.js?v=11"></script>
   <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/ort.all.min.js"></script>
-  <script type="module">
-    import { initCascadeMobile } from './js/app_mobitest_cascade.js?v=1';
-    window.addEventListener('DOMContentLoaded', () => initCascadeMobile('/export/models/yolov8_label.onnx'));
-  </script>
+  <script type="module" src="js/app_mobitest_cascade.js?v=1"></script>
 </body>
 </html>

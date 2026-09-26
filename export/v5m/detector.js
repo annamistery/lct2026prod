@@ -103,10 +103,13 @@ async function loadMainThreadFallback(modelUrl) {
     mainCtx = mainCanvas.getContext('2d', { willReadFrequently: true });
     mainTensorData = new Float32Array(3 * inputSize * inputSize);
 
-    mainThreadSession = await window.ort.InferenceSession.create(modelUrl, {
-      executionProviders: ['webgpu', 'wasm'],
-      graphOptimizationLevel: 'all'
-    });
+    mainThreadSession = await Promise.race([
+      window.ort.InferenceSession.create(modelUrl, {
+        executionProviders: ['wasm'],
+        graphOptimizationLevel: 'all'
+      }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('InferenceSession.create timeout')), 15000))
+    ]);
     activeProvider = 'wasm (main-thread)';
     isWorkerMode = false;
     isReady = true;
