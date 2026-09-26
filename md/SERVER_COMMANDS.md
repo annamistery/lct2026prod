@@ -332,6 +332,13 @@ docker compose exec api python scripts/ingest_cascade_catalog.py \
     --images-dir /media/catalog_sources \
     --dry-run
 
+# Список отсутствующих изображений с названием, slug, ссылкой и ожидаемым именем файла
+# Результат сохранится в imports/missing_images.csv (доступен на хосте)
+docker compose exec api python scripts/list_missing_catalog_images.py \
+    --csv /imports/wines_integrated_cleared.csv \
+    --images-dir /media/catalog_sources \
+    --output /imports/missing_images.csv
+
 # 2. Тестовый прогон на 2 товарах
 docker compose exec api python scripts/ingest_cascade_catalog.py \
     --csv /imports/wines_integrated_cleared.csv \
@@ -352,6 +359,10 @@ docker compose exec api python scripts/ingest_cascade_catalog.py \
 
 Скрипт идемпотентен: повторный запуск пропускает товары, у которых уже есть ровно 116 векторов в обеих таблицах (`product_embeddings` и `product_embeddings_v4`).
 При обрыве предыдущего запуска или частичных данных автоматически очищает «битые» векторы и перезаписывает их.
+
+**Важно:** v1-векторы готовятся из растянутого квадратного кропа (`canonical_size` × `canonical_size`),
+чтобы совпадать с query-путём `SearchPipelineV1`. v4-векторы готовятся из Letterbox 518×518.
+Если ранее векторы v1 были созданы с другой геометрией, пересоздайте их через `--force-rebuild`.
 
 ## 21. Запуск финального бенчмарка каскада (для отчёта заказчику)
 
