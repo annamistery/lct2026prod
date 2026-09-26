@@ -416,7 +416,7 @@ def _default_output_dir() -> Path:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Final Cascade Evaluation Runner")
-    parser.add_argument("--packs", nargs="+", default=["tmp1", "tmp2", "imports"], help="Test packs to evaluate")
+    parser.add_argument("--packs", nargs="+", default=["1", "2"], help="Test packs to evaluate (subdirectories of tmp/)")
     parser.add_argument("--limit", type=int, default=0, help="Limit items per pack (0 = all)")
     parser.add_argument("--output-dir", type=Path, default=_default_output_dir(), help="Output directory (default: /media/artifacts in container)")
     parser.add_argument("--threshold", type=float, default=None, help="Confidence threshold: slug=null when confidence < threshold")
