@@ -35,7 +35,10 @@ async def search_cascade(
     if k > settings.max_top_k:
         raise HTTPException(status_code=422, detail=f"k must not exceed {settings.max_top_k}")
     source = await _decode_upload(image, images, settings)
-    return await pipeline.run(source, ProductRepository(session), k, is_already_crop=False)
+    return await pipeline.run(
+        source, ProductRepository(session), k,
+        is_already_crop=False, threshold=settings.cascade_predict_threshold,
+    )
 
 
 @router.post("/search-from-crop", response_model=CascadeSearchResponse)
@@ -51,7 +54,10 @@ async def search_from_crop_cascade(
     if k > settings.max_top_k:
         raise HTTPException(status_code=422, detail=f"k must not exceed {settings.max_top_k}")
     source = await _decode_upload(crop, images, settings)
-    return await pipeline.run(source, ProductRepository(session), k, is_already_crop=True)
+    return await pipeline.run(
+        source, ProductRepository(session), k,
+        is_already_crop=True, threshold=settings.cascade_predict_threshold,
+    )
 
 
 @router.post("/predict", response_model=CascadePredictResponse)

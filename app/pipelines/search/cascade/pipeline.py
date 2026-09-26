@@ -41,6 +41,7 @@ class CascadeSearchPipeline:
         repository: ProductRepository,
         k: int = 5,
         is_already_crop: bool = False,
+        threshold: float | None = None,
     ) -> CascadeSearchResponse:
         started = time.perf_counter()
 
@@ -128,6 +129,19 @@ class CascadeSearchPipeline:
             total_ms=self._elapsed(started),
         )
 
+        # Apply predict confidence threshold consistently across both endpoints
+        effective_threshold = threshold if threshold is not None else self.predict_threshold
+        if effective_threshold is not None and winner is not None:
+            winner_confidence = (
+                getattr(winner, "final_score", None)
+                or getattr(winner, "dino_similarity", None)
+            )
+            if winner_confidence is not None and winner_confidence < effective_threshold:
+                winner = None
+                final_results = []
+                stage_reached = "rejected_low_confidence"
+                decision.reason += f" (confidence {winner_confidence:.4f} < threshold {effective_threshold:.4f})"
+
         return CascadeSearchResponse(
             stage_reached=stage_reached,
             winner=winner,
@@ -151,11 +165,13 @@ class CascadeSearchPipeline:
     ) -> CascadePredictResponse:
         """Fast prediction for benchmarks returning only top-1 wine slug and confidence.
 
-        If ``threshold`` (or ``self.predict_threshold``) is set and the winner
-        confidence is below it, ``slug`` is returned as ``None`` to indicate
-        "not found" per customer requirements.
+        The threshold is applied inside ``run``; if the winner confidence is below
+        it ``slug`` is ``None`` per customer requirements.
         """
-        response = await self.run(image, repository, k=1, is_already_crop=is_already_crop)
+        effective_threshold = threshold if threshold is not None else self.predict_threshold
+        response = await self.run(
+            image, repository, k=1, is_already_crop=is_already_crop, threshold=effective_threshold,
+        )
         winner = response.winner
         confidence = (
             getattr(winner, "final_score", None)
@@ -163,13 +179,8 @@ class CascadeSearchPipeline:
             if winner
             else None
         )
-        effective_threshold = threshold if threshold is not None else self.predict_threshold
-        if confidence is not None and effective_threshold is not None and confidence < effective_threshold:
-            slug = None
-        else:
-            slug = winner.slug if winner else None
         return CascadePredictResponse(
-            slug=slug,
+            slug=winner.slug if winner else None,
             stage_reached=response.stage_reached,
             confidence=round(confidence, 4) if confidence is not None else None,
         )
