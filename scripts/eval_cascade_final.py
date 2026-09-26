@@ -46,6 +46,7 @@ from app.pipelines.search.v4.pipeline import SearchPipelineV4  # noqa: E402
 from app.services.detector import DetectorService  # noqa: E402
 from app.services.embeddings import EmbeddingService  # noqa: E402
 from app.services.images import ImageService  # noqa: E402
+from app.services.query_prep_v3 import QueryPrepV3  # noqa: E402
 from app.services.siglip_embeddings import SigLIP2EmbeddingService  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -175,10 +176,20 @@ async def evaluate_cascade(
         settings.embedding_dimension_v4,
         skip_resize=True,
     )
+    query_prep_v4 = QueryPrepV3(
+        detector=detector,
+        segmenter=None,
+        target_size=settings.canonical_size_v4,
+    )
     pipeline_v4 = SearchPipelineV4(
-        embeddings_v4,
-        detector,
-        asyncio.Semaphore(settings.gpu_concurrency),
+        embeddings=embeddings_v4,
+        images=images_service,
+        query_prep=query_prep_v4,
+        gpu_semaphore=asyncio.Semaphore(settings.gpu_concurrency),
+        candidate_pool_size=settings.v4_candidate_pool_size,
+        vote_pool_size=settings.v4_vote_pool_size,
+        enable_ocr_rerank=settings.enable_ocr_rerank_v4,
+        ocr_reranker=None,
     )
 
     decision_engine = CascadeDecisionEngine(
