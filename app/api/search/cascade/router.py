@@ -57,11 +57,17 @@ async def search_from_crop_cascade(
 @router.post("/predict", response_model=CascadePredictResponse)
 async def predict_cascade(
     image: Annotated[UploadFile, File()],
+    threshold: Annotated[float | None, Form(ge=0.0, le=1.0)] = None,
     session: AsyncSession = Depends(get_session),
     images: ImageService = Depends(get_images),
     pipeline: CascadeSearchPipeline = Depends(get_pipeline_cascade),
     settings: Settings = Depends(get_settings),
 ) -> CascadePredictResponse:
-    """Benchmark prediction returning only top-1 wine slug and confidence using cascade."""
+    """Benchmark prediction returning only top-1 wine slug and confidence using cascade.
+
+    If ``threshold`` is not provided, the configured ``cascade_predict_threshold`` is used.
+    When the winner confidence is below the threshold, ``slug`` is ``null``.
+    """
     source = await _decode_upload(image, images, settings)
-    return await pipeline.predict_top1(source, ProductRepository(session), is_already_crop=False)
+    effective_threshold = threshold if threshold is not None else settings.cascade_predict_threshold
+    return await pipeline.predict_top1(source, ProductRepository(session), is_already_crop=False, threshold=effective_threshold)

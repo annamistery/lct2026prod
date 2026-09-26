@@ -33,6 +33,7 @@ class CascadeSearchPipeline:
     pipeline_v4: SearchPipelineV4 | None
     decision_engine: CascadeDecisionEngine
     images: ImageService
+    predict_threshold: float | None = None
 
     async def run(
         self,
@@ -146,14 +147,27 @@ class CascadeSearchPipeline:
         image: Image.Image,
         repository: ProductRepository,
         is_already_crop: bool = False,
+        threshold: float | None = None,
     ) -> CascadePredictResponse:
-        """Fast prediction for benchmarks returning only top-1 wine slug and confidence."""
+        """Fast prediction for benchmarks returning only top-1 wine slug and confidence.
+
+        If ``threshold`` (or ``self.predict_threshold``) is set and the winner
+        confidence is below it, ``slug`` is returned as ``None`` to indicate
+        "not found" per customer requirements.
+        """
         response = await self.run(image, repository, k=1, is_already_crop=is_already_crop)
-        slug = response.winner.slug if response.winner else None
+        winner = response.winner
         confidence = (
-            getattr(response.winner, "final_score", None)
-            or getattr(response.winner, "dino_similarity", None)
+            getattr(winner, "final_score", None)
+            or getattr(winner, "dino_similarity", None)
+            if winner
+            else None
         )
+        effective_threshold = threshold if threshold is not None else self.predict_threshold
+        if confidence is not None and effective_threshold is not None and confidence < effective_threshold:
+            slug = None
+        else:
+            slug = winner.slug if winner else None
         return CascadePredictResponse(
             slug=slug,
             stage_reached=response.stage_reached,

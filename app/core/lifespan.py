@@ -181,13 +181,19 @@ async def lifespan(app: FastAPI):
                 from app.pipelines.search.cascade.decision import CascadeDecisionEngine
                 from app.pipelines.search.cascade.pipeline import CascadeSearchPipeline
 
-                decision_engine = CascadeDecisionEngine()
+                decision_engine = CascadeDecisionEngine(
+                    confidence_margin=settings.cascade_confidence_margin,
+                    min_confidence_score=settings.cascade_min_confidence_score,
+                    neighbor_window=settings.cascade_neighbor_score_window,
+                    max_neighbors=settings.cascade_max_neighbors,
+                )
                 pipeline_cascade = CascadeSearchPipeline(
                     detector=detector,
                     pipeline_v1=p1,
                     pipeline_v4=p4,
                     decision_engine=decision_engine,
                     images=images,
+                    predict_threshold=settings.cascade_predict_threshold,
                 )
                 app.state.pipeline_cascade = pipeline_cascade
                 if p4 is not None:

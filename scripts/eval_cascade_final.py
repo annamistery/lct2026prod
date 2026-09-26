@@ -7,6 +7,7 @@ with detailed performance breakdown:
 - Early-exit efficiency (percentage of queries resolved by fast v1)
 - Fine arbitration (percentage of queries routed to v4 for neighbor re-ranking)
 - Latency percentiles (P50, P90, P95, Mean, Min, Max)
+- Optional confidence threshold sweep to choose the "not found" cutoff
 - Markdown report generation for final customer submission
 """
 
@@ -35,6 +36,7 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
 from app.core.config import get_settings  # noqa: E402
+from app.db.repositories.products import ProductRepository  # noqa: E402
 from app.db.session import create_engine_and_session_factory  # noqa: E402
 from app.pipelines.search.cascade.decision import CascadeDecisionEngine  # noqa: E402
 from app.pipelines.search.cascade.pipeline import CascadeSearchPipeline  # noqa: E402
@@ -56,22 +58,27 @@ class EvalItemResult:
     image_name: str
     expected_slug: str
     predicted_slug: str | None
+    confidence: float | None
+    stage_reached: str
     is_correct: bool
-    decision: str  # v1_confident | v4_refined
-    margin: float
-    sim_top1: float
+    is_null: bool
+    margin: float | None
+    sim_top1: float | None
     latency_total_ms: float
     latency_bbox_ms: float
     latency_v1_ms: float
-    latency_v4_ms: float
+    latency_v4_ms: float | None
 
 
 @dataclass
 class PackSummary:
     pack_name: str
+    threshold: float | None
     total: int
     correct: int
     accuracy_pct: float
+    null_predictions: int
+    null_pct: float
     v1_early_exits: int
     v1_early_exit_pct: float
     v4_arbitrated: int
@@ -129,13 +136,16 @@ async def evaluate_cascade(
     packs: list[str],
     limit: int = 0,
     output_dir: Path = Path("artifacts"),
+    threshold: float | None = None,
 ) -> None:
     settings = get_settings()
     output_dir.mkdir(parents=True, exist_ok=True)
 
     logger.info("Initializing DB connection and models...")
     engine, session_factory = create_engine_and_session_factory(settings.database_url)
-    images_service = ImageService(settings.media_dir, settings.canonical_size, settings.max_upload_bytes, settings.max_image_pixels)
+    images_service = ImageService(
+        settings.media_dir, settings.canonical_size, settings.max_upload_bytes, settings.max_image_pixels
+    )
 
     logger.info("Loading YOLO detector (%s)...", settings.yolo_model_path)
     detector = await asyncio.to_thread(DetectorService, settings.yolo_model_path, settings.yolo_confidence)
@@ -143,8 +153,8 @@ async def evaluate_cascade(
     logger.info("Loading DINOv2 v1...")
     embeddings_v1 = await asyncio.to_thread(
         EmbeddingService,
-        settings.dino_model_path,
-        settings.dino_base_model_path,
+        settings.resolved_dino_model_path,
+        settings.resolved_dino_base_model_path,
         settings.embedding_dimension,
     )
     pipeline_v1 = SearchPipelineV1(
@@ -154,6 +164,7 @@ async def evaluate_cascade(
         asyncio.Semaphore(settings.gpu_concurrency),
         asyncio.Semaphore(settings.sift_concurrency),
         settings.candidate_pool_size,
+        enable_sift_rerank=settings.enable_sift_rerank,
     )
 
     logger.info("Loading SigLIP 2 v4...")
@@ -174,7 +185,7 @@ async def evaluate_cascade(
         confidence_margin=settings.cascade_confidence_margin,
         min_confidence_score=settings.cascade_min_confidence_score,
         max_neighbors=settings.cascade_max_neighbors,
-        neighbor_score_window=settings.cascade_neighbor_score_window,
+        neighbor_window=settings.cascade_neighbor_score_window,
     )
 
     cascade = CascadeSearchPipeline(
@@ -182,7 +193,8 @@ async def evaluate_cascade(
         pipeline_v1=pipeline_v1,
         pipeline_v4=pipeline_v4,
         decision_engine=decision_engine,
-        media_dir=settings.media_dir,
+        images=images_service,
+        predict_threshold=None,
     )
 
     all_summaries: list[PackSummary] = []
@@ -211,6 +223,7 @@ async def evaluate_cascade(
         for idx, item in enumerate(queries, 1):
             img_path = queries_img_dir / item["image_name"]
             if not img_path.is_file():
+                logger.warning("[%s: %d/%d] Image not found: %s", pack_name, idx, len(queries), img_path)
                 continue
 
             try:
@@ -218,37 +231,51 @@ async def evaluate_cascade(
                     pil_img = img.convert("RGB")
 
                 async with session_factory() as session:
+                    repo = ProductRepository(session)
                     t0 = time.perf_counter()
-                    resp = await cascade.run(pil_img, session, top_k=5)
+                    resp = await cascade.run(pil_img, repo, k=5)
                     lat_total = (time.perf_counter() - t0) * 1000
 
-                pred_slug = resp.top1.slug if resp.top1 else None
-                is_correct = pred_slug == item["expected_slug"]
+                winner = resp.winner
+                raw_confidence = (
+                    getattr(winner, "final_score", None)
+                    or getattr(winner, "dino_similarity", None)
+                    if winner
+                    else None
+                )
+                raw_slug = winner.slug if winner else None
+                predicted_slug = None
+                is_null = True
+                if raw_slug is not None:
+                    if threshold is None or (raw_confidence is not None and raw_confidence >= threshold):
+                        predicted_slug = raw_slug
+                        is_null = False
+
+                is_correct = predicted_slug == item["expected_slug"]
+                sim_top1 = getattr(winner, "dino_similarity", None)
+                margin = resp.decision.margin if resp.decision else None
 
                 res_item = EvalItemResult(
                     query_id=item["query_id"],
                     image_name=item["image_name"],
                     expected_slug=item["expected_slug"],
-                    predicted_slug=pred_slug,
+                    predicted_slug=predicted_slug,
+                    confidence=round(raw_confidence, 4) if raw_confidence is not None else None,
+                    stage_reached=resp.stage_reached,
                     is_correct=is_correct,
-                    decision=resp.decision.decision,
-                    margin=resp.decision.margin,
-                    sim_top1=resp.top1.similarity if resp.top1 else 0.0,
+                    is_null=is_null,
+                    margin=margin,
+                    sim_top1=round(sim_top1, 4) if sim_top1 is not None else None,
                     latency_total_ms=lat_total,
                     latency_bbox_ms=resp.timings.bbox_detect_ms,
-                    latency_v1_ms=resp.timings.v1_search_ms,
-                    latency_v4_ms=resp.timings.v4_search_ms or 0.0,
+                    latency_v1_ms=resp.timings.v1_total_ms,
+                    latency_v4_ms=resp.timings.v4_total_ms,
                 )
                 pack_results.append(res_item)
 
                 if idx % 10 == 0 or idx == len(queries):
-                    logger.info(
-                        "[%s: %d/%d] Evaluated. Current Acc: %.1f%%",
-                        pack_name,
-                        idx,
-                        len(queries),
-                        (sum(1 for r in pack_results if r.is_correct) / len(pack_results)) * 100,
-                    )
+                    current_acc = (sum(1 for r in pack_results if r.is_correct) / len(pack_results)) * 100
+                    logger.info("[%s: %d/%d] Evaluated. Current Acc: %.1f%%", pack_name, idx, len(queries), current_acc)
 
             except Exception as e:
                 logger.error("Error evaluating %s: %s", item["image_name"], e)
@@ -258,15 +285,19 @@ async def evaluate_cascade(
 
         tot = len(pack_results)
         corr = sum(1 for r in pack_results if r.is_correct)
-        v1_exits = sum(1 for r in pack_results if r.decision == "v1_confident")
-        v4_arbs = sum(1 for r in pack_results if r.decision == "v4_refined")
+        nulls = sum(1 for r in pack_results if r.is_null)
+        v1_exits = sum(1 for r in pack_results if r.stage_reached == "v1_confident")
+        v4_arbs = sum(1 for r in pack_results if r.stage_reached == "v4_refined")
         lats = [r.latency_total_ms for r in pack_results]
 
         summary = PackSummary(
             pack_name=pack_name,
+            threshold=threshold,
             total=tot,
             correct=corr,
             accuracy_pct=(corr / tot) * 100 if tot > 0 else 0.0,
+            null_predictions=nulls,
+            null_pct=(nulls / tot) * 100 if tot > 0 else 0.0,
             v1_early_exits=v1_exits,
             v1_early_exit_pct=(v1_exits / tot) * 100 if tot > 0 else 0.0,
             v4_arbitrated=v4_arbs,
@@ -291,15 +322,21 @@ async def evaluate_cascade(
 
     md = ["# Итоговый отчёт тестирования: Финальный каскад (Cascade v1 + v4)\n"]
     md.append(f"**Дата проверки:** {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+    if threshold is not None:
+        md.append(f"**Порог уверенности predict:** `{threshold:.4f}` — при значении ниже порога `slug` возвращается `null`\n")
+    else:
+        md.append("**Порог уверенности predict:** не задан — возвращается любой top-1\n")
     md.append("## Сводная таблица результатов по тестовым наборам\n")
-    md.append("| Набор тестов | Всего | Точность Top-1 | v1 Быстрый выход | v4 Арбитраж соседей | Latency (P50) | Latency (P90) | Среднее время |")
-    md.append("| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |")
+    md.append(
+        "| Набор тестов | Всего | Точность Top-1 | null | v1 Быстрый выход | v4 Арбитраж соседей | Latency (P50) | Latency (P90) | Среднее время |"
+    )
+    md.append("| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |")
 
     for s in all_summaries:
         md.append(
             f"| **{s.pack_name}** | {s.total} | **{s.accuracy_pct:.1f}%** ({s.correct}/{s.total}) | "
-            f"{s.v1_early_exit_pct:.1f}% ({s.v1_early_exits}) | {s.v4_arbitrated_pct:.1f}% ({s.v4_arbitrated}) | "
-            f"{s.latency_p50_ms:.1f} мс | {s.latency_p90_ms:.1f} мс | {s.latency_mean_ms:.1f} мс |"
+            f"{s.null_pct:.1f}% ({s.null_predictions}) | {s.v1_early_exit_pct:.1f}% ({s.v1_early_exits}) | "
+            f"{s.v4_arbitrated_pct:.1f}% ({s.v4_arbitrated}) | {s.latency_p50_ms:.1f} мс | {s.latency_p90_ms:.1f} мс | {s.latency_mean_ms:.1f} мс |"
         )
 
     md.append("\n## Архитектурные особенности каскада:")
@@ -314,14 +351,69 @@ async def evaluate_cascade(
     logger.info("Benchmark complete. Artifacts saved: %s, %s", report_file, json_file)
 
 
+async def evaluate_threshold_sweep(
+    packs: list[str],
+    thresholds: list[float],
+    limit: int = 0,
+    output_dir: Path = Path("artifacts"),
+) -> None:
+    """Run evaluation once and then compute metrics for a list of confidence thresholds."""
+    await evaluate_cascade(packs, limit=limit, output_dir=output_dir, threshold=None)
+
+    json_file = output_dir / "cascade_final_results.json"
+    if not json_file.is_file():
+        logger.error("No results file found for threshold sweep.")
+        return
+
+    data = json.loads(json_file.read_text(encoding="utf-8"))
+    details: dict[str, list[dict[str, Any]]] = data.get("details", {})
+
+    sweep_md = ["# Подбор порога уверенности для `/api/cascade/predict`\n"]
+    sweep_md.append("| Threshold | Pack | Total | Correct | Accuracy | Null predictions | null % |")
+    sweep_md.append("| :---: | :--- | :---: | :---: | :---: | :---: | :---: |")
+
+    for threshold in thresholds:
+        for pack_name, items in details.items():
+            total = len(items)
+            if total == 0:
+                continue
+            correct = sum(
+                1
+                for it in items
+                if it["predicted_slug"] is not None and it["predicted_slug"] == it["expected_slug"]
+            )
+            nulls = sum(1 for it in items if it["predicted_slug"] is None)
+            acc = (correct / total) * 100
+            null_pct = (nulls / total) * 100
+            sweep_md.append(
+                f"| {threshold:.4f} | {pack_name} | {total} | {correct} | {acc:.1f}% | {nulls} | {null_pct:.1f}% |"
+            )
+
+    sweep_file = output_dir / "cascade_threshold_sweep.md"
+    sweep_file.write_text("\n".join(sweep_md), encoding="utf-8")
+    print("\n" + "\n".join(sweep_md) + "\n")
+    logger.info("Threshold sweep saved: %s", sweep_file)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Final Cascade Evaluation Runner")
     parser.add_argument("--packs", nargs="+", default=["tmp1", "tmp2", "imports"], help="Test packs to evaluate")
     parser.add_argument("--limit", type=int, default=0, help="Limit items per pack (0 = all)")
     parser.add_argument("--output-dir", type=Path, default=Path("artifacts"), help="Output directory")
+    parser.add_argument("--threshold", type=float, default=None, help="Confidence threshold: slug=null when confidence < threshold")
+    parser.add_argument(
+        "--threshold-sweep",
+        nargs="+",
+        type=float,
+        default=None,
+        help="Run evaluation without threshold, then compute metrics for listed thresholds (e.g. 0.5 0.6 0.7 0.8 0.9)",
+    )
     args = parser.parse_args()
 
-    asyncio.run(evaluate_cascade(args.packs, args.limit, args.output_dir))
+    if args.threshold_sweep:
+        asyncio.run(evaluate_threshold_sweep(args.packs, args.threshold_sweep, args.limit, args.output_dir))
+    else:
+        asyncio.run(evaluate_cascade(args.packs, args.limit, args.output_dir, args.threshold))
     return 0
 
 

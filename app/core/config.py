@@ -53,6 +53,12 @@ class Settings(BaseSettings):
     ocr_rerank_weight_text: float = 0.2
     v4_vote_pool_size: int = Field(50, ge=1, le=500)
     v4_candidate_pool_size: int = Field(20, ge=1, le=100)
+    # Cascade decision + predict threshold
+    cascade_confidence_margin: float = Field(0.05, ge=0.0, le=1.0)
+    cascade_min_confidence_score: float = Field(0.65, ge=0.0, le=1.0)
+    cascade_neighbor_score_window: float = Field(0.08, ge=0.0, le=1.0)
+    cascade_max_neighbors: int = Field(5, ge=1, le=20)
+    cascade_predict_threshold: float | None = Field(None, ge=0.0, le=1.0)
     sommelier_csv_path: Path = Path("app/sommelier/data/wines_integrated.csv")
     sommelier_max_sessions: int = Field(500, ge=1, le=100_000)
     sommelier_session_ttl_seconds: int = Field(3600, ge=60, le=86_400)
