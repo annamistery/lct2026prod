@@ -358,9 +358,17 @@ docker compose exec api python scripts/ingest_cascade_catalog.py \
 Для комплексной проверки точности и скорости финального каскада по всем тестовым наборам (`tmp1`, `tmp2`, `imports`) и генерации итогового отчета в Markdown:
 
 ```bash
+# Результаты сохраняются в /media/artifacts (видна на хосте)
 docker compose exec api python scripts/eval_cascade_final.py \
-    --packs tmp1 tmp2 imports \
-    --output-dir artifacts
+    --packs tmp1 tmp2 imports
+```
+
+Для подбора порога уверенности, ниже которого `/api/cascade/predict` возвращает `slug: null`:
+
+```bash
+docker compose exec api python scripts/eval_cascade_final.py \
+    --packs tmp1 tmp2 \
+    --threshold-sweep 0.5 0.55 0.6 0.65 0.7 0.75 0.8 0.85 0.9
 ```
 
 Результаты тестирования сохраняются в:

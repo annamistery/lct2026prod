@@ -395,11 +395,19 @@ async def evaluate_threshold_sweep(
     logger.info("Threshold sweep saved: %s", sweep_file)
 
 
+def _default_output_dir() -> Path:
+    """Use /media/artifacts inside the container so results are persisted on the host mount."""
+    media_artifacts = Path("/media/artifacts")
+    if media_artifacts.parent.is_dir():
+        return media_artifacts
+    return Path("artifacts")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Final Cascade Evaluation Runner")
     parser.add_argument("--packs", nargs="+", default=["tmp1", "tmp2", "imports"], help="Test packs to evaluate")
     parser.add_argument("--limit", type=int, default=0, help="Limit items per pack (0 = all)")
-    parser.add_argument("--output-dir", type=Path, default=Path("artifacts"), help="Output directory")
+    parser.add_argument("--output-dir", type=Path, default=_default_output_dir(), help="Output directory (default: /media/artifacts in container)")
     parser.add_argument("--threshold", type=float, default=None, help="Confidence threshold: slug=null when confidence < threshold")
     parser.add_argument(
         "--threshold-sweep",
