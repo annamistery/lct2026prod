@@ -379,28 +379,20 @@ async def ingest_cascade_catalog(
             else:
                 raw_crop = source_image
 
-            # 2. Canonical Letterbox 518x518 (preserves aspect ratio) for v4
+            # 2. Canonical Letterbox 518x518 (preserves aspect ratio)
             canonical_518 = letterbox_pil(raw_crop, settings.canonical_size_v4)
 
-            # 3. Generate 116-augmentation cloud once in v4 native resolution
+            # 3. Generate 116-augmentation cloud in RAM
             aug_tuples = generate_augmented_cloud_v3(canonical_518, variants_per_aug=5, seed=42)
-            aug_images_v4 = [t[2] for t in aug_tuples]
+            aug_images = [t[2] for t in aug_tuples]
 
-            # 4. Prepare matching v1 inputs: stretch the same augmented crops to the
-            #    v1 canonical square. This matches the runtime query path in
-            #    SearchPipelineV1 (images.crop -> ImageService.canonical resize).
-            aug_images_v1 = [
-                img.resize((settings.canonical_size, settings.canonical_size), Image.Resampling.LANCZOS)
-                for img in aug_images_v4
-            ]
-
-            # 5. Batch compute v1 embeddings (DINOv2, 384d, 116 vectors)
+            # 4. Batch compute v1 embeddings (DINOv2, 384d, 116 vectors)
             async with gpu_semaphore:
-                v1_vectors = await asyncio.to_thread(v1_embeddings.embed_batch, aug_images_v1, batch_size)
+                v1_vectors = await asyncio.to_thread(v1_embeddings.embed_batch, aug_images, batch_size)
 
-            # 6. Batch compute v4 embeddings (SigLIP 2, 768d, 116 vectors)
+            # 5. Batch compute v4 embeddings (SigLIP 2, 768d, 116 vectors)
             async with gpu_semaphore:
-                v4_vectors = await asyncio.to_thread(v4_embeddings.embed_batch, aug_images_v4, batch_size)
+                v4_vectors = await asyncio.to_thread(v4_embeddings.embed_batch, aug_images, batch_size)
 
             # 6. Save media master files atomically
             source_rel, label_rel = _save_product_media(prod_id, source_image, canonical_518, settings)

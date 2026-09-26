@@ -53,7 +53,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="List catalog rows missing image files.")
     parser.add_argument("--csv", type=Path, default=Path("imports/wines_integrated_cleared.csv"), help="Path to catalog CSV")
     parser.add_argument("--images-dir", type=Path, default=Path("media/catalog_sources"), help="Directory with downloaded images")
-    parser.add_argument("--output", type=Path, default=Path("imports/missing_images.csv"), help="Output CSV path")
+    parser.add_argument("--output", type=Path, default=Path("/media/missing_images.csv"), help="Output CSV path")
     args = parser.parse_args()
 
     if not args.csv.is_file():
