@@ -24,6 +24,7 @@ from app.schemas.search.v1 import SearchResult
 from app.schemas.search.v4 import SearchResultV4
 from app.services.detector import DetectorService
 from app.services.images import ImageService
+from app.services.query_prep_v3 import letterbox_pil
 
 
 @dataclass
@@ -34,6 +35,7 @@ class CascadeSearchPipeline:
     decision_engine: CascadeDecisionEngine
     images: ImageService
     predict_threshold: float | None = None
+    target_size: int = 518
 
     async def run(
         self,
@@ -55,16 +57,28 @@ class CascadeSearchPipeline:
             bbox_detect_ms = self._elapsed(bbox_started)
             if box is not None:
                 try:
-                    raw_crop = self.images.crop(image, box)
+                    x1, y1, x2, y2 = box
+                    iw, ih = image.size
+                    ix1 = max(0, int(x1))
+                    iy1 = max(0, int(y1))
+                    ix2 = min(iw, int(x2))
+                    iy2 = min(ih, int(y2))
+                    if ix2 > ix1 and iy2 > iy1:
+                        raw_crop = image.crop((ix1, iy1, ix2, iy2))
+                    else:
+                        raw_crop = image
                 except Exception:
                     raw_crop = image
             else:
                 raw_crop = image
 
+        # Prepare the v1/v4 canonical letterbox view (same geometry as reference embeddings)
+        canonical_518 = letterbox_pil(raw_crop, self.target_size)
+
         # Step 2: Run coarse Stage 1 (v1: DINOv2-small LoRA + pgvector cosine similarity)
         v1_started = time.perf_counter()
         v1_response = await self.pipeline_v1.run(
-            raw_crop, repository, k=max(k, 10), query_crop=None,
+            canonical_518, repository, k=max(k, 10), query_crop=None,
         )
         v1_total_ms = self._elapsed(v1_started)
         v1_results: list[SearchResult] = v1_response.results

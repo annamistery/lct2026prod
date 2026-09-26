@@ -194,6 +194,7 @@ async def lifespan(app: FastAPI):
                     decision_engine=decision_engine,
                     images=images,
                     predict_threshold=settings.cascade_predict_threshold,
+                    target_size=settings.canonical_size_v4,
                 )
                 app.state.pipeline_cascade = pipeline_cascade
                 if p4 is not None:

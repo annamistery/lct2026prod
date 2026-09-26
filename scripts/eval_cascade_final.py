@@ -206,6 +206,7 @@ async def evaluate_cascade(
         decision_engine=decision_engine,
         images=images_service,
         predict_threshold=None,
+        target_size=settings.canonical_size_v4,
     )
 
     all_summaries: list[PackSummary] = []
