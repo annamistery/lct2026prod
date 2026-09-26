@@ -11,6 +11,18 @@
   <a href="/import" class="btn">Импортировать</a>
 </div>
 
+<form method="get" action="/products" style="display: flex; gap: 12px; margin-bottom: 24px; align-items: center;">
+  <input
+    type="search"
+    name="q"
+    value="{{ q }}"
+    placeholder="Поиск по названию, производителю или slug"
+    style="flex: 1; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text);"
+  >
+  <button type="submit" class="btn">Найти</button>
+  {% if q %}<a href="/products" class="btn" style="background: transparent; border: 1px solid var(--border);">Сбросить</a>{% endif %}
+</form>
+
 {% if products %}
 <div class="grid">
   {% for product in products %}
@@ -28,14 +40,37 @@
   </a>
   {% endfor %}
 </div>
+
+{% if total_count > limit %}
+{% set total_pages = (total_count // limit) + (1 if total_count % limit > 0 else 0) %}
+{% set current_page = (offset // limit) + 1 %}
+<div style="display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 32px; flex-wrap: wrap;">
+  {% if offset > 0 %}
+    <a href="/products?q={{ q | urlencode }}&limit={{ limit }}&offset={{ offset - limit }}" class="btn" style="padding: 6px 12px;">← Назад</a>
+  {% endif %}
+  <span style="color: var(--muted); font-size: 13px;">Страница {{ current_page }} из {{ total_pages }} ({{ total_count }} товаров)</span>
+  {% if offset + limit < total_count %}
+    <a href="/products?q={{ q | urlencode }}&limit={{ limit }}&offset={{ offset + limit }}" class="btn" style="padding: 6px 12px;">Вперёд →</a>
+  {% endif %}
+</div>
+{% endif %}
+
 {% else %}
 <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 48px; text-align: center;">
   <div style="font-size: 32px; margin-bottom: 12px;">🍷</div>
+  {% if q %}
+  <h2>По запросу «{{ q }}» ничего не найдено</h2>
+  <p style="color: var(--muted); max-width: 400px; margin: 0 auto 20px;">
+    Проверьте правильность написания или попробуйте поискать по части названия / производителя.
+  </p>
+  <a href="/products" class="btn">Показать все товары</a>
+  {% else %}
   <h2>В базе данных пока нет товаров</h2>
   <p style="color: var(--muted); max-width: 400px; margin: 0 auto 20px;">
     Вы можете запустить пакетный импорт из CSV и скачанных изображений в разделе «Импорт данных».
   </p>
   <a href="/import" class="btn">Перейти к импорту</a>
+  {% endif %}
 </div>
 {% endif %}
 {% endblock %}

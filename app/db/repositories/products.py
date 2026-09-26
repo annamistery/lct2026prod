@@ -46,9 +46,28 @@ class ProductRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def list_products(self, limit: int = 100, offset: int = 0) -> list[Product]:
-        result = await self.session.scalars(select(Product).order_by(Product.created_at.desc()).limit(limit).offset(offset))
-        return list(result)
+    async def list_products(self, limit: int = 100, offset: int = 0) -> tuple[list[Product], int]:
+        stmt = select(Product).order_by(Product.created_at.desc())
+        total = await self.session.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+        result = await self.session.scalars(stmt.limit(limit).offset(offset))
+        return list(result), int(total)
+
+    async def search_products(
+        self, q: str | None, limit: int = 100, offset: int = 0
+    ) -> tuple[list[Product], int]:
+        """Search products by title/manufacturer/slug with pagination metadata."""
+        stmt = select(Product)
+        if q:
+            like_q = f"%{q}%"
+            stmt = stmt.where(
+                (Product.title.ilike(like_q))
+                | (Product.manufacturer.ilike(like_q))
+                | (Product.slug.ilike(like_q))
+            )
+        stmt = stmt.order_by(Product.title)
+        total = await self.session.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+        result = await self.session.scalars(stmt.limit(limit).offset(offset))
+        return list(result), int(total)
 
     async def get(self, product_id: uuid.UUID) -> Product | None:
         return await self.session.get(Product, product_id)

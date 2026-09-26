@@ -26,13 +26,16 @@ async def index():
 @router.get("/products", response_class=HTMLResponse)
 async def products_page(
     request: Request,
+    q: Annotated[str | None, Query(min_length=1, max_length=200)] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 60,
     offset: Annotated[int, Query(ge=0)] = 0,
     session: AsyncSession = Depends(get_session),
 ):
     repo = ProductRepository(session)
-    products = await repo.list_products(limit=limit, offset=offset)
-    total = await session.scalar(select(func.count(Product.id))) or 0
+    if q:
+        products, total = await repo.search_products(q=q, limit=limit, offset=offset)
+    else:
+        products, total = await repo.list_products(limit=limit, offset=offset)
     return templates.TemplateResponse(
         "products.html",
         {
@@ -42,6 +45,7 @@ async def products_page(
             "total_count": total,
             "limit": limit,
             "offset": offset,
+            "q": q or "",
         },
     )
 

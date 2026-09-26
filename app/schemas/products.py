@@ -19,3 +19,6 @@ class ProductResponse(BaseModel):
 
 class ProductListResponse(BaseModel):
     products: list[ProductResponse]
+    total: int = 0
+    limit: int = 50
+    offset: int = 0
