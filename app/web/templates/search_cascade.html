@@ -126,15 +126,18 @@
   text-align: center;
 }
 .file-item {
-  padding: 5px 8px;
+  padding: 8px 10px;
   border-radius: 4px;
-  font-size: 12px;
+  font-size: 13px;
+  line-height: 1.4;
+  min-height: 28px;
   color: var(--muted);
   cursor: pointer;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   transition: all 0.1s;
+  flex-shrink: 0;
 }
 .file-item:hover {
   background: var(--surface-2);
@@ -229,7 +232,7 @@
     <div style="margin-bottom: 12px;">
       <input type="text" id="filter-input" placeholder="Поиск по имени файла..." style="width: 100%; padding: 8px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 13px; outline: none; margin-bottom: 10px;">
     </div>
-    <div id="files-list" style="max-height: 480px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px;">
+    <div id="files-list" style="max-height: 70vh; overflow-y: auto;">
       <div style="color: var(--muted); font-size: 12px; padding: 8px;">Загрузка списка...</div>
     </div>
   </div>
