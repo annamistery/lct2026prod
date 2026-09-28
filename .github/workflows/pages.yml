@@ -28,7 +28,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          lfs: true  # web/models/yolov8_label.onnx — the browser detector that draws the aiming frame
+          lfs: false  # web/models/yolov8_label.onnx — the browser detector that draws the aiming frame
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
