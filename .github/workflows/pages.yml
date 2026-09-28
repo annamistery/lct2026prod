@@ -1,0 +1,37 @@
+name: Scanner on GitHub Pages
+
+# Publishes the scanner (web/) as a static site. Recognition runs on the API computer, the address is passed
+# in the link: https://<owner>.github.io/<repo>/?api=https://<tunnel address>
+# One-time setup by the repository owner: Settings -> Pages -> Source: GitHub Actions, and allow this branch in
+# Settings -> Environments -> github-pages -> Deployment branches.
+on:
+  push:
+    branches: [main, anna_cascade]
+    paths: ["web/**", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true  # web/models/yolov8_label.onnx — the browser detector that draws the aiming frame
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+      - id: deployment
+        uses: actions/deploy-pages@v4

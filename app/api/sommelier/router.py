@@ -1,9 +1,16 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query, Request
-from fastapi.concurrency import run_in_threadpool
+from typing import Annotated
 
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.concurrency import run_in_threadpool
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.dependencies import get_session
+from app.db.repositories.products import ProductRepository
 from app.schemas.sommelier import (
+    SommelierAlternative,
+    SommelierAlternativesResponse,
     SommelierAskRequest,
     SommelierAskResponse,
     SommelierResetRequest,
@@ -64,4 +71,30 @@ async def wine_info(slug: str, request: Request, dish: str | None = Query(None, 
 
         dish_parsed = await run_in_threadpool(parse_dish, dish)
     result = await run_in_threadpool(sommelier.about_wine, slug, dish_parsed)
-    return SommelierWineInfoResponse(kind=result["kind"], id=result.get("id"), text=result["text"])
+    return SommelierWineInfoResponse(kind=result["kind"], id=result.get("id"), text=result["text"], card=result.get("card"))
+
+
+@router.get("/wine/{slug}/alternatives", response_model=SommelierAlternativesResponse)
+async def wine_alternatives(
+    slug: str,
+    request: Request,
+    limit: Annotated[int, Query(ge=1, le=20)] = 5,
+    session: AsyncSession = Depends(get_session),
+) -> SommelierAlternativesResponse:
+    """Точка интеграции с распознаванием: похожие по стилю вина каталога к распознанному вину (slug).
+
+    Цвет и игристость совпадают, сладость отличается не больше чем на ступень; дальше — сорт, тип, тело, танины,
+    ароматика и регион из карточек. Не больше двух вин одной винодельни. Картинка — этикетка из каталога распознавания.
+    """
+    service = _service(request)
+    sommelier = await run_in_threadpool(service.wine_lookup)
+    result = await run_in_threadpool(sommelier.alternatives, slug, limit)
+    products = await ProductRepository(session).get_by_slugs([item["id"] for item in result["items"]])
+    items = [
+        SommelierAlternative(
+            **item,
+            image_url=f"/api/media/{products[item['id']].label_image_path}" if item["id"] in products else None,
+        )
+        for item in result["items"]
+    ]
+    return SommelierAlternativesResponse(kind=result["kind"], id=result["id"], items=items)

@@ -360,27 +360,31 @@ docker compose exec api python scripts/ingest_cascade_catalog.py \
 Скрипт идемпотентен: повторный запуск пропускает товары, у которых уже есть ровно 116 векторов в обеих таблицах (`product_embeddings` и `product_embeddings_v4`).
 При обрыве предыдущего запуска или частичных данных автоматически очищает «битые» векторы и перезаписывает их.
 
-## 21. Запуск финального бенчмарка каскада (для отчёта заказчику)
+## 21. Проверка качества распознавания и калибровка порогов
 
-Для комплексной проверки точности и скорости финального каскада по всем тестовым наборам (`tmp1`, `tmp2`, `imports`) и генерации итогового отчета в Markdown:
-
-```bash
-# Результаты сохраняются в /media/artifacts (видна на хосте)
-docker compose exec api python scripts/eval_cascade_final.py \
-    --packs 1 2
-```
-
-Для подбора порога уверенности, ниже которого `/api/cascade/predict` возвращает `slug: null`:
+Точность каскада и зоны ответа (найдено / похоже / нет в каталоге) на размеченных наборах — через работающий API:
 
 ```bash
-docker compose exec api python scripts/eval_cascade_final.py \
-    --packs 1 2 \
-    --threshold-sweep 0.5 0.55 0.6 0.65 0.7 0.75 0.8 0.85 0.9
+python scripts/eval_recognition.py --api http://127.0.0.1:8030     --sets tmp1=tmp/1 tmp2=tmp/2 --out /tmp/eval.jsonl
 ```
 
-Результаты тестирования сохраняются в:
-- `artifacts/cascade_final_report.md` — итоговая сводная таблица с разбивкой по точности, раннему выходу v1, арбитражу v4 и перцентилям задержек (P50, P90, P95).
-- `artifacts/cascade_final_results.json` — детальные метрики по каждому проверенному изображению.
+Набор — папка с фото (или `queries/`) и разметкой `mapping.json` либо `labels.tsv`
+(`image_path`, `expected_slug`, `status` = `in_catalog` | `not_in_catalog` | `unsure`, `alt_slugs`).
+
+Пересчёт порогов после изменения каталога (векторы выгружаются в `media/research/`):
+
+```bash
+docker compose exec api python scripts/research_dump_features.py     --sets tmp1=/srv/app/tmp/1 tmp2=/srv/app/tmp/2
+python3 scripts/calibrate_cascade.py media/research
+```
+
+Аудит каталога — пары товаров с одинаковой картинкой этикетки (`media/artifacts/catalog_audit.tsv`):
+
+```bash
+docker compose exec api python scripts/audit_catalog.py
+```
+
+Подробности и результаты: `docs/RECOGNITION_QUALITY.md`.
 
 ## 22. Мобильный сканер каскада
 

@@ -117,7 +117,22 @@ class Sommelier:
             if unk:
                 L.append(f"  в базе не указано: {', '.join(unk)}")
         L.append("\n" + guardrails.NEUTRAL_FOOTER)
-        return dict(kind="wine_info", id=w["id"], text="\n".join(L))
+        card = dict(name=w["name"], winery=w.get("winery") or "", category=w.get("category") or "",
+                    color=w.get("color") or "", region=w.get("region") or "", grape=w.get("grape") or "")
+        return dict(kind="wine_info", id=w["id"], text="\n".join(L), card=card)
+
+    def alternatives(self, slug, k=5):
+        """Точка интеграции с распознаванием: вина каталога, похожие по стилю на распознанное (slug)."""
+        w = self.engine.by_id.get(slug)
+        if not w:
+            return dict(kind="not_found", id=None, items=[])
+        from .explain import wine_facts
+        items = [
+            dict(id=p["wine"]["id"], name=p["wine"]["name"], winery=p["wine"]["winery"],
+                 facts=wine_facts(p["wine"], "novice"), score=p["score"], reasons=p["reasons"])
+            for p in self.engine.similar(w, k)
+        ]
+        return dict(kind="alternatives", id=w["id"], items=items)
 
     # ---- различия между сортами / типами --------------------------------------------------------------
     def _groups_in(self, t):

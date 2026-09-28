@@ -8,7 +8,6 @@ import {
   mapBoxesToElement,
   drawBoxes,
   drawBox,
-  cropLabel,
   isPointInBox,
   getDetectorStats
 } from './v5m/detector.js?v=1';
@@ -426,29 +425,17 @@ function initCascadeMobile(modelUrl = 'models/yolov8_label.onnx') {
     setStatus('Ищу…');
 
     try {
-      let blob = null;
-      let endpoint = `${API_BASE}/api/cascade/search`;
+      // Always the full frame: the label is cut by the server YOLO, the answer-zone thresholds are
+      // calibrated on those crops. The browser detector only helps to aim the camera.
+      const endpoint = `${API_BASE}/api/cascade/search`;
       const srcEl = sourceElement || (isFrozen && freezeCanvas ? freezeCanvas : video);
-      const boxToCrop = targetBox || currentBox || (currentBoxes && currentBoxes[0]);
-
-      if (isDetectorReady() && boxToCrop && boxToCrop.conf >= 0.25) {
-        blob = await cropLabel(srcEl, boxToCrop, 518);
-        if (blob) {
-          endpoint = `${API_BASE}/api/cascade/search-from-crop`;
-        }
-      }
-
-      if (!blob) {
-        const canvas = document.createElement('canvas');
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(srcEl, 0, 0, canvas.width, canvas.height);
-        blob = await new Promise((resolve, reject) => {
-          canvas.toBlob((b) => b ? resolve(b) : reject(new Error('не удалось сохранить кадр')), 'image/jpeg', 0.92);
-        });
-        endpoint = `${API_BASE}/api/cascade/search`;
-      }
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext('2d').drawImage(srcEl, 0, 0, canvas.width, canvas.height);
+      const blob = await new Promise((resolve, reject) => {
+        canvas.toBlob((b) => b ? resolve(b) : reject(new Error('не удалось сохранить кадр')), 'image/jpeg', 0.92);
+      });
 
 
       const formData = new FormData();
@@ -456,7 +443,6 @@ function initCascadeMobile(modelUrl = 'models/yolov8_label.onnx') {
       formData.append('k', '5');
 
       sendClientLog('info', 'starting cascade camera search', {
-        clientCrop: endpoint.includes('search-from-crop'),
         fromFrozen: isFrozen,
         blobSize: blob.size
       });
@@ -506,12 +492,16 @@ function initCascadeMobile(modelUrl = 'models/yolov8_label.onnx') {
     const winner = data.winner;
     const timings = data.timings;
     const cropUrl = data.v4_query_crop || data.bbox_crop;
-    const stageReached = data.stage_reached || '';
-    const isV1Only = stageReached === 'v1_confident';
+    const STATUS = {
+      found: { color: '#00e676', label: 'Найдено', bg: '#f0fdf4' },
+      probable: { color: '#ffab00', label: 'Похоже — сверьте с этикеткой', bg: '#fff8e1' },
+      not_in_catalog: { color: '#ff5252', label: 'Нет в каталоге', bg: '#fef2f2' },
+    };
+    const view = STATUS[data.status] || STATUS.probable;
 
     if (resultStatus) {
       if (timings) {
-        resultStatus.textContent = `⚡ Каскад за ${timings.total_ms} мс (Detect: ${timings.bbox_detect_ms || 0}ms, v1: ${timings.v1_total_ms}ms, v4: ${timings.v4_total_ms || 0}ms)`;
+        resultStatus.textContent = `⚡ ${data.message} · ${timings.total_ms} мс (YOLO ${timings.bbox_detect_ms || 0}, DINOv2 ${timings.v1_total_ms}, SigLIP 2 ${timings.v4_total_ms || 0})`;
       } else if (data.time) {
         resultStatus.textContent = `Поиск занял ${data.time.toFixed(2)} с`;
       }
@@ -528,16 +518,16 @@ function initCascadeMobile(modelUrl = 'models/yolov8_label.onnx') {
       if (winner) {
         const title = winner.title || winner.product_id || 'Неизвестный товар';
         const mfg = winner.manufacturer || '';
-        const scoreRaw = winner.final_score !== undefined ? winner.final_score : winner.dino_similarity;
-        const score = scoreRaw !== undefined ? (scoreRaw * 100).toFixed(2) : '—';
-        const imgSrc = winner.image_url || '';
-        const badgeColor = isV1Only ? '#00e676' : '#a29bfe';
-        const badgeText = isV1Only ? 'Этап 1: DINOv2' : 'Этап 2: SigLIP 2 / OCR';
-        const lowConfidence = scoreRaw !== undefined && scoreRaw < 0.75;
+        const scoreRaw = typeof data.confidence === 'number' ? data.confidence : undefined;
+        const score = scoreRaw !== undefined ? (scoreRaw * 100).toFixed(1) : '—';
+        const imgSrc = winner.image_url ? API_BASE + winner.image_url : '';
+        const badgeColor = view.color;
+        const badgeText = view.label;
+        const lowConfidence = data.status !== 'found';
 
         hero.innerHTML = `
           <div style="background:${lowConfidence ? '#fff8e1' : '#f0fdf4'};border:2px solid ${lowConfidence ? '#ffab00' : badgeColor};border-radius:12px;padding:14px;box-shadow:0 4px 14px rgba(0,0,0,0.1);">
-            <div style="display:inline-block;background:${badgeColor};color:#000;font-size:11px;font-weight:800;padding:4px 10px;border-radius:20px;margin-bottom:8px;">${lowConfidence ? '⚠️ НИЗКАЯ УВЕРЕННОСТЬ' : '🏆 ' + badgeText}</div>
+            <div style="display:inline-block;background:${badgeColor};color:#000;font-size:11px;font-weight:800;padding:4px 10px;border-radius:20px;margin-bottom:8px;">${lowConfidence ? '⚠️ ' + badgeText : '🏆 ' + badgeText}</div>
             <div style="display:flex;gap:12px;align-items:center;">
               <div style="width:80px;height:80px;background:#fff;border-radius:8px;border:1px solid #e2e8f0;overflow:hidden;display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;" onclick="openMobileLightbox('${imgSrc}', '${escapeHtml(title)}')">
                 <img src="${imgSrc}" style="max-width:100%;max-height:100%;object-fit:contain;" alt="Winner">
@@ -546,29 +536,31 @@ function initCascadeMobile(modelUrl = 'models/yolov8_label.onnx') {
                 <div style="font-size:15px;font-weight:700;color:#15803d;line-height:1.3;margin-bottom:2px;">${escapeHtml(title)}</div>
                 ${mfg ? `<div style="font-size:12px;color:#166534;margin-bottom:4px;">${escapeHtml(mfg)}</div>` : ''}
                 <div style="font-size:12px;font-weight:700;color:#15803d;">Уверенность: ${score}%</div>
-                ${winner.product_id ? `<a href="/products/${winner.product_id}" style="font-size:11px;color:#2563eb;text-decoration:underline;">Открыть карточку</a>` : ''}
+                ${winner.product_id ? `<a href="${API_BASE}/products/${winner.product_id}" style="font-size:11px;color:#2563eb;text-decoration:underline;">Открыть карточку</a>` : ''}
               </div>
             </div>
           </div>
         `;
       } else {
-        hero.innerHTML = `<div style="background:#fff8e1;border:2px solid #ffab00;border-radius:12px;padding:14px;color:#b45309;font-weight:700;">Не найдено или низкая уверенность</div>`;
+        hero.innerHTML = `<div style="background:${view.bg};border:2px solid ${view.color};border-radius:12px;padding:14px;color:#b91c1c;font-weight:700;">${escapeHtml(data.message || 'Нет в каталоге')}<div style="font-weight:400;font-size:12px;color:#7f1d1d;margin-top:4px;">Ниже — самые похожие этикетки каталога (это другие вина).</div></div>`;
       }
     }
 
     const others = document.getElementById('other-results');
     if (others) {
       let html = '';
-      const candidates = data.v4_results && data.v4_results.length ? data.v4_results : (data.final_results || []);
-      if (candidates.length > 1) {
-        html += '<h3 style="margin:14px 0 8px 0;font-size:14px;color:#334155;">Кандидаты</h3>';
-        html += candidates.slice(1, 6).map((it, i) => {
+      const candidates = data.final_results || [];
+      const skip = winner ? 1 : 0;  // без ответа показываем все похожие этикетки
+      if (candidates.length > skip) {
+        html += `<h3 style="margin:14px 0 8px 0;font-size:14px;color:#334155;">${winner ? 'Другие кандидаты' : 'Похожие этикетки каталога'}</h3>`;
+        html += candidates.slice(skip, skip + 5).map((it, i) => {
           const t = it.title || '—';
-          const img = it.image_url || '';
-          const sim = it.final_score !== undefined ? (it.final_score * 100).toFixed(1) : (it.dino_similarity !== undefined ? (it.dino_similarity * 100).toFixed(1) : '—');
+          const img = it.image_url ? API_BASE + it.image_url : '';
+          const simRaw = typeof it.v4_similarity === 'number' ? it.v4_similarity : it.v1_similarity;
+          const sim = typeof simRaw === 'number' ? (simRaw * 100).toFixed(1) : '—';
           return `
             <div style="background:#fff;border:1px solid #e2e8f0;border-left:4px solid #a29bfe;border-radius:8px;padding:8px 10px;display:flex;align-items:center;gap:10px;margin-bottom:6px;">
-              <div style="font-size:11px;font-weight:700;color:#64748b;min-width:20px;">#${i+2}</div>
+              <div style="font-size:11px;font-weight:700;color:#64748b;min-width:20px;">#${i + 1 + skip}</div>
               <div style="width:40px;height:40px;background:#f8fafc;border-radius:6px;border:1px solid #cbd5e1;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;cursor:pointer;" onclick="openMobileLightbox('${img}', '${escapeHtml(t)}')">
                 <img src="${img}" style="max-width:100%;max-height:100%;object-fit:contain;" alt="">
               </div>

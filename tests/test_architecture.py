@@ -14,6 +14,8 @@ def test_only_search_is_versioned():
     assert "/api/ping" in paths
     assert "/api/sommelier/ask" in paths
     assert "/api/sommelier/wine/{slug}" in paths
+    assert "/api/sommelier/wine/{slug}/alternatives" in paths
+    assert "/api/cascade/predict" in paths
     assert "/api/v1/products" not in paths
     assert "/api/search" not in paths
     assert "/api/v1/sommelier/ask" not in paths

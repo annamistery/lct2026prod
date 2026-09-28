@@ -182,7 +182,7 @@ function captureFullFrameBlob() {
 
 async function performCascadeSearch(blob) {
   const formData = new FormData();
-  formData.append('file', blob, 'camera_scan.jpg');
+  formData.append('image', blob, 'camera_scan.jpg');
 
   const t0 = performance.now();
   const resp = await fetch(CASCADE_SEARCH_URL, {
@@ -199,53 +199,71 @@ async function performCascadeSearch(blob) {
   renderResults(data, elapsed);
 }
 
+const MOBILE_STATUS = {
+  found: { color: '#00e676', label: 'Найдено' },
+  probable: { color: '#ffd740', label: 'Похоже — сверьте с этикеткой' },
+  not_in_catalog: { color: '#ff5252', label: 'Нет в каталоге' },
+};
+
 function renderResults(res, clientElapsed) {
   if (!resultSection || !heroCard) return;
 
   resultSection.classList.remove('hidden');
-  const winner = res.top1;
-  const decision = res.decision;
-  const isV1Only = decision.decision === 'v1_confident';
+  const winner = res.winner;
+  const view = MOBILE_STATUS[res.status] || MOBILE_STATUS.probable;
+  const confidence = typeof res.confidence === 'number' ? `${Math.round(res.confidence * 100)}%` : '—';
 
-  const badgeColor = isV1Only ? '#00e676' : '#b388ff';
-  const badgeText = isV1Only ? 'Этап 1: DINOv2 Уверенно' : 'Этап 2: SigLIP 2 / OCR Арбитраж';
-
-  const sommelierUrl = winner.slug ? `/sommelier/?wine=${encodeURIComponent(winner.slug)}` : '#';
+  if (!winner) {
+    heroCard.innerHTML = `
+      <div style="border: 2px solid ${view.color}; border-radius: 12px; padding: 14px; background: rgba(20,20,25,0.9); color: #fff;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <span style="background: ${view.color}; color: #000; font-weight: 700; font-size: 0.75rem; padding: 3px 8px; border-radius: 12px;">${escapeHtml(view.label)}</span>
+          <span style="color: #aaa; font-size: 0.8rem;">${clientElapsed} мс</span>
+        </div>
+        <h3 style="margin: 0 0 6px; font-size: 1.1rem;">${escapeHtml(res.message)}</h3>
+        <div style="color: #bbb; font-size: 0.85rem;">Сходство с ближайшей этикеткой каталога: ${confidence}. Попробуйте снять этикетку ближе и без бликов.</div>
+      </div>`;
+    statusMsg.textContent = res.message;
+    return;
+  }
 
   heroCard.innerHTML = `
-    <div style="border: 2px solid ${badgeColor}; border-radius: 12px; padding: 14px; background: rgba(20,20,25,0.9); color: #fff;">
+    <div style="border: 2px solid ${view.color}; border-radius: 12px; padding: 14px; background: rgba(20,20,25,0.9); color: #fff;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-        <span style="background: ${badgeColor}; color: #000; font-weight: 700; font-size: 0.75rem; padding: 3px 8px; border-radius: 12px;">
-          ${escapeHtml(badgeText)}
-        </span>
+        <span style="background: ${view.color}; color: #000; font-weight: 700; font-size: 0.75rem; padding: 3px 8px; border-radius: 12px;">${escapeHtml(view.label)}</span>
         <span style="color: #aaa; font-size: 0.8rem;">${clientElapsed} мс</span>
       </div>
-
       <div style="display: flex; gap: 12px; align-items: center;">
-        <img src="${API_BASE}/api/media/${winner.label_image_path}" 
-             alt="${escapeHtml(winner.title)}"
+        <img src="${API_BASE}${winner.image_url}" alt="${escapeHtml(winner.title)}"
              style="width: 85px; height: 110px; object-fit: contain; border-radius: 6px; background: #fff; padding: 4px;"
-             onclick="window.openMobileLightbox('${API_BASE}/api/media/${winner.label_image_path}', '${escapeHtml(winner.title)}')">
-        
+             onclick="window.openMobileLightbox('${API_BASE}${winner.image_url}', '${escapeHtml(winner.title)}')">
         <div style="flex: 1;">
           <h3 style="margin: 0 0 4px; font-size: 1.1rem; line-height: 1.3;">${escapeHtml(winner.title)}</h3>
           <div style="color: #bbb; font-size: 0.85rem; margin-bottom: 6px;">${escapeHtml(winner.manufacturer)}</div>
-          <div style="font-size: 0.8rem; color: #4fc3f7;">
-            Сходство: <b>${Math.round(winner.similarity * 100)}%</b>
-            ${winner.vintage ? ` • Винтаж: <b>${winner.vintage}</b>` : ''}
-          </div>
+          <div style="font-size: 0.8rem; color: #4fc3f7;">Сходство: <b>${confidence}</b></div>
         </div>
       </div>
-
-      <div style="margin-top: 12px; display: flex; gap: 8px;">
-        <a href="${sommelierUrl}" class="btn" style="flex: 1; text-align: center; text-decoration: none; padding: 8px 12px; font-size: 0.9rem; background: #e91e63; color: #fff; border-radius: 6px; font-weight: 600;">
-          🍷 Подобрать блюдо (AI-сомелье)
-        </a>
-      </div>
+      <div id="mobile-alternatives" style="margin-top: 12px; font-size: 0.85rem; color: #ccc;">AI-сомелье подбирает похожие вина…</div>
     </div>
   `;
+  statusMsg.textContent = `${view.label}: ${winner.title} (${confidence})`;
+  if (winner.slug) renderAlternatives(winner.slug);
+}
 
-  statusMsg.textContent = `Распознано: ${winner.title} (${Math.round(winner.similarity * 100)}%)`;
+async function renderAlternatives(slug) {
+  const box = document.getElementById('mobile-alternatives');
+  try {
+    const resp = await fetch(`${API_BASE}/api/sommelier/wine/${encodeURIComponent(slug)}/alternatives?limit=3`);
+    const data = resp.ok ? await resp.json() : { items: [] };
+    if (!box) return;
+    box.innerHTML = data.items.length
+      ? '<div style="font-weight: 700; color: #fff; margin-bottom: 6px;">Похожие вина (AI-сомелье)</div>' + data.items.map(item => `
+          <div style="margin-bottom: 6px;"><b>${escapeHtml(item.name)}</b> <span style="color: #999;">${escapeHtml(item.winery)}</span><br>
+          <span style="font-size: 0.75rem; color: #b388ff;">${item.reasons.map(escapeHtml).join(' · ')}</span></div>`).join('')
+      : '';
+  } catch {
+    if (box) box.textContent = '';
+  }
 }
 
 // Lightbox helper

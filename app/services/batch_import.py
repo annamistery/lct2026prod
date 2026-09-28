@@ -20,6 +20,7 @@ class ImportRecord:
     manufacturer: str
     description: str
     image_path: str
+    slug: str | None = None
 
 
 class BatchImportService:
@@ -61,6 +62,7 @@ class BatchImportService:
         if len(rows) > self.max_items:
             raise ValueError(f"Manifest exceeds {self.max_items} products")
         records = []
+        slugs: set[str] = set()
         for number, row in enumerate(rows, 1):
             if not isinstance(row, dict):
                 raise ValueError(f"Row {number} must be an object")
@@ -68,14 +70,19 @@ class BatchImportService:
             manufacturer = str(row.get("manufacturer") or row.get("producer") or "").strip()
             image_path = str(row.get("image_path") or row.get("image") or row.get("filename") or "").strip()
             description = str(row.get("description") or "").strip()
+            slug = str(row.get("slug") or row.get("Slug") or "").strip() or None
             if not title or not manufacturer or not image_path:
                 raise ValueError(f"Row {number} requires title, manufacturer, and image_path")
-            if len(title) > 300 or len(manufacturer) > 300 or len(description) > 5000 or len(image_path) > 500:
+            if len(title) > 300 or len(manufacturer) > 300 or len(description) > 5000 or len(image_path) > 500 or len(slug or "") > 300:
                 raise ValueError(f"Row {number} contains an oversized field")
             image = (batch / image_path).resolve()
             if batch not in image.parents or not image.is_file():
                 raise ValueError(f"Row {number} image is missing or outside the batch: {image_path}")
-            records.append(ImportRecord(title, manufacturer, description, image_path))
+            if slug and slug in slugs:
+                raise ValueError(f"Row {number} repeats slug {slug}")
+            if slug:
+                slugs.add(slug)
+            records.append(ImportRecord(title, manufacturer, description, image_path, slug))
         return records
 
     async def run(self, job_id: uuid.UUID) -> None:
@@ -117,7 +124,7 @@ class BatchImportService:
                 image_path = self.resolve_batch(batch_id) / record.image_path
                 contents = await asyncio.to_thread(self._read_limited, image_path)
                 source = await asyncio.to_thread(self.images.decode, contents)
-                product = await self.ingestion.create(session, record.title, record.manufacturer, record.description, source)
+                product = await self.ingestion.create(session, record.title, record.manufacturer, record.description, source, slug=record.slug)
                 item = await session.get(ImportItem, item_id)
                 job = await session.get(ImportJob, job_id)
                 item.status = "completed"

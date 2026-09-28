@@ -34,3 +34,16 @@ def test_rejects_manifest_image_traversal(tmp_path):
     (batch / "manifest.json").write_text(json.dumps([{"title": "One", "manufacturer": "Maker", "image_path": "../outside.jpg"}]), encoding="utf-8")
     with pytest.raises(ValueError, match="outside the batch"):
         importer.load_manifest("customer-001", "manifest.json")
+
+
+def test_manifest_slug_is_optional_and_unique(tmp_path):
+    importer, staging = service(tmp_path)
+    batch = staging / "customer-002"
+    (batch / "images").mkdir(parents=True)
+    Image.new("RGB", (10, 10)).save(batch / "images" / "one.jpg")
+    (batch / "manifest.csv").write_text("title,manufacturer,image_path,slug\nOne,Maker,images/one.jpg,one-slug\nTwo,Maker,images/one.jpg,\n", encoding="utf-8")
+    records = importer.load_manifest("customer-002", "manifest.csv")
+    assert [record.slug for record in records] == ["one-slug", None]
+    (batch / "twice.csv").write_text("title,manufacturer,image_path,slug\nOne,Maker,images/one.jpg,same\nTwo,Maker,images/one.jpg,same\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="repeats slug"):
+        importer.load_manifest("customer-002", "twice.csv")

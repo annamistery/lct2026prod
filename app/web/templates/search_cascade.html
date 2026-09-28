@@ -143,6 +143,92 @@
   background: var(--surface-2);
   color: #fff;
 }
+.file-item .mark { display: inline-block; width: 16px; font-weight: 700; }
+.cascade-status-banner.st-found { background: linear-gradient(90deg, rgba(46, 204, 113, 0.16), rgba(46, 204, 113, 0.04)); border-color: rgba(46, 204, 113, 0.45); }
+.cascade-status-banner.st-probable { background: linear-gradient(90deg, rgba(241, 196, 15, 0.16), rgba(241, 196, 15, 0.04)); border-color: rgba(241, 196, 15, 0.45); }
+.cascade-status-banner.st-miss { background: linear-gradient(90deg, rgba(255, 107, 107, 0.16), rgba(255, 107, 107, 0.04)); border-color: rgba(255, 107, 107, 0.45); }
+.st-badge { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 11px; font-weight: 700; color: #000; white-space: nowrap; }
+.st-badge.st-found { background: #2ecc71; }
+.st-badge.st-probable { background: #f1c40f; }
+.st-badge.st-not_in_catalog { background: #ff6b6b; }
+.slug-line { margin-top: 6px; font-family: ui-monospace, monospace; font-size: 11px; color: var(--muted); word-break: break-all; }
+.somm-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 16px; }
+.somm-title { font-weight: 700; font-size: 14px; margin-bottom: 8px; color: #fff; }
+.somm-text { font-size: 13px; color: #ccc; line-height: 1.5; }
+.somm-note { font-size: 12px; color: #f1c40f; margin-bottom: 8px; }
+.somm-ask { display: flex; gap: 8px; margin: 10px 0; }
+.somm-ask input { flex: 1; min-width: 0; padding: 7px 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 13px; }
+.alt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.alt-card { display: flex; gap: 10px; background: var(--surface-2); border-radius: 8px; padding: 8px; }
+.alt-card img, .alt-noimg { width: 64px; height: 86px; object-fit: contain; background: #000; border-radius: 4px; flex-shrink: 0; }
+.alt-noimg { display: flex; align-items: center; justify-content: center; font-size: 10px; color: var(--muted); text-align: center; }
+.alt-body { min-width: 0; font-size: 12px; }
+.alt-name { font-weight: 700; color: #fff; }
+.alt-winery { color: var(--muted); font-size: 11px; }
+.alt-facts { margin-top: 4px; color: #ccc; }
+.alt-reasons { margin-top: 4px; color: #a29bfe; font-size: 11px; }
+.batch-table tr.row-part td:nth-child(5) { color: #f1c40f; }
+.file-item .mark.ok { color: #2ecc71; }
+.file-item .mark.bad { color: #ff4757; }
+.file-item .mark.done { color: #f1c40f; }
+.set-buttons { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.set-btn {
+  padding: 5px 9px;
+  font-size: 12px;
+  background: var(--surface-2);
+  color: #fff;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  cursor: pointer;
+}
+.set-btn:hover { border-color: #f1c40f; }
+.set-btn:disabled { opacity: 0.4; cursor: default; }
+.set-dropzone {
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  padding: 10px;
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+  margin-bottom: 8px;
+}
+.set-dropzone.over { border-color: #f1c40f; color: #fff; }
+.set-info { font-size: 11px; color: var(--muted); line-height: 1.5; }
+.batch-run-btn {
+  width: 100%;
+  padding: 8px 10px;
+  margin-bottom: 12px;
+  background: #f1c40f;
+  color: #000;
+  font-weight: 700;
+  font-size: 13px;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.batch-run-btn:disabled { opacity: 0.5; cursor: default; }
+.batch-area {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 20px;
+}
+.batch-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.batch-progress { height: 6px; background: var(--surface-2); border-radius: 3px; overflow: hidden; margin-bottom: 10px; }
+#batch-bar { height: 100%; width: 0; background: #f1c40f; transition: width 0.2s; }
+.batch-summary { font-size: 13px; margin-bottom: 12px; display: flex; flex-wrap: wrap; gap: 6px 16px; }
+.batch-summary b { color: #f1c40f; }
+.batch-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.batch-table th { text-align: left; color: var(--muted); font-weight: 600; padding: 6px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.batch-table td { padding: 6px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.batch-table tbody tr { cursor: pointer; }
+.batch-table tbody tr:hover { background: var(--surface-2); }
+.batch-table tr.row-ok td:nth-child(5) { color: #2ecc71; }
+.batch-table tr.row-bad td:nth-child(5) { color: #ff4757; }
+.batch-table img { width: 64px; height: 64px; object-fit: contain; background: var(--surface-2); border-radius: 4px; display: block; }
+.batch-table .file { color: var(--muted); font-size: 11px; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.batch-table .slug { color: var(--muted); font-size: 11px; font-family: ui-monospace, monospace; word-break: break-all; }
 .file-item.active {
   background: #f1c40f !important;
   color: #000 !important;
@@ -223,12 +309,36 @@
     <div style="margin-bottom: 12px;">
       <label style="font-size: 11px; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; font-weight: 600; display: block;">Каталог тестов:</label>
       <select id="source-select" style="width: 100%; padding: 8px 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 13px; outline: none; margin-bottom: 10px;">
-        <option value="tmp1">Тест 1 (set48 / 27 фото)</option>
+        <option value="local">Мой набор (загрузить с компьютера)</option>
+        <option value="tmp1" selected>Тест 1 (set48 / 27 фото)</option>
         <option value="tmp2">Тест 2 (vina / 25 фото)</option>
         <option value="imports">Каталог (imports/images)</option>
         <option value="catalog">Кропы базы (media/products)</option>
       </select>
     </div>
+    <!-- Свой набор: фото и список хранятся только в браузере, на сервер уходят по одному для поиска -->
+    <div id="local-set-panel" style="margin-bottom: 12px;">
+      <div style="font-size: 11px; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; font-weight: 600;">Свой набор фото:</div>
+      <input type="file" id="set-files-input" accept="image/*,.jpg,.jpeg,.png,.webp" multiple style="display: none;">
+      <input type="file" id="set-folder-input" webkitdirectory multiple style="display: none;">
+      <div class="set-buttons">
+        <button type="button" class="set-btn" id="set-add-files">+ Фото</button>
+        <button type="button" class="set-btn" id="set-add-folder">+ Папка</button>
+        <button type="button" class="set-btn" id="set-clear">Очистить</button>
+      </div>
+      <div id="set-dropzone" class="set-dropzone">Перетащите сюда фото, папку или список (queries.tsv / mapping.json), затем «Проверить все»</div>
+      <div id="set-info" class="set-info">Набор пуст</div>
+    </div>
+    <!-- Список проверки: порядок фото, query_id и (необязательно) правильный slug -->
+    <div style="margin-bottom: 10px;">
+      <input type="file" id="set-list-input" accept=".tsv,.csv,.txt,.json" style="display: none;">
+      <div class="set-buttons" style="margin-bottom: 4px;">
+        <button type="button" class="set-btn" id="set-add-list">Загрузить список</button>
+        <button type="button" class="set-btn" id="set-drop-list" style="display: none;">× Убрать список</button>
+      </div>
+      <div id="list-info" class="set-info">Список не загружен — проверяются все фото источника. Формат: queries.tsv / labels.tsv (image_path, expected_slug, status = in_catalog | not_in_catalog, alt_slugs) или mapping.json.</div>
+    </div>
+    <button type="button" id="batch-run" class="batch-run-btn">▶ Проверить все по списку</button>
     <div style="margin-bottom: 12px;">
       <input type="text" id="filter-input" placeholder="Поиск по имени файла..." style="width: 100%; padding: 8px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 13px; outline: none; margin-bottom: 10px;">
     </div>
@@ -252,63 +362,80 @@
 
     <!-- Dropzone загрузки своего файла -->
     <div id="dropzone" style="border: 2px dashed var(--border); border-radius: var(--radius); padding: 20px; text-align: center; background: var(--surface); cursor: pointer; margin-bottom: 20px; transition: border-color 0.2s;">
-      <input type="file" id="file-input" accept="image/*" style="display: none;">
+      <input type="file" id="file-input" accept="image/*,.jpg,.jpeg,.png,.webp" style="display: none;">
       <div style="font-size: 14px; font-weight: 600; color: #fff; margin-bottom: 4px;">Кликните для выбора файла или перетащите фото сюда</div>
-      <div style="font-size: 12px; color: var(--muted);">BBox оригинал → v1 DINOv2 coarse (~15 мс) → при обнаружении соседей: v4 SigLIP 2/OCR среди отобранных кандидатов</div>
+      <div style="font-size: 12px; color: var(--muted);">YOLO-кроп → DINOv2 отбирает кандидатов → SigLIP 2 + DINOv2 ранжируют → пороги: найдено / похоже / нет в каталоге</div>
     </div>
 
+    <!-- Пакетная проверка набора -->
+    <div id="batch-area" class="batch-area" style="display: none;">
+      <div class="batch-head">
+        <div style="font-weight: 700; font-size: 15px;">Проверка набора</div>
+        <div class="set-buttons" style="margin: 0;">
+          <button type="button" class="set-btn" id="batch-stop">Остановить</button>
+          <button type="button" class="set-btn" id="batch-only-errors">Только ошибки</button>
+          <button type="button" class="set-btn" id="batch-save-jsonl">predictions.jsonl</button>
+          <button type="button" class="set-btn" id="batch-save-tsv">results.tsv</button>
+          <button type="button" class="set-btn" id="batch-hide">Скрыть</button>
+        </div>
+      </div>
+      <div class="batch-progress"><div id="batch-bar"></div></div>
+      <div id="batch-summary" class="batch-summary"></div>
+      <div style="overflow-x: auto;">
+        <table class="batch-table">
+          <thead>
+            <tr><th>#</th><th>Фото</th><th>Ответ</th><th>Вино из каталога</th><th>Проверка</th><th>Сходство</th><th>мс</th></tr>
+          </thead>
+          <tbody id="batch-rows"></tbody>
+        </table>
+      </div>
+      <div style="font-size: 12px; color: var(--muted); margin-top: 8px;">Кликните строку, чтобы открыть подробный разбор каскада для этого фото.</div>
+    </div>
+
+    <div id="thresholds-line" style="font-size: 12px; color: var(--muted); margin-bottom: 8px;"></div>
     <div id="status-line" style="font-size: 13px; color: var(--muted); margin-bottom: 12px;">Выберите тестовый файл слева или загрузите свой</div>
     <div id="loading" style="display: none; padding: 20px; text-align: center; color: var(--accent); font-weight: 600;">
       Поиск в каскадном пайплайне...
       <br>
-      <span style="color: var(--muted); font-size: 12px;">YOLO BBox ➔ DINOv2 Coarse ➔ Decision Engine ➔ Scoped SigLIP 2 / OCR</span>
+      <span style="color: var(--muted); font-size: 12px;">YOLO-кроп ➔ DINOv2: кандидаты ➔ SigLIP 2 + DINOv2: оценка ➔ зона ответа</span>
     </div>
 
     <!-- Область результатов -->
     <div id="results-area" style="display: none;">
 
-      <!-- ТРИПТИХ В САМОМ ВЕРХУ: Оригинал - Кроп - Финальный победитель -->
-      <div class="section-title" style="margin-top: 0;">
-        <span>Сопоставление: Оригинал ➔ Кроп ➔ Финальный победитель</span>
-        <span style="font-size: 11px; color: var(--muted); font-weight: normal;">(кликните для зума)</span>
-      </div>
-      <div class="compare-grid" id="triptychGrid"></div>
-
-      <!-- Карточка победителя Top-1 -->
-      <div id="winner-box"></div>
-
-      <!-- Баннер статуса каскада и таймингов -->
+      <!-- Статус ответа: найдено / похоже / нет в каталоге -->
       <div id="statusBanner" class="cascade-status-banner">
         <div>
-          <div id="statusTitle" style="font-size: 15px; font-weight: 700;"></div>
+          <div id="statusTitle" style="font-size: 16px; font-weight: 700;"></div>
           <div id="statusDesc" style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;"></div>
         </div>
         <div id="timingsSummary" class="metrics-row" style="margin-top: 0;"></div>
       </div>
 
-      <!-- ВТОРИЧНЫЕ ЭТАПЫ (ДИАГНОСТИКА) -->
+      <!-- Оригинал - Кроп - Ответ -->
+      <div class="section-title" style="margin-top: 0;">
+        <span>Сопоставление: Оригинал ➔ Кроп ➔ Ответ</span>
+        <span style="font-size: 11px; color: var(--muted); font-weight: normal;">(кликните для зума)</span>
+      </div>
+      <div class="compare-grid" id="triptychGrid"></div>
 
-      <!-- Секция Этапа 1 (v1 DINOv2) -->
+      <!-- Карточка вина и блоки AI-сомелье -->
+      <div id="winner-box"></div>
+      <div id="sommelier-box"></div>
+
+      <!-- Кандидаты: DINOv2 + SigLIP 2 -->
       <div class="section-title">
-        <span>Этап 1: Первичная выдача DINOv2-small LoRA</span>
+        <span id="finalTitle">Кандидаты (DINOv2 + SigLIP 2)</span>
+        <span id="finalBadge" style="font-size: 11px; color: var(--muted); font-weight: normal;"></span>
+      </div>
+      <div id="finalCards" class="compare-grid"></div>
+
+      <!-- Диагностика: первичная выдача DINOv2 -->
+      <div class="section-title">
+        <span>Диагностика: первичная выдача DINOv2 (отбор кандидатов)</span>
         <span id="v1Badge" style="font-size: 11px; color: var(--muted); font-weight: normal;"></span>
       </div>
       <div id="v1Cards" class="compare-grid"></div>
-
-      <!-- Секция Этапа 2 (v4 SigLIP 2 / OCR среди соседей) -->
-      <div id="stage2Section" style="display: none;">
-        <div class="section-title">
-          <span>Этап 2: Соревнование кандидатов-соседей (SigLIP 2 768d + OCR)</span>
-          <span id="v4Badge" style="font-size: 11px; color: var(--muted); font-weight: normal;"></span>
-        </div>
-        <div id="v4Cards" class="compare-grid"></div>
-      </div>
-
-      <!-- Все кандидаты (Top-K) -->
-      <div class="section-title">
-        <span>Итоговый пул кандидатов (Top-K)</span>
-      </div>
-      <div id="finalCards" class="compare-grid"></div>
 
     </div>
   </div>
@@ -350,39 +477,125 @@ fileInput.addEventListener('change', () => {
   if (fileInput.files.length) handleFile(fileInput.files[0], fileInput.files[0].name);
 });
 
+// ---------- Источники фото: папки сервера или свой набор в браузере ----------
+const IMAGE_EXT = /\.(jpe?g|png|webp)$/i;
+const localFiles = new Map();   // имя файла -> File (свой набор, только в браузере)
+let manifest = null;            // [{query_id, image_path, expect: 'in' | 'out' | null, expected: [slug...]}] из queries.tsv / labels.tsv / mapping.json
+let manifestName = '';
+const results = new Map();      // "<источник>|<имя файла>" -> {data, error, ms}
+const setInfo = document.getElementById('set-info');
+const listInfo = document.getElementById('list-info');
+
+function esc(value) {
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+}
+const baseName = path => String(path).split(/[\\/]/).pop();
+const resultKey = (name, source = sourceSelect.value) => `${source}|${name}`;
+const expectationFor = name => (manifest && manifest.find(m => baseName(m.image_path) === name)) || { expect: null, expected: [] };
+const STATUS_LABEL = { found: 'найдено', probable: 'похоже', not_in_catalog: 'нет в каталоге' };
+
+// Вердикт по ответу каскада: ok — верно, bad — ошибка, part — «похоже» на другое вино, когда вина нет в каталоге
+function verdictFor(expectation, data) {
+  if (!data || !expectation.expect) return null;
+  const slug = data.winner ? data.winner.slug : null;
+  if (expectation.expect === 'in') {
+    if (slug && expectation.expected.includes(slug)) return { cls: 'ok', text: data.status === 'found' ? '✓ верно' : '✓ верно (похоже)' };
+    if (data.status === 'not_in_catalog') return { cls: 'bad', text: '✗ ошибочно «нет в каталоге»' };
+    return { cls: 'bad', text: `✗ ожидалось<div class="slug">${esc(expectation.expected[0])}</div>` };
+  }
+  if (data.status === 'not_in_catalog') return { cls: 'ok', text: '✓ верно: нет в каталоге' };
+  if (data.status === 'found') return { cls: 'bad', text: '✗ ложно «найдено» (вина нет в каталоге)' };
+  return { cls: 'part', text: '~ «похоже» на другое вино (вина нет в каталоге)' };
+}
+
 async function loadFiles() {
+  if (sourceSelect.value === 'local') {
+    allFiles = [...localFiles.keys()];
+    renderFiles();
+    return;
+  }
   filesList.innerHTML = '<div style="color: var(--muted); padding: 8px; font-size: 12px;">Загрузка...</div>';
   try {
-    const res = await fetch(`/api/rectify/files?source=${sourceSelect.value}`);
+    const res = await fetch(`/api/rectify/files?source=${encodeURIComponent(sourceSelect.value)}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     allFiles = await res.json();
     renderFiles();
   } catch (err) {
-    filesList.innerHTML = `<div style="color: #ff4757; padding: 8px; font-size: 12px;">${err.message}</div>`;
+    filesList.innerHTML = `<div style="color: #ff4757; padding: 8px; font-size: 12px;">${esc(err.message)}</div>`;
   }
+}
+
+function fileMark(name) {
+  const r = results.get(resultKey(name));
+  if (!r) return '<span class="mark"></span>';
+  if (r.error) return '<span class="mark bad" title="Ошибка">!</span>';
+  const verdict = verdictFor(expectationFor(name), r.data);
+  if (!verdict) return '<span class="mark done" title="Проверено">•</span>';
+  return { ok: '<span class="mark ok" title="Верно">✓</span>', bad: '<span class="mark bad" title="Ошибка">✗</span>', part: '<span class="mark done" title="Похоже">~</span>' }[verdict.cls];
 }
 
 function renderFiles() {
   const q = filterInput.value.trim().toLowerCase();
   const filtered = q ? allFiles.filter(f => f.toLowerCase().includes(q)) : allFiles;
   if (!filtered.length) {
-    filesList.innerHTML = '<div style="color: var(--muted); padding: 8px; font-size: 12px;">Ничего не найдено</div>';
+    const hint = sourceSelect.value === 'local' && !localFiles.size ? 'Добавьте фото кнопками выше' : 'Ничего не найдено';
+    filesList.innerHTML = `<div style="color: var(--muted); padding: 8px; font-size: 12px;">${hint}</div>`;
     return;
   }
-  filesList.innerHTML = filtered.map(f => `<div class="file-item" data-filename="${f}" onclick="selectFile('${f}')">${f}</div>`).join('');
+  filesList.innerHTML = filtered.map(f => `<div class="file-item" data-filename="${esc(f)}" title="${esc(f)}">${fileMark(f)}${esc(f)}</div>`).join('');
+}
+
+filesList.addEventListener('click', (e) => {
+  const item = e.target.closest('.file-item');
+  if (item) selectFile(item.dataset.filename);
+});
+
+async function getSourceFile(name, source = sourceSelect.value) {
+  if (source === 'local') {
+    const file = localFiles.get(name);
+    if (!file) throw new Error(`файл ${name} не добавлен в набор`);
+    return file;
+  }
+  const res = await fetch(`/api/rectify/image?source=${encodeURIComponent(source)}&filename=${encodeURIComponent(name)}`);
+  if (!res.ok) throw new Error(`не удалось загрузить ${name}`);
+  const blob = await res.blob();
+  return new File([blob], name, { type: blob.type || 'image/jpeg' });
 }
 
 async function selectFile(filename) {
   document.querySelectorAll('.file-item').forEach(el => el.classList.toggle('active', el.dataset.filename === filename));
-  statusLine.textContent = `Загрузка и поиск в каскаде для ${filename}...`;
   try {
-    const res = await fetch(`/api/rectify/image?source=${sourceSelect.value}&filename=${filename}`);
-    if (!res.ok) throw new Error(`Не удалось загрузить ${filename}`);
-    const blob = await res.blob();
-    handleFile(new File([blob], filename, { type: blob.type || 'image/jpeg' }), filename);
+    const file = await getSourceFile(filename);
+    const stored = results.get(resultKey(filename));
+    if (stored && stored.data) {  // уже проверено в наборе — показываем без повторного поиска
+      if (currentOrigUrl) URL.revokeObjectURL(currentOrigUrl);
+      currentOrigUrl = URL.createObjectURL(file);
+      statusLine.textContent = `${filename}: результат проверки набора (${stored.data.timings.total_ms} мс)`;
+      renderResults(stored.data, currentOrigUrl);
+      resultsArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+    statusLine.textContent = `Загрузка и поиск в каскаде для ${filename}...`;
+    handleFile(file, filename);
   } catch (err) {
     statusLine.textContent = `Ошибка: ${err.message}`;
   }
+}
+
+async function cascadeSearch(file) {
+  const fd = new FormData();
+  fd.append('image', file);
+  fd.append('k', '5');
+  const res = await fetch('/api/cascade/search', { method: 'POST', body: fd });
+  const contentType = res.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    const text = await res.text();
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${text || 'Ошибка сервера'}`);
+    throw new Error(`Неожиданный ответ сервера: ${text.slice(0, 100)}`);
+  }
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || `Ошибка каскада (HTTP ${res.status})`);
+  return data;
 }
 
 async function handleFile(file, displayName) {
@@ -392,22 +605,8 @@ async function handleFile(file, displayName) {
   loading.style.display = 'block';
   resultsArea.style.display = 'none';
 
-  const fd = new FormData();
-  fd.append('image', file);
-  fd.append('k', '5');
-
   try {
-    const res = await fetch('/api/cascade/search', { method: 'POST', body: fd });
-    let data;
-    const contentType = res.headers.get('content-type') || '';
-    if (contentType.includes('application/json')) {
-      data = await res.json();
-    } else {
-      const text = await res.text();
-      if (!res.ok) throw new Error(`HTTP ${res.status}: ${text || 'Ошибка сервера'}`);
-      throw new Error(`Неожиданный ответ сервера: ${text.slice(0, 100)}`);
-    }
-    if (!res.ok) throw new Error(data.detail || `Ошибка каскада (HTTP ${res.status})`);
+    const data = await cascadeSearch(file);
     statusLine.textContent = `Готово: ${displayName || file.name} (${data.timings.total_ms} мс)`;
     renderResults(data, currentOrigUrl);
   } catch (err) {
@@ -417,205 +616,520 @@ async function handleFile(file, displayName) {
   }
 }
 
+// ---------- Свой набор: добавление фото, папок и списка ----------
+function addLocalFiles(files) {
+  let added = 0;
+  for (const file of files) {
+    if (!IMAGE_EXT.test(file.name) || file.name.startsWith('.')) continue;  // ._name — мусор macOS
+    if (!localFiles.has(file.name)) added++;
+    localFiles.set(file.name, file);
+  }
+  updateSetInfo();
+  if (sourceSelect.value !== 'local') sourceSelect.value = 'local';
+  loadFiles();
+  return added;
+}
+
+function updateSetInfo() {
+  if (!localFiles.size) {
+    setInfo.textContent = 'Набор пуст';
+    return;
+  }
+  let text = `Фото в наборе: ${localFiles.size}`;
+  if (manifest) {
+    const missing = manifest.filter(m => !localFiles.has(baseName(m.image_path))).length;
+    if (missing) text += ` · из списка не хватает: ${missing}`;
+  }
+  setInfo.textContent = text;
+}
+
+function parseManifest(text, filename) {
+  let rows;
+  if (/\.json$/i.test(filename) || text.trim().startsWith('{') || text.trim().startsWith('[')) {
+    const json = JSON.parse(text);
+    rows = Array.isArray(json) ? json : (json.cases || json.queries || []);
+  } else {
+    const lines = text.replace(/^﻿/, '').split(/\r?\n/).filter(l => l.trim());
+    const sep = lines[0].includes('\t') ? '\t' : (lines[0].includes(';') ? ';' : ',');
+    const header = lines[0].split(sep).map(h => h.trim().toLowerCase());
+    if (!header.includes('image_path')) throw new Error('в первой строке нет колонки image_path');
+    rows = lines.slice(1).map(line => {
+      const cells = line.split(sep);
+      return Object.fromEntries(header.map((h, i) => [h, (cells[i] || '').trim()]));
+    });
+  }
+  const parsed = rows
+    .filter(r => r && r.image_path)
+    .map((r, i) => {
+      const slug = r.expected_slug || r.true_slug || r.gt_slug || r.slug || '';
+      const alts = String(r.alt_slugs || '').split(',').map(x => x.trim()).filter(Boolean);
+      const status = String(r.status || r.label || '').toLowerCase();
+      let expect = null;
+      if (slug && status !== 'unsure') expect = 'in';
+      else if (['not_in_catalog', 'negative', 'out'].includes(status)) expect = 'out';
+      return {
+        query_id: r.query_id || `q-${String(i + 1).padStart(6, '0')}`,
+        image_path: String(r.image_path),
+        expect,
+        expected: slug ? [slug, ...alts] : [],
+      };
+    });
+  if (!parsed.length) throw new Error('в списке нет строк с image_path');
+  return parsed;
+}
+
+async function loadManifest(file) {
+  try {
+    manifest = parseManifest(await file.text(), file.name);
+    manifestName = file.name;
+    const inside = manifest.filter(m => m.expect === 'in').length;
+    const outside = manifest.filter(m => m.expect === 'out').length;
+    listInfo.textContent = `Список ${file.name}: ${manifest.length} фото` + (inside || outside
+      ? `; вино из каталога: ${inside}, вина нет в каталоге: ${outside} — будет посчитана точность`
+      : '; правильных ответов нет — точность не считается');
+    document.getElementById('set-drop-list').style.display = '';
+  } catch (err) {
+    listInfo.textContent = `Не удалось прочитать список ${file.name}: ${err.message}`;
+  }
+  updateSetInfo();
+  renderFiles();
+}
+
+async function readDroppedEntries(items) {
+  // Перетаскивание папки: обходим её содержимое через webkitGetAsEntry
+  const files = [];
+  const walk = entry => new Promise(resolve => {
+    if (entry.isFile) {
+      entry.file(f => { files.push(f); resolve(); }, () => resolve());
+    } else if (entry.isDirectory) {
+      const reader = entry.createReader();
+      const readAll = () => reader.readEntries(async entries => {
+        if (!entries.length) return resolve();
+        for (const child of entries) {
+          if (child.name !== '__MACOSX') await walk(child);
+        }
+        readAll();
+      }, () => resolve());
+      readAll();
+    } else {
+      resolve();
+    }
+  });
+  const entries = [...items].map(i => i.webkitGetAsEntry && i.webkitGetAsEntry()).filter(Boolean);
+  for (const entry of entries) await walk(entry);
+  return files;
+}
+
+async function handleSetDrop(dataTransfer) {
+  const files = dataTransfer.items && dataTransfer.items.length ? await readDroppedEntries(dataTransfer.items) : [...dataTransfer.files];
+  const lists = files.filter(f => /\.(tsv|csv|txt|json)$/i.test(f.name));
+  if (lists.length) await loadManifest(lists.find(f => /queries|mapping/i.test(f.name)) || lists[0]);
+  addLocalFiles(files);
+}
+
+document.getElementById('set-add-files').addEventListener('click', () => document.getElementById('set-files-input').click());
+document.getElementById('set-add-folder').addEventListener('click', () => document.getElementById('set-folder-input').click());
+document.getElementById('set-add-list').addEventListener('click', () => document.getElementById('set-list-input').click());
+document.getElementById('set-files-input').addEventListener('change', e => { addLocalFiles(e.target.files); e.target.value = ''; });
+document.getElementById('set-folder-input').addEventListener('change', async e => {
+  const files = [...e.target.files].filter(f => !f.webkitRelativePath.includes('__MACOSX'));
+  const list = files.find(f => /(queries|mapping).*\.(tsv|json)$/i.test(f.name));
+  if (list && !manifest) await loadManifest(list);
+  addLocalFiles(files);
+  e.target.value = '';
+});
+document.getElementById('set-list-input').addEventListener('change', e => { if (e.target.files[0]) loadManifest(e.target.files[0]); e.target.value = ''; });
+document.getElementById('set-drop-list').addEventListener('click', () => {
+  manifest = null;
+  manifestName = '';
+  listInfo.textContent = 'Список не загружен — проверяются все фото источника.';
+  document.getElementById('set-drop-list').style.display = 'none';
+  updateSetInfo();
+  renderFiles();
+});
+document.getElementById('set-clear').addEventListener('click', () => {
+  localFiles.clear();
+  for (const key of [...results.keys()]) if (key.startsWith('local|')) results.delete(key);
+  updateSetInfo();
+  loadFiles();
+});
+const setDropzone = document.getElementById('set-dropzone');
+setDropzone.addEventListener('dragover', e => { e.preventDefault(); setDropzone.classList.add('over'); });
+setDropzone.addEventListener('dragleave', () => setDropzone.classList.remove('over'));
+setDropzone.addEventListener('drop', e => { e.preventDefault(); setDropzone.classList.remove('over'); handleSetDrop(e.dataTransfer); });
+
+// ---------- Пакетная проверка ----------
+const batchArea = document.getElementById('batch-area');
+const batchRows = document.getElementById('batch-rows');
+const batchSummary = document.getElementById('batch-summary');
+const batchBar = document.getElementById('batch-bar');
+const batchRunBtn = document.getElementById('batch-run');
+let batchRunning = false;
+let batchStopRequested = false;
+let batchItems = [];
+let batchOnlyErrors = false;
+
+function batchQueue() {
+  if (manifest) return manifest.map(m => ({ ...m, name: baseName(m.image_path) }));
+  return allFiles.map((name, i) => ({ query_id: `q-${String(i + 1).padStart(6, '0')}`, image_path: name, expect: null, expected: [], name }));
+}
+
+const confidenceOf = data => (data && typeof data.confidence === 'number' ? data.confidence : null);
+
+function renderBatch() {
+  const done = batchItems.filter(it => it.state !== 'pending');
+  const ok = done.filter(it => it.data);
+  const inside = ok.filter(it => it.expect === 'in');
+  const outside = ok.filter(it => it.expect === 'out');
+  const verdicts = new Map(ok.map(it => [it, verdictFor(it, it.data)]));
+  const insideOk = inside.filter(it => verdicts.get(it).cls === 'ok');
+  const count = (items, status) => items.filter(it => it.data.status === status).length;
+  const times = ok.map(it => it.ms).sort((a, b) => a - b);
+  const avg = times.length ? Math.round(times.reduce((a, b) => a + b, 0) / times.length) : 0;
+  batchBar.style.width = `${batchItems.length ? (done.length / batchItems.length) * 100 : 0}%`;
+  const parts = [
+    `Проверено: <b>${done.length}</b> из ${batchItems.length}`,
+    `ошибок запроса: <b>${done.filter(it => it.state === 'error').length}</b>`,
+    `ответы: найдено ${count(ok, 'found')}, похоже ${count(ok, 'probable')}, нет в каталоге ${count(ok, 'not_in_catalog')}`,
+  ];
+  if (inside.length) {
+    const found = inside.filter(it => it.data.status === 'found');
+    const foundOk = found.filter(it => verdicts.get(it).cls === 'ok').length;
+    parts.push(`вина из каталога: точность Top-1 <b>${(100 * insideOk.length / inside.length).toFixed(1)}%</b> (${insideOk.length} из ${inside.length}), «найдено» верно ${foundOk} из ${found.length}, ошибочно «нет в каталоге» <b>${count(inside, 'not_in_catalog')}</b>`);
+  }
+  if (outside.length) parts.push(`вин нет в каталоге: распознано «нет в каталоге» <b>${count(outside, 'not_in_catalog')}</b> из ${outside.length}, «похоже» ${count(outside, 'probable')}, ложно «найдено» <b>${count(outside, 'found')}</b>`);
+  if (times.length) parts.push(`время: среднее <b>${avg}</b> мс, медиана ${times[Math.floor(times.length / 2)]}, макс ${times[times.length - 1]}`);
+  if (manifestName) parts.push(`список: ${esc(manifestName)}`);
+  batchSummary.innerHTML = parts.map(p => `<span>${p}</span>`).join('');
+
+  const rows = batchItems.filter(it => !batchOnlyErrors || it.state === 'error' || (verdicts.get(it) && verdicts.get(it).cls !== 'ok'));
+  batchRows.innerHTML = rows.map(it => {
+    const index = batchItems.indexOf(it);
+    const shown = it.data && (it.data.winner || (it.data.final_results || [])[0]);
+    let cls = '';
+    let verdict = '';
+    if (it.state === 'pending') verdict = '<span style="color: var(--muted);">ожидает…</span>';
+    else if (it.state === 'running') verdict = '<span style="color: #f1c40f;">поиск…</span>';
+    else if (it.state === 'error') { cls = 'row-bad'; verdict = `ошибка: ${esc(it.error)}`; }
+    else {
+      const v = verdicts.get(it);
+      if (v) { cls = `row-${v.cls}`; verdict = v.text; } else verdict = '—';
+    }
+    const confidence = confidenceOf(it.data);
+    const status = it.data ? `<span class="st-badge st-${it.data.status}">${STATUS_LABEL[it.data.status] || esc(it.data.status)}</span>` : '';
+    const card = shown ? `<div style="display: flex; gap: 8px; align-items: center;${it.data.winner ? '' : ' opacity: 0.55;'}"><img src="${esc(shown.image_url)}" alt=""><div>${it.data.winner ? '' : '<div class="file">ближайшая этикетка:</div>'}<div style="font-weight: 600; color: #fff;">${esc(shown.title)}</div><div class="file">${esc(shown.manufacturer || '')}</div><div class="slug">${esc(shown.slug || '')}</div></div></div>` : '';
+    return `<tr class="${cls}" data-index="${index}">
+      <td>${index + 1}<div class="file">${esc(it.query_id)}</div></td>
+      <td>${it.thumb ? `<img src="${it.thumb}" alt="">` : ''}<div class="file" title="${esc(it.name)}">${esc(it.name)}</div></td>
+      <td>${status}</td>
+      <td>${card}</td>
+      <td>${verdict}</td>
+      <td>${confidence === null ? '' : confidence.toFixed(3)}</td>
+      <td>${it.ms ?? ''}</td>
+    </tr>`;
+  }).join('');
+}
+
+batchRows.addEventListener('click', async (e) => {
+  const row = e.target.closest('tr[data-index]');
+  if (!row) return;
+  const it = batchItems[Number(row.dataset.index)];
+  if (!it || !it.data) return;
+  if (currentOrigUrl) URL.revokeObjectURL(currentOrigUrl);
+  currentOrigUrl = it.file ? URL.createObjectURL(it.file) : '';
+  statusLine.textContent = `${it.name}: подробный разбор (${it.data.timings.total_ms} мс)`;
+  renderResults(it.data, currentOrigUrl);
+  resultsArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+
+async function makeThumb(file) {
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = 128 / Math.max(bitmap.width, bitmap.height);
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+    return canvas.toDataURL('image/jpeg', 0.8);
+  } catch {
+    return '';
+  }
+}
+
+async function runBatch() {
+  if (batchRunning) return;
+  const queue = batchQueue();
+  if (!queue.length) {
+    statusLine.textContent = sourceSelect.value === 'local' ? 'Сначала добавьте фото в набор' : 'В выбранном источнике нет фото';
+    return;
+  }
+  const source = sourceSelect.value;
+  batchItems = queue.map(q => ({ ...q, state: 'pending' }));
+  batchRunning = true;
+  sourceSelect.disabled = true;
+  batchStopRequested = false;
+  batchRunBtn.disabled = true;
+  batchArea.style.display = 'block';
+  renderBatch();
+
+  for (const it of batchItems) {
+    if (batchStopRequested) break;
+    it.state = 'running';
+    renderBatch();
+    const started = performance.now();
+    try {
+      it.file = await getSourceFile(it.name, source);
+      it.thumb = await makeThumb(it.file);
+      it.data = await cascadeSearch(it.file);
+      it.ms = Math.round(performance.now() - started);
+      it.state = 'done';
+      results.set(resultKey(it.name, source), { data: it.data, ms: it.ms });
+    } catch (err) {
+      it.state = 'error';
+      it.error = err.message;
+      results.set(resultKey(it.name, source), { error: err.message });
+    }
+    renderBatch();
+    renderFiles();
+  }
+  for (const it of batchItems) if (it.state === 'pending') { it.state = 'error'; it.error = 'остановлено'; }
+  batchRunning = false;
+  batchRunBtn.disabled = false;
+  sourceSelect.disabled = false;
+  renderBatch();
+  statusLine.textContent = batchStopRequested ? 'Проверка набора остановлена' : 'Проверка набора завершена';
+}
+
+function download(filename, text, type) {
+  const url = URL.createObjectURL(new Blob([text], { type }));
+  const a = Object.assign(document.createElement('a'), { href: url, download: filename });
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+batchRunBtn.addEventListener('click', runBatch);
+document.getElementById('batch-stop').addEventListener('click', () => { batchStopRequested = true; });
+document.getElementById('batch-hide').addEventListener('click', () => { batchArea.style.display = 'none'; });
+document.getElementById('batch-only-errors').addEventListener('click', (e) => {
+  batchOnlyErrors = !batchOnlyErrors;
+  e.target.textContent = batchOnlyErrors ? 'Показать все' : 'Только ошибки';
+  renderBatch();
+});
+document.getElementById('batch-save-jsonl').addEventListener('click', () => {
+  // Формат participant_test.sh (без sha256 — он считается там по файлу)
+  const lines = batchItems.filter(it => it.state === 'done' || it.state === 'error').map(it => JSON.stringify({
+    query_id: it.query_id,
+    image_path: it.image_path,
+    predicted_slug: it.data && it.data.winner ? it.data.winner.slug : null,
+    latency_ms: it.ms ?? null,
+  }));
+  download('predictions.jsonl', lines.join('\n') + '\n', 'application/x-ndjson');
+});
+document.getElementById('batch-save-tsv').addEventListener('click', () => {
+  const clean = v => String(v ?? '').replace(/[\t\r\n]+/g, ' ');
+  const header = ['query_id', 'image_path', 'status', 'predicted_slug', 'title', 'manufacturer', 'confidence', 'latency_ms', 'expected', 'expected_slugs', 'verdict', 'error'];
+  const lines = batchItems.map(it => {
+    const w = it.data && it.data.winner;
+    const confidence = confidenceOf(it.data);
+    const verdict = verdictFor(it, it.data);
+    return [it.query_id, it.image_path, it.data ? it.data.status : '', w ? w.slug : '', w ? w.title : '', w ? w.manufacturer : '',
+      confidence === null ? '' : confidence.toFixed(4), it.ms ?? '', it.expect === 'in' ? 'in_catalog' : (it.expect === 'out' ? 'not_in_catalog' : ''),
+      it.expected.join(','), verdict ? verdict.cls : '', it.error || ''].map(clean).join('\t');
+  });
+  download('results.tsv', [header.join('\t'), ...lines].join('\n') + '\n', 'text/tab-separated-values');
+});
+
+const STATUS_VIEW = {
+  found: { cls: 'st-found', icon: '✓', color: '#2ecc71' },
+  probable: { cls: 'st-probable', icon: '?', color: '#f1c40f' },
+  not_in_catalog: { cls: 'st-miss', icon: '✗', color: '#ff6b6b' },
+};
+
+function candidateCard(item, idx, isWinner) {
+  const v4 = item.v4_similarity === null || item.v4_similarity === undefined ? '—' : item.v4_similarity.toFixed(3);
+  return `
+    <div class="compare-card${isWinner ? ' winner-border' : ''}">
+      <div class="compare-header">
+        <span>#${idx + 1} ${isWinner ? 'Ответ' : ''}</span>
+        <span class="badge-tag">${item.fusion_score.toFixed(3)}</span>
+      </div>
+      <div class="compare-img-wrap">
+        <img class="compare-img zoomable" src="${esc(item.image_url)}" alt="" data-caption="${esc(item.title)}">
+      </div>
+      <div style="width: 100%; margin-top: 8px; font-size: 12px;">
+        <div style="font-weight: 700; color: #fff; font-size: 13px;">${esc(item.title)}</div>
+        <div style="color: var(--muted); font-size: 11px; margin-top: 2px;">${esc(item.manufacturer || '')}</div>
+        <div style="margin-top: 6px; display: flex; justify-content: space-between;"><span style="color: var(--muted);">SigLIP 2:</span><span style="font-weight: 700; color: #a29bfe;">${v4}</span></div>
+        <div style="display: flex; justify-content: space-between;"><span style="color: var(--muted);">DINOv2:</span><span style="font-weight: 700; color: #2ecc71;">${item.v1_similarity.toFixed(3)}</span></div>
+      </div>
+    </div>`;
+}
+
 function renderResults(data, origUrl) {
   resultsArea.style.display = 'block';
   const w = data.winner;
-  const wImgUrl = w ? w.image_url : '';
-  const wTitle = w ? w.title : 'Не найдено';
-  const wScore = w ? (w.final_score ? w.final_score.toFixed(4) : (w.dino_similarity || '-')) : '-';
+  const view = STATUS_VIEW[data.status] || STATUS_VIEW.probable;
   const cropUrl = data.bbox_crop || origUrl;
 
-  // 1. ТРИПТИХ В САМОМ ВЕРХУ: 1. Оригинал | 2. Кроп | 3. Финальный победитель
-  const triptych = document.getElementById('triptychGrid');
-  triptych.innerHTML = `
-    <!-- Карточка 1: Оригинал -->
+  // 1. Статус ответа и тайминги
+  document.getElementById('statusBanner').className = `cascade-status-banner ${view.cls}`;
+  document.getElementById('statusTitle').innerHTML = `<span style="color: ${view.color};">${view.icon} ${esc(data.message)}</span>` +
+    (data.confidence !== null && data.confidence !== undefined ? ` <span style="font-size: 12px; color: var(--muted); font-weight: 400;">сходство ${data.confidence.toFixed(3)}</span>` : '');
+  document.getElementById('statusDesc').textContent = data.decision.reason;
+  const t = data.timings;
+  document.getElementById('timingsSummary').innerHTML = `
+    <div class="metric-pill"><span class="label">YOLO</span><span class="val">${t.bbox_detect_ms ?? 0} ms</span></div>
+    <div class="metric-pill"><span class="label">Подготовка</span><span class="val">${t.query_prep_ms} ms</span></div>
+    <div class="metric-pill"><span class="label">DINOv2</span><span class="val">${t.v1_total_ms} ms</span></div>
+    <div class="metric-pill"><span class="label">SigLIP 2</span><span class="val">${t.v4_total_ms ? t.v4_total_ms + ' ms' : '—'}</span></div>
+    <div class="metric-pill" style="border-color: #f1c40f;"><span class="label" style="color: #f1c40f;">Итого</span><span class="val" style="color: #f1c40f;">${t.total_ms} ms</span></div>`;
+
+  // 2. Оригинал - кроп - ответ
+  document.getElementById('triptychGrid').innerHTML = `
     <div class="compare-card">
-      <div class="compare-header">
-        <span>1. Загруженный оригинал</span>
-        <span class="badge-tag">Фото</span>
-      </div>
-      <div class="compare-img-wrap">
-        <img class="compare-img zoomable" src="${origUrl}" alt="Оригинал" onclick="openLightbox('${origUrl}', 'Загруженный оригинал (полный кадр)')">
-      </div>
-      <div class="compare-hint">Кликните для зума</div>
+      <div class="compare-header"><span>1. Загруженное фото</span><span class="badge-tag">Фото</span></div>
+      <div class="compare-img-wrap"><img class="compare-img zoomable" src="${esc(origUrl)}" alt="" data-caption="Загруженное фото"></div>
     </div>
-
-    <!-- Карточка 2: Кроп этикетки (YOLO) -->
     <div class="compare-card">
-      <div class="compare-header">
-        <span>2. Кроп этикетки (YOLO)</span>
-        <span class="badge-tag accent-v1">BBox</span>
-      </div>
-      <div class="compare-img-wrap">
-        <img class="compare-img zoomable" src="${cropUrl}" alt="Кроп этикетки" onclick="openLightbox('${cropUrl}', 'BBox кроп этикетки (оригинальное разрешение)')">
-      </div>
-      <div class="compare-hint">Кликните для зума</div>
+      <div class="compare-header"><span>2. Кроп этикетки (YOLO)</span><span class="badge-tag accent-v1">BBox</span></div>
+      <div class="compare-img-wrap"><img class="compare-img zoomable" src="${esc(cropUrl)}" alt="" data-caption="Кроп этикетки"></div>
     </div>
+    <div class="compare-card ${w ? 'winner-border' : ''}">
+      <div class="compare-header"><span style="color: ${view.color};">3. ${w ? 'Вино из каталога' : 'Нет в каталоге'}</span></div>
+      <div class="compare-img-wrap">${w
+        ? `<img class="compare-img zoomable" src="${esc(w.image_url)}" alt="" data-caption="${esc(w.title)}">`
+        : `<div style="color: ${view.color}; font-size: 13px; text-align: center; padding: 12px;">${esc(data.message)}</div>`}</div>
+    </div>`;
 
-    <!-- Карточка 3: Финальный победитель -->
-    <div class="compare-card winner-border">
-      <div class="compare-header">
-        <span style="color: #f1c40f;">3. Финальный победитель</span>
-        <span class="badge-tag accent-winner">Top-1</span>
-      </div>
-      <div class="compare-img-wrap">
-        ${wImgUrl ? `
-          <img class="compare-img zoomable" src="${wImgUrl}" alt="${wTitle}" onclick="openLightbox('${wImgUrl}', 'Победитель Top-1: ${wTitle}')">
-        ` : `
-          <div style="color: var(--muted); font-size: 12px;">Не найдено</div>
-        `}
-      </div>
-      <div class="compare-hint" style="color: #f1c40f; font-weight: 600;">Скор: ${wScore}</div>
-    </div>
-  `;
-
-  // 2. Карточка победителя Top-1 (подробные данные)
+  // 3. Карточка вина
   const winnerBox = document.getElementById('winner-box');
   if (w) {
     winnerBox.innerHTML = `
       <div class="winner-card">
-        <img class="zoomable" src="${w.image_url}" alt="${w.title}" style="width: 120px; height: 160px; object-fit: contain; background: #000; border-radius: 6px; flex-shrink: 0;" onclick="openLightbox('${w.image_url}', '${w.title}')">
+        <img class="zoomable" src="${esc(w.image_url)}" alt="" data-caption="${esc(w.title)}" style="width: 120px; height: 160px; object-fit: contain; background: #000; border-radius: 6px; flex-shrink: 0;">
         <div style="flex: 1;">
-          <div style="font-size: 11px; background: #f1c40f; color: #000; font-weight: 700; padding: 2px 8px; border-radius: 4px; display: inline-block; margin-bottom: 6px;">Победитель каскада (Top-1 Match)</div>
-          <div style="font-size: 18px; font-weight: 700; color: #fff;">${w.title}</div>
-          <div style="color: var(--muted); font-size: 13px; margin-top: 2px;">${w.manufacturer || ''}</div>
-          <div style="font-size: 12px; color: #aaa; margin-top: 6px;">${w.description || ''}</div>
-          <div class="metrics-row" style="margin-top: 10px;">
-            <div class="metric-pill"><span class="label">Итоговый скор</span><span class="val" style="color: #f1c40f;">${wScore}</span></div>
-            ${w.vote_count !== undefined ? `<div class="metric-pill"><span class="label">Голосов v4</span><span class="val">${w.vote_count}</span></div>` : ''}
-            ${w.ocr_vintage_match !== undefined && w.ocr_vintage_match !== null ? `<div class="metric-pill"><span class="label">Винтаж OCR</span><span class="val" style="color: ${w.ocr_vintage_match ? '#2ecc71' : '#e74c3c'};">${w.ocr_vintage_match ? '✓ ' + (data.vintage_detected || '') : '✗ Не совпал'}</span></div>` : ''}
-          </div>
-          ${w.slug ? `
-          <div style="margin-top: 12px;">
-            <a href="/api/sommelier/wine/${w.slug}" target="_blank" class="btn btn-primary" style="font-size: 12px; padding: 6px 16px; text-decoration: none; display: inline-block;">
-              Справка AI-сомелье ↗
-            </a>
-          </div>` : ''}
+          <div style="font-size: 11px; background: ${view.color}; color: #000; font-weight: 700; padding: 2px 8px; border-radius: 4px; display: inline-block; margin-bottom: 6px;">${esc(data.message)}</div>
+          <div style="font-size: 18px; font-weight: 700; color: #fff;">${esc(w.title)}</div>
+          <div style="color: var(--muted); font-size: 13px; margin-top: 2px;">${esc(w.manufacturer || '')}</div>
+          <div style="font-size: 12px; color: #aaa; margin-top: 6px;">${esc(w.description || '')}</div>
+          <div class="slug-line">${esc(w.slug || '')}</div>
         </div>
-      </div>
-    `;
+      </div>`;
   } else {
-    winnerBox.innerHTML = '<div style="color: var(--muted); padding: 12px;">Победитель не определен</div>';
+    winnerBox.innerHTML = `
+      <div class="winner-card" style="border-color: ${view.color};">
+        <div>
+          <div style="font-size: 18px; font-weight: 700; color: ${view.color};">${esc(data.message)}</div>
+          <div style="font-size: 13px; color: #aaa; margin-top: 6px;">Этикетка не похожа ни на одно вино каталога настолько, чтобы его предлагать. Ниже — самые похожие этикетки каталога (это другие вина); подобрать вино по вкусу поможет AI-сомелье.</div>
+        </div>
+      </div>`;
   }
+  renderSommelier(w, data.status);
 
-  // 3. Баннер решения каскада и тайминги
-  const banner = document.getElementById('statusBanner');
-  const title = document.getElementById('statusTitle');
-  const desc = document.getElementById('statusDesc');
+  // 4. Кандидаты
+  document.getElementById('finalTitle').textContent = w ? 'Кандидаты (DINOv2 + SigLIP 2)' : 'Самые похожие этикетки каталога (другие вина)';
+  document.getElementById('finalBadge').textContent = data.decision.margin !== null && data.decision.margin !== undefined ? `отрыв от второго: ${data.decision.margin.toFixed(3)}` : '';
+  document.getElementById('finalCards').innerHTML = data.final_results.map((item, idx) => candidateCard(item, idx, Boolean(w) && idx === 0)).join('');
 
-  if (data.stage_reached === 'v1_confident') {
-    banner.className = 'cascade-status-banner v1-win';
-    title.innerHTML = '<span style="color: #2ecc71;">✓ ЭТАП 1: Уверенный победитель Top-1 (v1 DINOv2)</span>';
-    desc.textContent = data.decision.reason + ' (v4 не вызывался, экономия ресурсов)';
-  } else {
-    banner.className = 'cascade-status-banner v4-refined';
-    title.innerHTML = '<span style="color: #a29bfe;">⚡ ЭТАП 2: Арбитраж соседей (v4 SigLIP 2 + OCR)</span>';
-    desc.textContent = data.decision.reason + ` → Отобрано соседей: ${data.v1_neighbors.length}, арбитраж провел v4`;
-  }
-
-  const tSummary = document.getElementById('timingsSummary');
-  tSummary.innerHTML = `
-    <div class="metric-pill"><span class="label">BBox YOLO</span><span class="val">${data.timings.bbox_detect_ms || 0} ms</span></div>
-    <div class="metric-pill"><span class="label">v1 DINOv2</span><span class="val">${data.timings.v1_total_ms} ms</span></div>
-    <div class="metric-pill"><span class="label">v4 SigLIP2</span><span class="val">${data.timings.v4_total_ms ? data.timings.v4_total_ms + ' ms' : 'Пропущен'}</span></div>
-    <div class="metric-pill" style="border-color: #f1c40f;"><span class="label" style="color: #f1c40f;">Итого</span><span class="val" style="color: #f1c40f;">${data.timings.total_ms} ms</span></div>
-  `;
-
-  // 4. ВТОРИЧНАЯ ДИАГНОСТИКА: Выдача v1
-  document.getElementById('v1Badge').textContent = `Время: ${data.timings.v1_total_ms} ms`;
-  const v1Cards = document.getElementById('v1Cards');
-  v1Cards.innerHTML = '';
-  const neighborIds = new Set(data.v1_neighbors.map(n => n.product_id));
-
-  data.v1_results.forEach((item, idx) => {
-    const isNeighbor = neighborIds.has(item.product_id);
-    const card = document.createElement('div');
-    card.className = 'compare-card' + (isNeighbor ? ' neighbor-border' : '');
-    card.innerHTML = `
-      <div class="compare-header">
-        <span>#${idx + 1} ${item.title.substring(0, 20)}...</span>
-        ${isNeighbor ? '<span class="badge-tag accent-v4">Сосед → v4</span>' : ''}
-      </div>
-      <div class="compare-img-wrap">
-        <img class="compare-img zoomable" src="${item.image_url}" alt="${item.title}" onclick="openLightbox('${item.image_url}', '${item.title}')">
-      </div>
+  // 5. Диагностика: первичная выдача DINOv2
+  document.getElementById('v1Badge').textContent = `Время: ${t.v1_total_ms} ms`;
+  document.getElementById('v1Cards').innerHTML = data.v1_results.map((item, idx) => `
+    <div class="compare-card">
+      <div class="compare-header"><span>#${idx + 1}</span><span class="badge-tag accent-v1">${item.dino_similarity.toFixed(3)}</span></div>
+      <div class="compare-img-wrap"><img class="compare-img zoomable" src="${esc(item.image_url)}" alt="" data-caption="${esc(item.title)}"></div>
       <div style="width: 100%; margin-top: 8px; font-size: 12px;">
-        <div style="font-weight: 600; color: #fff;">${item.title}</div>
-        <div style="color: var(--muted); font-size: 11px;">${item.manufacturer || ''}</div>
-        <div style="margin-top: 4px; display: flex; justify-content: space-between;">
-          <span style="color: var(--muted);">DINO Sim:</span>
-          <span style="font-weight: 700; color: #2ecc71;">${item.dino_similarity}</span>
-        </div>
+        <div style="font-weight: 600; color: #fff;">${esc(item.title)}</div>
+        <div style="color: var(--muted); font-size: 11px;">${esc(item.manufacturer || '')}</div>
       </div>
-    `;
-    v1Cards.appendChild(card);
-  });
-
-  // 5. ВТОРИЧНАЯ ДИАГНОСТИКА: Выдача v4 среди соседей
-  const stage2Sec = document.getElementById('stage2Section');
-  if (data.v4_results && data.v4_results.length > 0) {
-    stage2Sec.style.display = 'block';
-    document.getElementById('v4Badge').textContent = `Время: ${data.timings.v4_total_ms} ms | Винтаж: ${data.vintage_detected || 'нет'}`;
-    const v4Cards = document.getElementById('v4Cards');
-    v4Cards.innerHTML = '';
-    data.v4_results.forEach((item, idx) => {
-      const isWinner = idx === 0;
-      const card = document.createElement('div');
-      card.className = 'compare-card' + (isWinner ? ' winner-border' : '');
-      card.innerHTML = `
-        <div class="compare-header">
-          <span>#${idx + 1} ${item.title.substring(0, 20)}...</span>
-          ${isWinner ? '<span class="badge-tag accent-v4" style="background:#f1c40f;">Победитель v4</span>' : ''}
-        </div>
-        <div class="compare-img-wrap">
-          <img class="compare-img zoomable" src="${item.image_url}" alt="${item.title}" onclick="openLightbox('${item.image_url}', '${item.title}')">
-        </div>
-        <div style="width: 100%; margin-top: 8px; font-size: 12px;">
-          <div style="font-weight: 600; color: #fff;">${item.title}</div>
-          <div style="color: var(--muted); font-size: 11px;">${item.manufacturer || ''}</div>
-          <div style="margin-top: 4px; display: flex; justify-content: space-between;">
-            <span style="color: var(--muted);">SigLIP2 Score:</span>
-            <span style="font-weight: 700; color: #a29bfe;">${item.final_score.toFixed(4)}</span>
-          </div>
-          <div style="display: flex; justify-content: space-between; font-size: 11px;">
-            <span style="color: var(--muted);">Голосов:</span>
-            <span>${item.vote_count}</span>
-          </div>
-        </div>
-      `;
-      v4Cards.appendChild(card);
-    });
-  } else {
-    stage2Sec.style.display = 'none';
-  }
-
-  // 6. Итоговый Top-K
-  const finalCards = document.getElementById('finalCards');
-  finalCards.innerHTML = '';
-  data.final_results.forEach((item, idx) => {
-    const isWinner = idx === 0;
-    const card = document.createElement('div');
-    card.className = 'compare-card' + (isWinner ? ' winner-border' : '');
-    const scoreVal = item.final_score ? item.final_score.toFixed(4) : (item.dino_similarity || '-');
-    card.innerHTML = `
-      <div class="compare-header">
-        <span>#${idx + 1} ${isWinner ? '🏆 Победитель' : ''}</span>
-      </div>
-      <div class="compare-img-wrap">
-        <img class="compare-img zoomable" src="${item.image_url}" alt="${item.title}" onclick="openLightbox('${item.image_url}', '${item.title}')">
-      </div>
-      <div style="width: 100%; margin-top: 8px; font-size: 12px;">
-        <div style="font-weight: 700; color: #fff; font-size: 13px;">${item.title}</div>
-        <div style="color: var(--muted); font-size: 11px; margin-top: 2px;">${item.manufacturer || ''}</div>
-        <div style="margin-top: 6px; display: flex; justify-content: space-between;">
-          <span style="color: var(--muted);">Скор:</span>
-          <span style="font-weight: 700; color: #f1c40f;">${scoreVal}</span>
-        </div>
-      </div>
-    `;
-    finalCards.appendChild(card);
-  });
+    </div>`).join('');
 }
+
+// ---------- AI-сомелье: «С чем подать» и «Похожие вина» ----------
+let sommelierRequest = 0;
+
+async function renderSommelier(winner, status) {
+  const box = document.getElementById('sommelier-box');
+  const request = ++sommelierRequest;
+  if (!winner || !winner.slug) {
+    box.innerHTML = `
+      <div class="somm-card">
+        <div class="somm-title">AI-сомелье</div>
+        <div class="somm-text">Этого вина нет в каталоге. Опишите блюдо или вкус — сомелье подберёт вино из каталога.</div>
+        <form class="somm-ask" id="somm-ask-form">
+          <input type="text" id="somm-ask-input" maxlength="300" placeholder="Например: стейк рибай, люблю бархатные красные">
+          <button type="submit" class="set-btn">Подобрать</button>
+        </form>
+        <div class="somm-text" id="somm-ask-answer"></div>
+      </div>`;
+    document.getElementById('somm-ask-form').addEventListener('submit', askSommelier);
+    return;
+  }
+  box.innerHTML = '<div class="somm-card"><div class="somm-text">AI-сомелье подбирает похожие вина…</div></div>';
+  try {
+    const slug = encodeURIComponent(winner.slug);
+    const [infoRes, altRes] = await Promise.all([fetch(`/api/sommelier/wine/${slug}`), fetch(`/api/sommelier/wine/${slug}/alternatives?limit=6`)]);
+    if (request !== sommelierRequest) return;  // пользователь уже открыл другое фото
+    const info = infoRes.ok ? await infoRes.json() : null;
+    const alts = altRes.ok ? await altRes.json() : null;
+    const note = status === 'probable' ? '<div class="somm-note">Ответ «похоже»: если на этикетке другое вино, ориентируйтесь на похожие ниже.</div>' : '';
+    const altCards = alts && alts.items.length ? alts.items.map(item => `
+      <div class="alt-card">
+        ${item.image_url ? `<img class="zoomable" src="${esc(item.image_url)}" alt="" data-caption="${esc(item.name)}">` : '<div class="alt-noimg">нет фото</div>'}
+        <div class="alt-body">
+          <div class="alt-name">${esc(item.name)}</div>
+          <div class="alt-winery">${esc(item.winery)}</div>
+          <div class="alt-facts">${esc(item.facts)}</div>
+          <div class="alt-reasons">${item.reasons.map(esc).join(' · ')}</div>
+        </div>
+      </div>`).join('') : '<div class="somm-text">Похожих вин в каталоге сомелье не нашёл.</div>';
+    box.innerHTML = `
+      <div class="somm-card">
+        <div class="somm-title">AI-сомелье: о вине и с чем подать</div>
+        ${note}
+        <div class="somm-text" style="white-space: pre-line;">${info && info.kind === 'wine_info' ? esc(info.text) : 'В карточках сомелье этого вина нет.'}</div>
+      </div>
+      <div class="somm-card">
+        <div class="somm-title">Похожие вина из каталога (альтернативы)</div>
+        <div class="alt-grid">${altCards}</div>
+      </div>`;
+  } catch (err) {
+    if (request === sommelierRequest) box.innerHTML = `<div class="somm-card"><div class="somm-text">AI-сомелье недоступен: ${esc(err.message)}</div></div>`;
+  }
+}
+
+let sommelierSession = null;
+
+async function askSommelier(event) {
+  event.preventDefault();
+  const input = document.getElementById('somm-ask-input');
+  const answer = document.getElementById('somm-ask-answer');
+  const message = input.value.trim();
+  if (!message) return;
+  answer.textContent = 'Сомелье думает…';
+  try {
+    const res = await fetch('/api/sommelier/ask', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(sommelierSession ? { message, session_id: sommelierSession } : { message }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+    sommelierSession = data.session_id;
+    answer.style.whiteSpace = 'pre-line';
+    answer.textContent = data.text;
+  } catch (err) {
+    answer.textContent = `Ошибка: ${err.message}`;
+  }
+}
+
+// Зум по клику на любую картинку результатов (подпись берётся из data-caption)
+resultsArea.addEventListener('click', (e) => {
+  const img = e.target.closest('img.zoomable');
+  if (img) openLightbox(img.src, img.dataset.caption || '');
+});
 
 function openLightbox(src, caption) {
   const overlay = document.getElementById('lightbox');
@@ -631,6 +1145,16 @@ function closeLightbox() {
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') closeLightbox();
 });
+
+// Пороги зон ответа, с которыми работает сервер (CASCADE_* в .env)
+fetch('/api/cascade/thresholds').then(res => (res.ok ? res.json() : null)).then(t => {
+  if (!t) return;
+  document.getElementById('thresholds-line').textContent =
+    `Пороги: «найдено» — сходство SigLIP 2 ≥ ${t.found_min_similarity} и отрыв ≥ ${t.found_min_margin}; ` +
+    `«нет в каталоге» — сходство < ${t.reject_below_similarity}; остальное — «похоже»` +
+    (t.predict_threshold !== null ? `; доп. порог отказа ${t.predict_threshold}` : '') +
+    (t.stage === 'v1_only' ? ' · SigLIP 2 не загружен: все ответы «похоже»' : '');
+}).catch(() => {});
 
 // Загрузка файлов при открытии страницы
 loadFiles();

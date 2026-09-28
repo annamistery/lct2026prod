@@ -1,362 +1,211 @@
-"""Tests for Cascade Search Pipeline (v1 Coarse + v4 Refinement)."""
+"""Tests for the cascade: DINOv2 candidates + SigLIP 2 / DINOv2 fusion + answer zones."""
 
 from __future__ import annotations
 
+import asyncio
 import uuid
-from unittest.mock import AsyncMock, MagicMock
+from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
 from PIL import Image
 
-from app.pipelines.search.cascade.decision import CascadeDecisionEngine
+from app.db.models.product import ProductEmbedding, ProductEmbeddingV4
+from app.pipelines.search.cascade.decision import FOUND, NOT_IN_CATALOG, PROBABLE, RecognitionThresholds, classify
 from app.pipelines.search.cascade.pipeline import CascadeSearchPipeline
-from app.schemas.search.cascade import (
-    CascadePredictResponse,
-    CascadeSearchResponse,
-    CascadeTimings,
-    V1DecisionDetails,
-)
-from app.schemas.search.v1 import SearchResponse, SearchResult, SearchTimings
-from app.schemas.search.v4 import SearchResponseV4, SearchResultV4, SearchTimingsV4
+
+THRESHOLDS = RecognitionThresholds(found_min_similarity=0.83, found_min_margin=0.15, reject_below_similarity=0.485)
 
 # ---------------------------------------------------------------------------
-# 1. Schema serialisation tests
+# 1. Answer zones
 # ---------------------------------------------------------------------------
 
-def test_cascade_schemas():
-    pid1 = uuid.uuid4()
-    v1_item = SearchResult(
-        product_id=pid1,
-        slug="wine-alpha-2018",
-        title="Wine Alpha 2018",
-        manufacturer="Alpha Winery",
-        description="Fine wine",
-        image_url="/api/media/alpha.webp",
-        dino_similarity=0.88,
-        pgvector_rank=1,
-        final_rank=1,
+
+def test_zone_not_in_catalog_below_reject_threshold():
+    status, reason = classify(0.40, 0.5, THRESHOLDS)
+    assert status == NOT_IN_CATALOG
+    assert "0.400" in reason
+
+
+def test_zone_found_needs_similarity_and_margin():
+    assert classify(0.90, 0.30, THRESHOLDS)[0] == FOUND
+    assert classify(0.90, 0.05, THRESHOLDS)[0] == PROBABLE  # close twin
+    assert classify(0.70, 0.90, THRESHOLDS)[0] == PROBABLE  # not similar enough
+    assert classify(0.90, None, THRESHOLDS)[0] == FOUND  # single candidate
+
+
+def test_zone_without_siglip_is_probable():
+    assert classify(None, 0.5, THRESHOLDS)[0] == PROBABLE
+
+
+# ---------------------------------------------------------------------------
+# 2. Pipeline with fake models and repository
+# ---------------------------------------------------------------------------
+
+
+def product(slug: str, manufacturer: str = "Винодельня") -> SimpleNamespace:
+    return SimpleNamespace(
+        id=uuid.uuid4(), slug=slug, title=slug.title(), manufacturer=manufacturer, description="",
+        label_image_path=f"products/{slug}/label.webp",
     )
-    decision = V1DecisionDetails(
-        is_confident=True,
-        top1_similarity=0.88,
-        top2_similarity=0.75,
-        margin=0.13,
-        reason="Ярко выраженный ТОП-1",
-    )
-    timings = CascadeTimings(
-        bbox_detect_ms=12.5,
-        v1_total_ms=18.0,
-        decision_ms=0.5,
-        v4_total_ms=None,
-        total_ms=31.0,
-    )
-    resp = CascadeSearchResponse(
-        stage_reached="v1_confident",
-        winner=v1_item,
-        final_results=[v1_item],
-        decision=decision,
-        v1_results=[v1_item],
-        v1_neighbors=[],
-        v4_results=None,
-        timings=timings,
-    )
-    data = resp.model_dump()
-    assert data["stage_reached"] == "v1_confident"
-    assert data["winner"]["slug"] == "wine-alpha-2018"
-    assert data["decision"]["is_confident"] is True
-    assert data["timings"]["v4_total_ms"] is None
 
 
-def test_cascade_predict_schema():
-    pred = CascadePredictResponse(
-        slug="wine-beta-2021",
-        stage_reached="v4_refined",
-        confidence=0.9234,
-    )
-    data = pred.model_dump()
-    assert data["slug"] == "wine-beta-2021"
-    assert data["stage_reached"] == "v4_refined"
-    assert data["confidence"] == 0.9234
+class FakeEmbeddings:
+    """Returns one vector per view; the vector only tags the view for the fake repository."""
+
+    def __init__(self, prefix: str):
+        self.prefix = prefix
+
+    def embed_batch(self, images, batch_size: int = 32):
+        return [[float(i), 1.0] for i, _ in enumerate(images)]
 
 
-# ---------------------------------------------------------------------------
-# 2. Decision engine unit tests
-# ---------------------------------------------------------------------------
+class FakeRepository:
+    """similarities[model][view][slug] — per-view best similarity of every product."""
 
-def test_decision_engine_unambiguous_winner():
-    engine = CascadeDecisionEngine(confidence_margin=0.05, min_confidence_score=0.65)
-    items = [
-        SearchResult(
-            product_id=uuid.uuid4(),
-            slug="wine-a",
-            title="Wine A",
-            manufacturer="Winery X",
-            description="",
-            image_url="",
-            dino_similarity=0.85,
-            pgvector_rank=1,
-            final_rank=1,
-        ),
-        SearchResult(
-            product_id=uuid.uuid4(),
-            slug="wine-b",
-            title="Wine B",
-            manufacturer="Winery Y",
-            description="",
-            image_url="",
-            dino_similarity=0.74,
-            pgvector_rank=2,
-            final_rank=2,
-        ),
-    ]
-    decision, neighbors = engine.evaluate(items)
-    assert decision.is_confident is True
-    assert decision.margin == 0.11
-    assert len(neighbors) == 0
-    assert "Ярко выраженный ТОП-1" in decision.reason
+    def __init__(self, products: list[SimpleNamespace], v1_order: list[str], similarities: dict):
+        self.products = {p.slug: p for p in products}
+        self.v1_order = v1_order
+        self.similarities = similarities
+
+    async def nearest(self, embedding, limit):
+        return [SimpleNamespace(product=self.products[slug], distance=0.1 * rank) for rank, slug in enumerate(self.v1_order[:limit])]
+
+    async def max_similarity_by_product(self, model, embedding, product_ids):
+        name = "v1" if model is ProductEmbedding else "v4"
+        assert model in (ProductEmbedding, ProductEmbeddingV4)
+        view = int(embedding[0])
+        table = self.similarities[name][view]
+        return {p.id: table[p.slug] for p in self.products.values() if p.id in product_ids and p.slug in table}
 
 
-def test_decision_engine_close_neighbors():
-    engine = CascadeDecisionEngine(confidence_margin=0.05)
-    items = [
-        SearchResult(
-            product_id=uuid.uuid4(),
-            slug="wine-a",
-            title="Wine A",
-            manufacturer="Winery X",
-            description="",
-            image_url="",
-            dino_similarity=0.83,
-            pgvector_rank=1,
-            final_rank=1,
-        ),
-        SearchResult(
-            product_id=uuid.uuid4(),
-            slug="wine-b",
-            title="Wine B",
-            manufacturer="Winery Y",
-            description="",
-            image_url="",
-            dino_similarity=0.81,
-            pgvector_rank=2,
-            final_rank=2,
-        ),
-    ]
-    decision, neighbors = engine.evaluate(items)
-    assert decision.is_confident is False
-    assert decision.margin == 0.02
-    assert len(neighbors) >= 2
-    assert neighbors[0].product_id == items[0].product_id
-    assert neighbors[1].product_id == items[1].product_id
-
-
-def test_decision_engine_same_winery_conflict():
-    engine = CascadeDecisionEngine(confidence_margin=0.05)
-    items = [
-        SearchResult(
-            product_id=uuid.uuid4(),
-            slug="chateau-rouge-2019",
-            title="Chateau Rouge 2019",
-            manufacturer="Chateau Tamagne",
-            description="",
-            image_url="",
-            dino_similarity=0.89,
-            pgvector_rank=1,
-            final_rank=1,
-        ),
-        SearchResult(
-            product_id=uuid.uuid4(),
-            slug="chateau-blanc-2020",
-            title="Chateau Blanc 2020",
-            manufacturer="Chateau Tamagne",
-            description="",
-            image_url="",
-            dino_similarity=0.82,
-            pgvector_rank=2,
-            final_rank=2,
-        ),
-    ]
-    decision, neighbors = engine.evaluate(items)
-    # Even though margin is 0.07 (which is >= 0.05), same manufacturer triggers neighbor refinement
-    assert decision.is_confident is False
-    assert len(neighbors) >= 2
-    assert "одного производителя" in decision.reason
-
-
-def test_decision_engine_single_or_empty():
-    engine = CascadeDecisionEngine()
-    empty_dec, empty_n = engine.evaluate([])
-    assert empty_dec.is_confident is False
-    assert len(empty_n) == 0
-
-    single_item = [
-        SearchResult(
-            product_id=uuid.uuid4(),
-            slug="solo",
-            title="Solo Wine",
-            manufacturer="Solo",
-            description="",
-            image_url="",
-            dino_similarity=0.90,
-            pgvector_rank=1,
-            final_rank=1,
-        )
-    ]
-    single_dec, single_n = engine.evaluate(single_item)
-    assert single_dec.is_confident is True
-    assert len(single_n) == 0
-
-
-# ---------------------------------------------------------------------------
-# 3. Pipeline integration with mock stages
-# ---------------------------------------------------------------------------
-
-@pytest.mark.asyncio
-async def test_cascade_pipeline_branch_v1_confident():
+def make_pipeline(with_v4: bool = True, predict_threshold: float | None = None) -> CascadeSearchPipeline:
     detector = MagicMock()
-    detector.best_box.return_value = (10, 10, 100, 100)
-
-    images = MagicMock()
-    mock_crop = Image.new("RGB", (90, 90), color="red")
-    images.crop.return_value = mock_crop
-
-    p1 = MagicMock()
-    p1_item = SearchResult(
-        product_id=uuid.uuid4(),
-        slug="confident-wine",
-        title="Confident Wine",
-        manufacturer="Alpha",
-        description="",
-        image_url="/api/media/a.webp",
-        dino_similarity=0.95,
-        pgvector_rank=1,
-        final_rank=1,
-    )
-    p1_second = SearchResult(
-        product_id=uuid.uuid4(),
-        slug="other-wine",
-        title="Other Wine",
-        manufacturer="Beta",
-        description="",
-        image_url="/api/media/b.webp",
-        dino_similarity=0.70,
-        pgvector_rank=2,
-        final_rank=2,
-    )
-    p1.run = AsyncMock(
-        return_value=SearchResponse(
-            winner=p1_item,
-            results=[p1_item, p1_second],
-            timings=SearchTimings(embedding_ms=10.0, pgvector_ms=5.0, total_ms=15.0),
-        )
-    )
-
-    p4 = MagicMock()
-    p4.run = AsyncMock()
-
-    cascade = CascadeSearchPipeline(
+    detector.best_box.return_value = (10, 10, 150, 190)
+    query_prep = MagicMock()
+    query_prep.prepare_crop.side_effect = lambda crop: SimpleNamespace(image=crop)
+    return CascadeSearchPipeline(
         detector=detector,
-        pipeline_v1=p1,
-        pipeline_v4=p4,
-        decision_engine=CascadeDecisionEngine(confidence_margin=0.05),
-        images=images,
+        v1_embeddings=FakeEmbeddings("v1"),
+        v4_embeddings=FakeEmbeddings("v4") if with_v4 else None,
+        query_prep=query_prep,
+        gpu_semaphore=asyncio.Semaphore(1),
+        thresholds=THRESHOLDS,
+        candidate_pool=10,
+        v1_weight=0.3,
+        predict_threshold=predict_threshold,
     )
 
-    full_image = Image.new("RGB", (200, 200), color="white")
-    repo = MagicMock()
 
-    resp = await cascade.run(full_image, repo, k=5, is_already_crop=False)
+def twins_repository(v4_rose_sira: float, v4_rose: float) -> FakeRepository:
+    """DINOv2 prefers «rose-sira», SigLIP 2 decides; «merlot» is a distant third candidate."""
+    items = [product("rose-sira"), product("rose"), product("merlot", "Другая")]
+    return FakeRepository(
+        items,
+        ["rose-sira", "rose", "merlot"],
+        {
+            "v1": [{"rose-sira": 0.95, "rose": 0.93, "merlot": 0.60}, {"rose-sira": 0.94, "rose": 0.93, "merlot": 0.55}],
+            "v4": [{"rose-sira": v4_rose_sira, "rose": v4_rose, "merlot": 0.30}, {"rose-sira": v4_rose_sira - 0.02, "rose": v4_rose - 0.02, "merlot": 0.28}],
+        },
+    )
 
-    assert resp.stage_reached == "v1_confident"
-    assert resp.winner.slug == "confident-wine"
-    assert resp.v4_results is None
-    p4.run.assert_not_called()  # v4 was correctly skipped
+
+IMAGE = Image.new("RGB", (200, 200), color="white")
 
 
 @pytest.mark.asyncio
-async def test_cascade_pipeline_branch_v4_refined():
-    detector = MagicMock()
-    detector.best_box.return_value = (10, 10, 100, 100)
+async def test_fusion_lets_siglip_overrule_dinov2_and_answers_found():
+    response = await make_pipeline().run(IMAGE, twins_repository(v4_rose_sira=0.70, v4_rose=0.95), k=3)
+    assert response.stage_reached == "fusion"
+    assert response.status == FOUND
+    assert response.winner.slug == "rose"
+    assert [c.slug for c in response.final_results] == ["rose", "rose-sira", "merlot"]
+    assert response.confidence == pytest.approx(0.95)
+    assert response.decision.margin > THRESHOLDS.found_min_margin
+    assert response.bbox_crop.startswith("data:image/webp;base64,")
 
-    images = MagicMock()
-    mock_crop = Image.new("RGB", (90, 90), color="red")
-    images.crop.return_value = mock_crop
 
-    p1 = MagicMock()
-    pid1, pid2 = uuid.uuid4(), uuid.uuid4()
-    p1_first = SearchResult(
-        product_id=pid1,
-        slug="twin-one-2018",
-        title="Twin One 2018",
-        manufacturer="Twin Winery",
-        description="",
-        image_url="/api/media/1.webp",
-        dino_similarity=0.85,
-        pgvector_rank=1,
-        final_rank=1,
-    )
-    p1_second = SearchResult(
-        product_id=pid2,
-        slug="twin-two-2019",
-        title="Twin Two 2019",
-        manufacturer="Twin Winery",
-        description="",
-        image_url="/api/media/2.webp",
-        dino_similarity=0.84,
-        pgvector_rank=2,
-        final_rank=2,
-    )
-    p1.run = AsyncMock(
-        return_value=SearchResponse(
-            winner=p1_first,
-            results=[p1_first, p1_second],
-            timings=SearchTimings(embedding_ms=10.0, pgvector_ms=5.0, total_ms=15.0),
-        )
-    )
+@pytest.mark.asyncio
+async def test_close_twin_is_probable_not_found():
+    response = await make_pipeline().run(IMAGE, twins_repository(v4_rose_sira=0.92, v4_rose=0.91), k=3)
+    assert response.status == PROBABLE
+    assert response.winner.slug == "rose-sira"
+    assert "отрыв" in response.decision.reason
 
-    p4_winner = SearchResultV4(
-        product_id=pid2,  # v4 selected the second candidate as winner via OCR/SigLIP
-        slug="twin-two-2019",
-        title="Twin Two 2019",
-        manufacturer="Twin Winery",
-        description="",
-        image_url="/api/media/2.webp",
-        dino_similarity=0.84,
-        vote_count=10,
-        vote_ratio=0.5,
-        matched_aug_name="original",
-        ocr_vintage_match=True,
-        ocr_score=0.92,
-        final_score=0.95,
-        rank=1,
-    )
-    p4 = MagicMock()
-    p4.run = AsyncMock(
-        return_value=SearchResponseV4(
-            winner=p4_winner,
-            results=[p4_winner],
-            timings=SearchTimingsV4(query_prep_ms=5.0, embedding_ms=15.0, pgvector_ms=4.0, total_ms=24.0),
-            vintage_detected="2019",
-        )
-    )
 
-    cascade = CascadeSearchPipeline(
-        detector=detector,
-        pipeline_v1=p1,
-        pipeline_v4=p4,
-        decision_engine=CascadeDecisionEngine(confidence_margin=0.05),
-        images=images,
-    )
+@pytest.mark.asyncio
+async def test_low_similarity_means_not_in_catalog():
+    pipeline = make_pipeline()
+    repository = twins_repository(v4_rose_sira=0.40, v4_rose=0.35)
+    response = await pipeline.run(IMAGE, repository, k=3)
+    assert response.status == NOT_IN_CATALOG
+    assert response.message == "Данного вина нет в каталоге"
+    assert response.winner is None
+    assert response.final_results  # the most similar catalog labels are still returned
+    prediction = await pipeline.predict_top1(IMAGE, repository)
+    assert prediction.slug is None
+    assert prediction.status == NOT_IN_CATALOG
 
-    full_image = Image.new("RGB", (200, 200), color="white")
-    repo = MagicMock()
 
-    resp = await cascade.run(full_image, repo, k=5, is_already_crop=False)
+@pytest.mark.asyncio
+async def test_predict_threshold_rejects_weak_answers():
+    repository = twins_repository(v4_rose_sira=0.70, v4_rose=0.60)
+    assert (await make_pipeline().predict_top1(IMAGE, repository)).slug == "rose-sira"
+    rejected = await make_pipeline(predict_threshold=0.8).predict_top1(IMAGE, repository)
+    assert rejected.slug is None
+    assert rejected.status == NOT_IN_CATALOG
 
-    assert resp.stage_reached == "v4_refined"
-    assert resp.winner.slug == "twin-two-2019"
-    assert resp.vintage_detected == "2019"
-    p4.run.assert_called_once()
-    # Check that product_ids scope was passed strictly matching the neighbors
-    call_kwargs = p4.run.call_args.kwargs
-    assert call_kwargs["product_ids"] == [pid1, pid2]
+
+@pytest.mark.asyncio
+async def test_without_siglip_dinov2_answers_as_probable():
+    response = await make_pipeline(with_v4=False).run(IMAGE, twins_repository(v4_rose_sira=0.9, v4_rose=0.9), k=2)
+    assert response.stage_reached == "v1_only"
+    assert response.status == PROBABLE
+    assert response.winner.slug == "rose-sira"
+    assert response.final_results[0].v4_similarity is None
+
+
+@pytest.mark.asyncio
+async def test_empty_catalog_is_not_in_catalog():
+    response = await make_pipeline().run(IMAGE, FakeRepository([], [], {"v1": [{}, {}], "v4": [{}, {}]}), k=3)
+    assert response.status == NOT_IN_CATALOG
+    assert response.winner is None
+    assert response.final_results == []
+
+
+def test_warm_up_runs_every_model_once():
+    pipeline = make_pipeline()
+    pipeline.warm_up()
+    pipeline.detector.best_box.assert_called_once()
+    pipeline.query_prep.prepare_crop.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# 3. Thresholds: API and configuration
+# ---------------------------------------------------------------------------
+
+
+def test_thresholds_endpoint_reports_running_zones():
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from app.api.router import router
+
+    app = FastAPI()
+    app.include_router(router)
+    app.state.pipeline_cascade = make_pipeline(predict_threshold=0.5)
+    with TestClient(app) as client:
+        data = client.get("/api/cascade/thresholds").json()
+    assert data == {
+        "found_min_similarity": 0.83, "found_min_margin": 0.15, "reject_below_similarity": 0.485,
+        "predict_threshold": 0.5, "candidate_pool": 10, "v1_weight": 0.3, "stage": "fusion",
+    }
+
+
+def test_settings_reject_inverted_zones():
+    from pydantic import ValidationError
+
+    from app.core.config import Settings
+
+    with pytest.raises(ValidationError, match="must not exceed"):
+        Settings(_env_file=None, cascade_found_min_similarity=0.4, cascade_reject_below_similarity=0.5)

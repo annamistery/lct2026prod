@@ -312,6 +312,63 @@ class Engine:
             s += 0.15
         return s
 
+    # ---- альтернативы к конкретному вину -------------------------------------------------------------
+    def similar(self, wine, k=5, max_per_winery=2):
+        """Вина каталога, похожие на `wine` по стилю: тот же цвет и игристость, близкая сладость (жёстко),
+        затем сорт, тип, тело, танины, кислотность, ароматика, регион. Каждый довод — из полей базы."""
+        f = wine["features"]
+        grapes = set(self.grapes_of(wine))
+        aroma = set(f["aroma"] or [])
+        name_key = (wine["name"].strip().lower(), wine["winery"])
+        scored = []
+        for w in self.wines:
+            g = w["features"]
+            if w["id"] == wine["id"] or (w["name"].strip().lower(), w["winery"]) == name_key:
+                continue
+            if w["category"] != wine["category"] or g["sparkling"] != f["sparkling"]:
+                continue
+            if f["sweetness"] is not None and g["sweetness"] is not None and abs(f["sweetness"] - g["sweetness"]) > 1:
+                continue
+            score, reasons = 0.0, []
+            common = grapes & set(self.grapes_of(w))
+            if common:
+                score += 0.35
+                reasons.append("тот же сорт: " + ", ".join(sorted(common)))
+            if wine.get("type") and w.get("type") == wine["type"]:
+                score += 0.15
+                reasons.append(f"тот же тип: {w['type'].lower()}")
+            for key, weight, label in (("body", 0.15, "похожее тело"), ("tannin", 0.1, "похожие танины"), ("acidity", 0.05, "похожая кислотность")):
+                if f[key] is not None and g[key] is not None:
+                    closeness = max(0.0, 1.0 - abs(f[key] - g[key]) / 2.0)
+                    score += weight * closeness
+                    if closeness >= 0.75:
+                        reasons.append(label)
+            shared_aroma = aroma & set(g["aroma"] or [])
+            if aroma and shared_aroma:
+                score += 0.2 * len(shared_aroma) / len(aroma | set(g["aroma"] or []))
+                reasons.append("общие ноты: " + ", ".join(sorted(shared_aroma)[:3]))
+            if f["sweetness"] is not None and g["sweetness"] == f["sweetness"]:
+                score += 0.05
+            if wine["region"] and w["region"] == wine["region"]:
+                score += 0.1
+                reasons.append(f"тот же регион: {w['region']}")
+            if f["oak"] and g["oak"]:
+                score += 0.05
+                reasons.append("тоже с дубовыми тонами")
+            scored.append((score, w, reasons))
+        scored.sort(key=lambda item: (-item[0], item[1]["name"]))
+        picks, per_winery, seen_names = [], Counter(), set()
+        for score, w, reasons in scored:
+            key = (w["name"].strip().lower(), w["winery"])
+            if key in seen_names or per_winery[w["winery"]] >= max_per_winery:
+                continue
+            seen_names.add(key)
+            per_winery[w["winery"]] += 1
+            picks.append(dict(wine=w, score=round(score, 3), reasons=reasons))
+            if len(picks) >= k:
+                break
+        return picks
+
     def _diversify(self, scored, k):
         if not scored:
             return []

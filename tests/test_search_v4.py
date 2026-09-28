@@ -63,7 +63,7 @@ def test_v4_schema_optional_fields():
     response = SearchResponseV4(winner=None, results=[], timings=timings)
     data = response.model_dump()
     assert data["winner"] is None
-    assert data["ocr_ms"] is None
+    assert data["timings"]["ocr_ms"] is None
     assert data["vintage_detected"] is None
 
 
@@ -161,11 +161,19 @@ def test_product_candidate_v4_dataclass():
 # ---------------------------------------------------------------------------
 
 def test_router_v4_returns_503_when_pipeline_not_ready():
-    from app.main import create_app
+    from fastapi import FastAPI
 
-    app = create_app()
+    from app.api.router import router
+    from app.core.dependencies import get_session
 
-    # Override lifespan: set pipeline_v4 to None without loading models
+    async def no_session():
+        yield None
+
+    # Bare app without the model-loading lifespan and database: the v4 pipeline is not loaded
+    app = FastAPI()
+    app.include_router(router)
+    app.dependency_overrides[get_session] = no_session
+    app.state.images = MagicMock()
     app.state.pipeline_v4 = None
 
     with TestClient(app, raise_server_exceptions=False) as client:

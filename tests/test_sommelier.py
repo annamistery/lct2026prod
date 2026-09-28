@@ -96,6 +96,27 @@ def test_about_wine_label_integration():
     some_id = next(iter(IDS))
     r = S.about_wine(some_id)
     assert r["kind"] == "wine_info" and r["id"] == some_id
+    wine = S.engine.by_id[some_id]
+    assert r["card"]["name"] == wine["name"] and r["card"]["category"] == wine["category"]  # карточка для сканера
 
     r = S.about_wine("несуществующий-слаг-вина-xyz")
     assert r["kind"] == "not_found"
+
+
+def test_alternatives_same_style_other_wines():
+    base = next(w for w in S.wines if w["category"] == "Розовое" and not w["features"]["sparkling"] and w["features"]["sweetness"] == 0)
+    r = S.alternatives(base["id"], k=5)
+    assert r["kind"] == "alternatives" and r["id"] == base["id"]
+    assert 0 < len(r["items"]) <= 5
+    alts = [S.engine.by_id[item["id"]] for item in r["items"]]
+    assert base["id"] not in {w["id"] for w in alts}
+    for w in alts:                                   # жёсткие условия стиля
+        assert w["category"] == base["category"] and w["features"]["sparkling"] is False
+        assert w["features"]["sweetness"] is None or abs(w["features"]["sweetness"] - base["features"]["sweetness"]) <= 1
+    wineries = [w["winery"] for w in alts]
+    assert max(wineries.count(x) for x in wineries) <= 2  # не больше двух вин одной винодельни
+    assert all(item["reasons"] for item in r["items"])  # каждый выбор объяснён
+
+
+def test_alternatives_unknown_slug():
+    assert S.alternatives("no-such-wine") == dict(kind="not_found", id=None, items=[])

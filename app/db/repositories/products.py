@@ -76,6 +76,23 @@ class ProductRepository:
         result = await self.session.scalars(select(Product).where(Product.slug == slug).limit(1))
         return result.first()
 
+    async def get_by_slugs(self, slugs: list[str]) -> dict[str, Product]:
+        if not slugs:
+            return {}
+        result = await self.session.scalars(select(Product).where(Product.slug.in_(slugs)))
+        return {product.slug: product for product in result if product.slug}
+
+    async def max_similarity_by_product(
+        self, model: type[ProductEmbedding] | type[ProductEmbeddingV4], embedding: list[float], product_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, float]:
+        """Cosine similarity of the nearest reference vector of every product in `product_ids`."""
+        if not product_ids:
+            return {}
+        distance = func.min(model.embedding.cosine_distance(embedding))
+        statement = select(model.product_id, distance).where(model.product_id.in_(product_ids)).group_by(model.product_id)
+        rows = (await self.session.execute(statement)).all()
+        return {row[0]: 1.0 - float(row[1]) for row in rows}
+
     def add(self, product: Product, embedding: ProductEmbedding) -> None:
         product.embeddings.append(embedding)
         self.session.add(product)

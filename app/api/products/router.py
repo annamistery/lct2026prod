@@ -64,6 +64,7 @@ async def create_product(
     manufacturer: Annotated[str, Form(min_length=1, max_length=300)],
     image: Annotated[UploadFile, File()],
     description: Annotated[str, Form(max_length=5000)] = "",
+    slug: Annotated[str | None, Form(max_length=300)] = None,
     session: AsyncSession = Depends(get_session),
     images: ImageService = Depends(get_images),
     ingestion: ProductIngestionService = Depends(get_ingestion),
@@ -72,7 +73,7 @@ async def create_product(
     contents = await image.read(settings.max_upload_bytes + 1)
     try:
         source = await asyncio.to_thread(images.decode, contents)
-        product = await ingestion.create(session, title, manufacturer, description, source)
+        product = await ingestion.create(session, title, manufacturer, description, source, slug=slug)
     except (InvalidImage, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return serialize(product)

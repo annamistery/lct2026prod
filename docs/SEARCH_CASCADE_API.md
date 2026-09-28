@@ -1,150 +1,121 @@
-# Руководство по Cascade Search Pipeline (v1 Coarse + v4 Refinement)
+# Каскадный поиск: API и логика ответа
 
-Архитектура: **Двухэтапный каскад: DINOv2-small LoRA (384d) + Scoped Google SigLIP 2 (768d) & OCR Reranker**
+Каскад — основной режим распознавания. DINOv2 отбирает кандидатов, SigLIP 2 и DINOv2 вместе их ранжируют, а по сходству и отрыву от второго кандидата выбирается одна из трёх зон ответа. Как измерены точность и пороги — в [`RECOGNITION_QUALITY.md`](RECOGNITION_QUALITY.md).
 
-Данный документ описывает финальный объединенный поисковый каскад, сочетающий скорость и точность DINOv2 на уникальных этикетках с возможностями SigLIP 2 и OCR по разрешению вин-близнецов.
-
----
-
-## 1. Архитектура и принцип работы каскада
+## 1. Как работает
 
 ```text
-[Фото пользователя]
-        │
-        ▼
-1. YOLO Detection (best_box)
-   └── Извлечение BBox-кропа этикетки в оригинальном высоком разрешении
-        │
-        ▼
-2. Этап 1: v1 Coarse Retrieval (DINOv2-small LoRA, 384d, ~15 мс)
-   ├── Извлечение эмбеддинга DINOv2 (384d)
-   └── Косинусный поиск в pgvector (`product_embeddings`)
-        │
-        ▼
-3. Cascade Decision Engine (Анализ выдачи v1)
-   ├── Проверка отрыва: (Sim1 - Sim2) >= 0.05 И Sim1 >= 0.65?
-   ├── Проверка конфликта одного производителя/серии?
-   │
-   ├── [ДА: Ярко выраженный ТОП-1] ──────────────────────────────────┐
-   │    └── Статус: "v1_confident"                                   │
-   │    └── Мгновенный возврат ответа (время отклика ~20 мс)          │
-   │                                                                 │
-   └── [НЕТ: Обнаружены кандидаты-соседи]                            │
-        │                                                            │
-        ▼                                                            │
-4. Отбор пула соседей (v1_neighbors)                                 │
-   └── Список из 2–5 близких кандидатов (ID, сходство, бренд)        │
-        │                                                            │
-        ▼                                                            │
-5. Этап 2: v4 Refinement (SigLIP 2 768d + OCR Reranker)              │
-   ├── Вход: исходный оригинальный BBox кроп с этапа 1               │
-   ├── QueryPrepV3: сегментация маски + Letterbox 518×518            │
-   ├── SigLIP 2 Vision Tower: эмбеддинг 768d                         │
-   ├── pgvector vote search: СТРОГО `WHERE product_id IN (:neighbors)`│
-   └── OCR Reranker: проверка года урожая (vintage) и текста         │
-        │                                                            │
-        ▼                                                            │
-[Финальный результат: Top-1 Winner + Top-5 + Диагностика всех этапов] ◄┘
+Фото ─► YOLO: кроп этикетки в исходном разрешении
+          ├─ вид A: letterbox 518×518 кропа
+          └─ вид B: маска сегментации + letterbox 518×518
+              │
+              ▼
+   DINOv2-small LoRA (384d): векторы A и B
+   кандидаты = 30 вин, ближайших к усреднённому вектору (pgvector, лучший эталон на вино)
+              │
+              ▼
+   SigLIP 2 LoRA (768d): векторы A и B
+   для каждого кандидата: лучшее сходство с его эталонами по каждому виду и каждой модели
+   оценка = SigLIP2(A) + SigLIP2(B) + 0,3 · (DINOv2(A) + DINOv2(B))
+              │
+              ▼
+   similarity = SigLIP 2 лучшего кандидата, margin = отрыв его оценки от второго
+   similarity < 0,485                         → not_in_catalog  «Данного вина нет в каталоге»
+   similarity ≥ 0,83 и margin ≥ 0,15          → found           «Вино найдено в каталоге»
+   иначе                                      → probable        «Похоже на это вино — сверьте название, год и цвет»
 ```
 
----
+OCR в каскаде не используется: на размеченных фото он не повышал точность и не отличал вина не из каталога.
 
-## 2. API Эндпоинты
+Если SigLIP 2 не загрузился, каскад работает только на DINOv2 (`stage_reached = "v1_only"`), и все ответы получают статус `probable`.
 
-Все эндпоинты каскада доступны по префиксу `/api/cascade/`.
+## 2. Эндпоинты
 
-### 2.1. Полный диагностический поиск: `POST /api/cascade/search`
+### `POST /api/cascade/search` — полный ответ с диагностикой
 
-Принимает фото полного кадра, выполняет детекцию, проходит каскад и возвращает подробные данные по каждому этапу.
+Поля формы: `image` (фото), `k` (число кандидатов в ответе, по умолчанию 5).
 
 ```bash
-curl -X POST "http://localhost:8030/api/cascade/search" \
-  -F "image=@/path/to/bottle.jpg" \
-  -F "k=5"
+curl -X POST http://localhost:8030/api/cascade/search -F "image=@bottle.jpg" -F k=5
 ```
 
-Пример JSON-ответа:
 ```json
 {
-  "stage_reached": "v4_refined",
+  "status": "probable",
+  "message": "Похоже на это вино — сверьте название, год и цвет с этикеткой",
+  "confidence": 0.9284,
+  "stage_reached": "fusion",
   "winner": {
-    "product_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
-    "slug": "chateau-tamagne-cabernet-2020",
-    "title": "Шато Тамань Каберне 2020",
-    "manufacturer": "Кубань-Вино",
-    "description": "Красное сухое вино 2020 года...",
-    "image_url": "/api/media/products/9b1deb4d/crop.webp",
-    "dino_similarity": 0.864,
-    "final_score": 0.9421,
-    "vote_count": 14,
-    "vote_ratio": 0.28,
-    "ocr_vintage_match": true,
-    "rank": 1
+    "product_id": "…", "slug": "belbek-belbek-roze-pino-nuar-rozovoe-suhoe-129",
+    "title": "Бельбек Розе", "manufacturer": "Бельбек", "description": "…",
+    "image_url": "/api/media/products/…/label.webp",
+    "v1_similarity": 0.9551, "v4_similarity": 0.9284, "fusion_score": 2.4271, "rank": 1,
+    "dino_similarity": 0.9551, "final_score": 0.9284
   },
-  "decision": {
-    "is_confident": false,
-    "top1_similarity": 0.864,
-    "top2_similarity": 0.851,
-    "margin": 0.013,
-    "reason": "Малый отрыв между кандидатами: 0.0130 < 0.0500 (топ-1: 0.8640, топ-2: 0.8510)"
-  },
-  "v1_neighbors": [
-    {
-      "product_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
-      "slug": "chateau-tamagne-cabernet-2020",
-      "title": "Шато Тамань Каберне 2020",
-      "manufacturer": "Кубань-Вино",
-      "dino_similarity": 0.864,
-      "rank_v1": 1
-    },
-    {
-      "product_id": "a45f9c1e-1234-4abc-9999-112233445566",
-      "slug": "chateau-tamagne-merlot-2020",
-      "title": "Шато Тамань Мерло 2020",
-      "manufacturer": "Кубань-Вино",
-      "dino_similarity": 0.851,
-      "rank_v1": 2
-    }
-  ],
-  "timings": {
-    "bbox_detect_ms": 11.2,
-    "v1_total_ms": 14.8,
-    "decision_ms": 0.2,
-    "v4_total_ms": 52.4,
-    "total_ms": 78.6
-  }
+  "final_results": ["… до k кандидатов в том же формате …"],
+  "decision": {"status": "probable", "similarity": 0.9284, "margin": 0.1021,
+               "reason": "Близкий второй кандидат: отрыв 0.102 < 0.150"},
+  "v1_results": ["… первичная выдача DINOv2 (SearchResult) …"],
+  "timings": {"bbox_detect_ms": 27.5, "query_prep_ms": 35.3, "v1_total_ms": 183.4,
+              "v4_total_ms": 49.6, "total_ms": 296.3},
+  "bbox_crop": "data:image/webp;base64,…",
+  "v4_query_crop": "data:image/webp;base64,…"
 }
 ```
 
-### 2.2. Быстрый бенчмарк-эндпоинт: `POST /api/cascade/predict`
+При `status = "not_in_catalog"` поле `winner` = `null`, а в `final_results` — самые похожие этикетки каталога (это другие вина, их можно показать как «похожие»).
 
-Легковесный эндпоинт для официального тестирования и оценки точности. Возвращает только `slug` победителя, этап решения и скор уверенности.
+`POST /api/cascade/search-from-crop` — то же для уже вырезанной этикетки (поле `crop`).
+
+### `POST /api/cascade/predict` — ответ для автоматической проверки
 
 ```bash
-curl -X POST "http://localhost:8030/api/cascade/predict" \
-  -F "image=@/path/to/bottle.jpg"
+curl -X POST http://localhost:8030/api/cascade/predict -F "image=@bottle.jpg"
 ```
 
-Пример JSON-ответа:
 ```json
-{
-  "slug": "chateau-tamagne-cabernet-2020",
-  "stage_reached": "v4_refined",
-  "confidence": 0.9421
-}
+{"slug": "alma-valley-risling-beloe-polusuhoe-125", "status": "probable", "stage_reached": "fusion", "confidence": 0.7831}
 ```
 
----
+`slug` = `null`, когда вина нет в каталоге. Необязательное поле формы `threshold` (или настройка `CASCADE_PREDICT_THRESHOLD`) дополнительно отклоняет ответы со сходством SigLIP 2 ниже заданного.
 
-## 3. Веб-интерфейс каскада
+### `GET /api/cascade/thresholds` — пороги, с которыми работает сервер
 
-Интерактивный сканер доступен в браузере по адресу:
-```text
-http://<ip-сервера>:8030/search-cascade
+```json
+{"found_min_similarity": 0.83, "found_min_margin": 0.15, "reject_below_similarity": 0.485,
+ "predict_threshold": null, "candidate_pool": 30, "v1_weight": 0.3, "stage": "fusion"}
 ```
-Интерфейс наглядно отображает:
-- Баннер этапа (`Этап 1: v1 DINOv2` зеленый или `Этап 2: v4 SigLIP 2 + OCR` фиолетовый);
-- Тайминги каждого компонента каскада;
-- Карточки кандидатов v1 с подсветкой отобранных соседей;
-- Карточки переранжирования v4;
-- Итоговый результат Top-K с возможностью детального зума этикеток.
+
+Сканеры показывают эти пороги рядом с ответом. Меняются они в `.env` (раздел 3) и применяются после перезапуска; порог «нет в каталоге» не может быть выше порога «найдено» — иначе API не стартует.
+
+### Сомелье к результату распознавания
+
+- `GET /api/sommelier/wine/{slug}?dish=…` — справка о вине и, если передано блюдо, оценка сочетания.
+- `GET /api/sommelier/wine/{slug}/alternatives?limit=5` — похожие по стилю вина каталога: тот же цвет и игристость, сладость отличается не больше чем на ступень, затем сорт, тип, тело, танины, ароматика и регион; не больше двух вин одной винодельни. У каждой альтернативы — доводы из карточки и картинка этикетки.
+
+## 3. Настройки (`.env`)
+
+| Переменная | По умолчанию | Смысл |
+|---|---|---|
+| `CASCADE_CANDIDATE_POOL` | 30 | сколько кандидатов DINOv2 передаёт на SigLIP 2 |
+| `CASCADE_V1_WEIGHT` | 0.3 | вес DINOv2 в итоговой оценке |
+| `CASCADE_FOUND_MIN_SIMILARITY` | 0.83 | минимальное сходство SigLIP 2 для ответа «найдено» |
+| `CASCADE_FOUND_MIN_MARGIN` | 0.15 | минимальный отрыв от второго кандидата для «найдено» |
+| `CASCADE_REJECT_BELOW_SIMILARITY` | 0.485 | ниже этого сходства — «нет в каталоге» |
+| `CASCADE_PREDICT_THRESHOLD` | не задан | дополнительный порог отказа для `/predict` |
+
+Вина, добавленные формой `/add`, `POST /api/products` или пакетом `POST /api/imports` (в манифесте можно указать `slug`), получают те же эталоны, что и основной каталог: YOLO-кроп → letterbox 518 → 116 аугментаций → векторы DINOv2 и SigLIP 2. Поэтому они сразу распознаются с этими порогами.
+
+Пороги откалиброваны на 164 размеченных фото. После изменения каталога их нужно пересчитать: `scripts/research_dump_features.py` → `scripts/calibrate_cascade.py`.
+
+## 4. Веб-интерфейс
+
+`http://<сервер>:8030/search-cascade`:
+
+- цветной статус ответа (найдено / похоже / нет в каталоге) с причиной и таймингами;
+- оригинал → кроп → вино из каталога;
+- AI-сомелье: справка «о вине и с чем подать», похожие вина-альтернативы; если вина нет в каталоге — вопрос к сомелье;
+- кандидаты с оценками обеих моделей и первичная выдача DINOv2;
+- «Мой набор»: проверка папки фото по списку `queries.tsv` / `labels.tsv` / `mapping.json` (включая вина не из каталога) с точностью, зонами ответа и выгрузкой `predictions.jsonl` / `results.tsv`.
+
+Мобильные сканеры показывают тот же статус и альтернативы сомелье. Основной — `/mobi/` в дизайне «Своё Вино»: карточка вина (категория, регион, сорт из карточки сомелье), оценка бокалами, сомелье «к мясу / рыбе / сырам» и своё блюдо, чат, другие кандидаты при «похоже» и похожие этикетки при «нет в каталоге». Все сканеры отправляют на сервер полный кадр или исходное фото: этикетку вырезает серверная YOLO, на её кропах откалиброваны пороги.

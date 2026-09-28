@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_session
-from app.db.models import Product, ProductEmbedding
+from app.db.models import Product, ProductEmbedding, ProductEmbeddingV4
 from app.db.repositories.products import ProductRepository
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -143,6 +143,7 @@ async def import_page(
 ):
     total_products = await session.scalar(select(func.count(Product.id))) or 0
     total_embeddings = await session.scalar(select(func.count(ProductEmbedding.id))) or 0
+    total_embeddings_v4 = await session.scalar(select(func.count(ProductEmbeddingV4.id))) or 0
     return templates.TemplateResponse(
         "import.html",
         {
@@ -150,6 +151,7 @@ async def import_page(
             "active": "import",
             "total_products": total_products,
             "total_embeddings": total_embeddings,
+            "total_embeddings_v4": total_embeddings_v4,
         },
     )
 

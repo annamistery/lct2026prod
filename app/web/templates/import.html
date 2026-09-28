@@ -19,40 +19,46 @@
         <td><strong style="font-size: 16px; color: var(--accent);">{{ total_products }}</strong></td>
       </tr>
       <tr>
-        <th>Каталожных векторов (pgvector)</th>
+        <th>Векторов DINOv2 (v1, 384d)</th>
         <td><strong style="font-size: 16px; color: var(--accent);">{{ total_embeddings }}</strong></td>
       </tr>
       <tr>
-        <th>Файл каталога CSV</th>
-        <td><code>imports/merged_strapi_vines - merged_strapi_wines.csv</code></td>
-      </tr>
-      <tr>
-        <th>Папка скачанных фото</th>
-        <td><code>imports/images/</code> (все 1932 изображения скачаны)</td>
+        <th>Векторов SigLIP 2 (v4, 768d)</th>
+        <td><strong style="font-size: 16px; color: var(--accent);">{{ total_embeddings_v4 }}</strong></td>
       </tr>
     </table>
+    <p style="color: var(--muted); font-size: 12px; margin-top: 8px;">Для распознавания каскадом у каждого вина должно быть по 116 векторов каждого вида.</p>
   </div>
 </div>
 
 <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px;">
-  <h2>Запуск прямого импорта</h2>
-  <p style="color: var(--muted); max-width: 650px; line-height: 1.5; margin-bottom: 20px;">
-    Импорт запускается на сервере внутри контейнера через консольную команду. Каждый товар проходит полную нарезку YOLO, расчет 384-мерного вектора DINOv2 на GPU и сохранение в базу.
+  <h2>Как добавить вина</h2>
+  <p style="color: var(--muted); max-width: 700px; line-height: 1.5; margin-bottom: 20px;">
+    Любой способ строит эталоны одинаково: YOLO-кроп этикетки → letterbox 518×518 → 116 аугментаций → векторы DINOv2 и SigLIP 2.
+    Поэтому добавленное вино сразу распознаётся каскадом с теми же порогами «найдено» / «похоже» / «нет в каталоге».
   </p>
 
+  <h3 style="font-size: 14px; margin-bottom: 8px;">1. Каталог CSV + папка фото (основной способ, уже загруженные вина пропускаются)</h3>
   <div style="background: #000; border: 1px solid var(--border); border-radius: 6px; padding: 16px; margin-bottom: 20px;">
-    <div style="color: var(--muted); font-size: 12px; margin-bottom: 8px;">Команда для полного импорта всех 1932 товаров в фоне:</div>
     <code style="color: #20d45a; font-size: 13px; font-family: monospace;">
-      docker compose exec -d api python3 scripts/import_from_csv.py
+      docker compose exec api python scripts/ingest_cascade_catalog.py --csv /imports/wines_integrated_cleared.csv --images-dir /media/catalog_sources
     </code>
   </div>
 
+  <h3 style="font-size: 14px; margin-bottom: 8px;">2. Пакет фото через API (<code>POST /api/imports</code>)</h3>
+  <p style="color: var(--muted); max-width: 700px; line-height: 1.5; margin-bottom: 12px;">
+    Положите фото и манифест в <code>imports/staging/&lt;batch_id&gt;/</code>. Манифест — CSV или JSON с колонками
+    <code>title</code>, <code>manufacturer</code>, <code>image_path</code> и необязательными <code>description</code>, <code>slug</code>.
+  </p>
   <div style="background: #000; border: 1px solid var(--border); border-radius: 6px; padding: 16px; margin-bottom: 20px;">
-    <div style="color: var(--muted); font-size: 12px; margin-bottom: 8px;">Команда для импорта первых 50 товаров для быстрой проверки:</div>
     <code style="color: #6c8cff; font-size: 13px; font-family: monospace;">
-      docker compose exec api python3 scripts/import_from_csv.py --limit 50
+      curl -X POST http://localhost:8030/api/imports -H "Content-Type: application/json" -d '{"batch_id": "batch1", "manifest_name": "manifest.csv"}'<br>
+      curl http://localhost:8030/api/imports/&lt;job_id&gt;
     </code>
   </div>
+
+  <h3 style="font-size: 14px; margin-bottom: 8px;">3. По одному вину</h3>
+  <p style="color: var(--muted); margin-bottom: 20px;">Форма <a href="/add">«Добавить»</a> или <code>POST /api/products</code>.</p>
 
   <div>
     <button onclick="location.reload()" class="btn btn-secondary">Обновить статистику базы</button>

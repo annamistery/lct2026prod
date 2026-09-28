@@ -1,1 +1,312 @@
-<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>LCT2026 — распознавание</title><link rel="stylesheet" href="style.css"></head><body><main><nav><strong>LCT2026</strong><a href="add.html">Добавить товар</a></nav><section class="panel"><h1>Распознавание этикетки</h1><p id="status">Подключение к камере…</p><div class="camera"><video id="camera" autoplay playsinline muted></video><canvas id="overlay"></canvas></div><button id="capture">Распознать</button><input id="file" type="file" accept="image/jpeg,image/png,image/webp"><div id="results"></div></section></main><script src="config.js"></script><script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/ort.min.js" crossorigin="anonymous"></script><script type="module" src="app.js"></script></body></html>
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Своё Вино | Сканер</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="vina.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <img src="znak.png" alt="" style="width: 24px; height: 24px; border-radius: 50%;">
+                <span>Своё Вино</span>
+            </div>
+            <div class="header-right">
+                <div class="server-status" id="server-status" title="Готовность сервера распознавания">
+                    <span class="status-dot"></span>
+                    <span class="status-label" id="status-text">...</span>
+                </div>
+                <button class="btn-icon" id="btn-settings" title="Адрес сервера">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3"/>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        <!-- Scanner View -->
+        <main id="scanner-view" class="view active">
+            <div class="scanner-frame">
+                <video id="camera-feed" autoplay playsinline muted style="position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; display: none;"></video>
+                <canvas id="overlay" style="position: absolute; inset: 0; width: 100%; height: 100%; z-index: 5; pointer-events: none;"></canvas>
+                <div class="corners top-left" style="z-index: 10;"></div>
+                <div class="corners top-right" style="z-index: 10;"></div>
+                <div class="corners bottom-left" style="z-index: 10;"></div>
+                <div class="corners bottom-right" style="z-index: 10;"></div>
+                <p class="scan-instruction" id="scan-instruction" style="z-index: 10;">Наведите камеру на этикетку<br>или загрузите фото</p>
+                <div class="scanning-line hidden" id="scanning-line" style="z-index: 10;"></div>
+            </div>
+
+            <p class="scanner-hint" id="scanner-hint"></p>
+
+            <div class="controls">
+                <button id="btn-snap" class="btn-snap hidden" title="Распознать этикетку"></button>
+                <label class="btn btn-primary btn-upload" id="label-upload">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+                    </svg>
+                    <span>Выбрать фото</span>
+                    <input type="file" id="file-input" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" hidden>
+                </label>
+            </div>
+
+            <div class="controls" style="padding-bottom: 8px;">
+                <label class="btn btn-secondary btn-upload">
+                    <span>Набор фото</span>
+                    <input type="file" id="batch-files-input" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" multiple hidden>
+                </label>
+                <label class="btn btn-secondary btn-upload">
+                    <span>Папка с фото</span>
+                    <input type="file" id="batch-folder-input" webkitdirectory multiple hidden>
+                </label>
+            </div>
+
+            <details class="thresholds" id="thresholds">
+                <summary>Как выбирается ответ</summary>
+                <div id="thresholds-body">Загрузка порогов…</div>
+            </details>
+
+            <div class="link-row mt-10">
+                <a href="add.html" id="link-add">Добавить вино в каталог</a>
+                <a href="/search-cascade" id="link-cascade">Каскадный поиск</a>
+            </div>
+        </main>
+
+        <!-- Batch View: проверка набора фото -->
+        <main id="batch-view" class="view">
+            <div class="result-header">
+                <button class="btn-back" id="btn-batch-back" style="margin-bottom: 0;">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+                    Назад к сканеру
+                </button>
+                <button id="btn-batch-stop" class="btn-link primary hidden">Остановить</button>
+            </div>
+            <section class="section-card">
+                <h3>Проверка набора фото</h3>
+                <div class="batch-progress"><div id="batch-bar"></div></div>
+                <p id="batch-summary"></p>
+                <div class="batch-actions">
+                    <button class="btn btn-secondary" id="btn-batch-tsv">results.tsv</button>
+                    <button class="btn btn-secondary" id="btn-batch-jsonl">predictions.jsonl</button>
+                </div>
+            </section>
+            <section class="section-card">
+                <p>Нажмите на строку, чтобы открыть подробный ответ.</p>
+                <div id="batch-list"></div>
+            </section>
+        </main>
+
+        <!-- Loading View -->
+        <main id="loading-view" class="view">
+            <div class="spinner"></div>
+            <p id="loading-text">Анализ этикетки…</p>
+        </main>
+
+        <!-- Result View -->
+        <main id="result-view" class="view">
+            <div class="result-header">
+                <button class="btn-back" id="btn-back" style="margin-bottom: 0;">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M15 18l-6-6 6-6"/>
+                    </svg>
+                    <span id="btn-back-label">Назад к сканеру</span>
+                </button>
+                <button id="btn-show-original" class="btn-link">
+                    Исходное фото
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                </button>
+            </div>
+
+            <!-- Ответ каскада: найдено / похоже / нет в каталоге -->
+            <section class="status-banner" id="status-banner">
+                <div class="status-title" id="status-title"></div>
+                <div class="status-reason" id="status-reason"></div>
+                <div class="status-meta" id="status-meta"></div>
+            </section>
+
+            <div id="wine-block">
+                <div class="wine-card">
+                    <div class="wine-image-container">
+                        <img id="wine-image" src="" alt="">
+                        <div class="people-rating-badge" id="people-rating-badge" style="cursor: pointer;" title="Ваша оценка на этом устройстве">
+                            <div class="badge-icon-wrapper">
+                                <img src="img/glass_filled_straight.png" alt="" class="badge-icon">
+                            </div>
+                            Рейтинг <span id="badge-score">-</span>
+                        </div>
+                    </div>
+
+                    <div class="wine-info">
+                        <p class="wine-winery" id="wine-winery"></p>
+                        <h2 class="wine-title" id="wine-title"></h2>
+
+                        <div class="tags">
+                            <span class="tag" id="wine-category"></span>
+                            <span class="tag" id="wine-color"></span>
+                            <span class="tag" id="wine-region"></span>
+                        </div>
+
+                        <div class="property" id="wine-grape-row">
+                            <span class="prop-label">Сорт:</span>
+                            <span class="prop-value" id="wine-grape"></span>
+                        </div>
+
+                        <p class="wine-description" id="wine-description"></p>
+                    </div>
+                </div>
+
+                <!-- Оценка вина -->
+                <section class="rating-section" id="rating-section">
+                    <h3>Поставь свою оценку</h3>
+                    <div class="glasses-container" id="glasses-container">
+                        <div class="glass-slot" data-index="1"><img src="img/glass_empty_straight.png" alt="1" class="glass-img"></div>
+                        <div class="glass-slot" data-index="2"><img src="img/glass_empty_straight.png" alt="2" class="glass-img"></div>
+                        <div class="glass-slot" data-index="3"><img src="img/glass_empty_straight.png" alt="3" class="glass-img"></div>
+                        <div class="glass-slot" data-index="4"><img src="img/glass_empty_straight.png" alt="4" class="glass-img"></div>
+                        <div class="glass-slot" data-index="5"><img src="img/glass_empty_straight.png" alt="5" class="glass-img"></div>
+                    </div>
+                    <div class="rating-stats">
+                        <div id="user-rating-text">Ваша оценка: - из 5</div>
+                        <div class="stats-small">Оценки хранятся на этом устройстве</div>
+                    </div>
+                </section>
+
+                <!-- Цифровой сомелье к распознанному вину -->
+                <section class="sommelier-section" id="sommelier-section">
+                    <h3><div class="badge-icon-wrapper"><img src="img/glass_filled_straight.png" class="badge-icon" alt=""></div>Цифровой сомелье</h3>
+                    <p id="somm-note-probable" class="somm-note hidden">Ответ «похоже»: если на этикетке другое вино, посмотрите других кандидатов ниже.</p>
+                    <p>К чему вы подбираете это вино?</p>
+                    <div class="pairing-options">
+                        <button class="btn-pairing" data-dish="стейк из говядины">Мясо</button>
+                        <button class="btn-pairing" data-dish="рыба">Рыба</button>
+                        <button class="btn-pairing" data-dish="сыр">Сыры</button>
+                    </div>
+                    <form class="ask-form" id="dish-form">
+                        <input type="text" id="dish-input" maxlength="300" placeholder="Или своё блюдо: утка, паста, плов…">
+                        <button type="submit" class="btn btn-secondary">Оценить</button>
+                    </form>
+                    <div class="somm-text somm-answer" id="pairing-answer"></div>
+
+                    <div class="sommelier-actions mt-10">
+                        <button class="btn btn-secondary" id="btn-about" title="Справка сомелье о вине">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                            <span>О вине</span>
+                        </button>
+                        <button class="btn btn-secondary" id="btn-chat" title="Чат с сомелье">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                            <span>Чат</span>
+                        </button>
+                    </div>
+                    <div class="somm-text somm-answer hidden" id="about-answer"></div>
+                </section>
+
+                <section class="section-card mt-10" id="alternatives-section" style="margin-top: 24px;">
+                    <h3>Похожие вина из каталога</h3>
+                    <p>Подобраны сомелье по стилю: цвет, сладость, сорт, регион.</p>
+                    <div id="alternatives-list"></div>
+                </section>
+            </div>
+
+            <!-- Кандидаты каскада: другие кандидаты («похоже») или похожие этикетки («нет в каталоге») -->
+            <section class="section-card" id="candidates-section">
+                <h3 id="candidates-title">Другие кандидаты</h3>
+                <p id="candidates-hint"></p>
+                <div id="candidates-list"></div>
+            </section>
+
+            <!-- Чат с сомелье: всегда доступен, особенно если вина нет в каталоге -->
+            <section class="section-card" id="chat-section">
+                <h3>Спросить сомелье</h3>
+                <p id="chat-hint">Опишите блюдо или вкус — сомелье подберёт вино из каталога.</p>
+                <form class="ask-form" id="chat-form">
+                    <input type="text" id="chat-input" maxlength="300" placeholder="Например: стейк, люблю бархатные красные">
+                    <button type="submit" class="btn btn-primary">Спросить</button>
+                </form>
+                <div class="somm-text somm-answer" id="chat-answer"></div>
+            </section>
+            <div id="toast" class="toast"></div>
+        </main>
+
+        <!-- Original Photo View -->
+        <main id="original-view" class="view">
+            <div class="result-header">
+                <button class="btn-back" id="btn-back-to-result" style="margin-bottom: 0;">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M15 18l-6-6 6-6"/>
+                    </svg>
+                    Назад к результату
+                </button>
+                <a id="btn-add-to-db" class="btn-link primary" href="add.html">
+                    Добавить в базу
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                </a>
+            </div>
+            <div class="wine-card">
+                <div class="wine-image-container" style="height: 360px;">
+                    <img id="original-img" src="" alt="Исходное фото">
+                </div>
+                <div class="wine-info">
+                    <p class="wine-winery">Кроп этикетки (YOLO на сервере)</p>
+                    <div class="wine-image-container" style="height: 220px; padding: 0;">
+                        <img id="crop-img" src="" alt="Кроп этикетки">
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Settings Modal -->
+        <div id="settings-modal" class="modal hidden">
+            <div class="modal-backdrop"></div>
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Сервер распознавания</h3>
+                    <button id="btn-close-modal" class="btn-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p class="settings-hint">Адрес сервера LCT2026, если сканер открыт не с него (например, через туннель):</p>
+                    <div class="form-group">
+                        <label for="input-api-url">API Base URL:</label>
+                        <input type="url" id="input-api-url" placeholder="https://example.trycloudflare.com">
+                        <small class="field-hint">Оставьте пустым — будет использован сервер, с которого открыта страница</small>
+                    </div>
+                    <div id="connection-feedback" class="feedback-box hidden"></div>
+                    <div class="modal-actions">
+                        <button id="btn-test-connection" class="btn btn-secondary">Проверить связь</button>
+                        <button id="btn-save-settings" class="btn btn-primary">Сохранить</button>
+                    </div>
+                    <button id="btn-reset-local" class="btn btn-secondary" style="width:100%;margin-top:10px;font-size:12px;">Сбросить на этот сервер</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lightbox Modal -->
+        <div id="lightbox-modal" class="lightbox-modal hidden">
+            <div class="lightbox-toolbar">
+                <div class="lightbox-title" id="lightbox-title">Просмотр изображения</div>
+                <div class="lightbox-controls">
+                    <button id="btn-zoom-out" title="Уменьшить">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+                    </button>
+                    <button id="btn-zoom-reset" title="Сбросить масштаб">100%</button>
+                    <button id="btn-zoom-in" title="Увеличить">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+                    </button>
+                    <button id="btn-close-lightbox" title="Закрыть (Esc)">&times;</button>
+                </div>
+            </div>
+            <div class="lightbox-canvas" id="lightbox-canvas">
+                <img id="lightbox-img" src="" alt="" draggable="false">
+            </div>
+        </div>
+    </div>
+
+    <script src="config.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/ort.min.js" crossorigin="anonymous"></script>
+    <script type="module" src="app.js"></script>
+</body>
+</html>

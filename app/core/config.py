@@ -1,7 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -53,12 +53,22 @@ class Settings(BaseSettings):
     ocr_rerank_weight_text: float = 0.2
     v4_vote_pool_size: int = Field(50, ge=1, le=500)
     v4_candidate_pool_size: int = Field(20, ge=1, le=100)
-    # Cascade decision + predict threshold
-    cascade_confidence_margin: float = Field(0.05, ge=0.0, le=1.0)
-    cascade_min_confidence_score: float = Field(0.65, ge=0.0, le=1.0)
-    cascade_neighbor_score_window: float = Field(0.08, ge=0.0, le=1.0)
-    cascade_max_neighbors: int = Field(5, ge=1, le=20)
+    # Cascade: DINOv2 candidates -> SigLIP 2 + DINOv2 score fusion -> found / probable / not_in_catalog.
+    # Thresholds are calibrated on tmp/1 + tmp/2 + labelled real photos (docs/RECOGNITION_QUALITY.md).
+    cascade_candidate_pool: int = Field(30, ge=2, le=200)
+    cascade_v1_weight: float = Field(0.3, ge=0.0, le=2.0)
+    cascade_found_min_similarity: float = Field(0.83, ge=0.0, le=1.0)
+    cascade_found_min_margin: float = Field(0.15, ge=0.0, le=4.0)
+    cascade_reject_below_similarity: float = Field(0.485, ge=0.0, le=1.0)
     cascade_predict_threshold: float | None = Field(None, ge=0.0, le=1.0)
+
+    @model_validator(mode="after")
+    def check_cascade_zones(self) -> "Settings":
+        # «нет в каталоге» must lie below «найдено», otherwise the «похоже» zone would be inverted
+        if self.cascade_reject_below_similarity > self.cascade_found_min_similarity:
+            raise ValueError("CASCADE_REJECT_BELOW_SIMILARITY must not exceed CASCADE_FOUND_MIN_SIMILARITY")
+        return self
+
     sommelier_csv_path: Path = Path("app/sommelier/data/wines_integrated.csv")
     sommelier_max_sessions: int = Field(500, ge=1, le=100_000)
     sommelier_session_ttl_seconds: int = Field(3600, ge=60, le=86_400)

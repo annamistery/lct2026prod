@@ -55,5 +55,54 @@ services:
               capabilities: [gpu]
     restart: unless-stopped
 
+  # Public entry for testing by link: only the scanner, recognition and sommelier routes (deploy/public/nginx.conf).
+  # Started only with the "public" profile: docker compose --profile public up -d
+  public:
+    image: nginx:1.27-alpine
+    profiles: ["public", "cloudflare"]
+    ports:
+      - "${PUBLIC_PORT:-8031}:8031"
+    volumes:
+      - ./deploy/public/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  # HTTPS link to the public entry (no router setup; camera on phones needs HTTPS) through an SSH tunnel of
+  # localhost.run: no account needed, the address *.lhr.life is printed by scripts/public_url.sh and changes
+  # after reconnects. Reconnects automatically.
+  tunnel:
+    image: alpine:3.20
+    profiles: ["public"]
+    command:
+      - sh
+      - -c
+      - >-
+        apk add --no-cache openssh-client >/dev/null &&
+        while true; do
+        ssh -T -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ServerAliveInterval=30 -o ExitOnForwardFailure=yes
+        -R 80:public:8031 nokey@localhost.run;
+        sleep 5;
+        done
+    depends_on:
+      - public
+    restart: unless-stopped
+
+  # Alternative: Cloudflare Tunnel (docker compose --profile cloudflare up -d). Blocked in some networks
+  # (TLS to the tunnel servers is cut). Without a token the address is a temporary *.trycloudflare.com; for a
+  # permanent one set CLOUDFLARED_COMMAND="tunnel --no-autoupdate run --token <token>" of a named tunnel
+  # whose public hostname points to http://public:8031.
+  tunnel-cloudflare:
+    image: cloudflare/cloudflared:2025.8.1
+    profiles: ["cloudflare"]
+    # --edge: some networks do not resolve the SRV records cloudflared uses to find Cloudflare servers
+    command: ${CLOUDFLARED_COMMAND:-tunnel --no-autoupdate --protocol http2 --edge region1.v2.argotunnel.com:7844 --edge region2.v2.argotunnel.com:7844 --url http://public:8031}
+    dns:
+      - 1.1.1.1
+      - 1.0.0.1
+    depends_on:
+      - public
+    restart: unless-stopped
+
 volumes:
   postgres_data:

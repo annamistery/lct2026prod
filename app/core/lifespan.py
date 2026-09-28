@@ -173,40 +173,41 @@ async def lifespan(app: FastAPI):
         except Exception:
             logger.exception("v4 pipeline failed to load")
 
-        # Cascade search pipeline (v1 Coarse + optional v4 Refinement)
+        # Cascade search pipeline (DINOv2 candidates + SigLIP 2 / DINOv2 fusion + answer zones)
         try:
-            p1 = getattr(app.state, "pipeline_v1", None)
-            p4 = getattr(app.state, "pipeline_v4", None)
-            if p1 is not None:
-                from app.pipelines.search.cascade.decision import CascadeDecisionEngine
-                from app.pipelines.search.cascade.pipeline import CascadeSearchPipeline
+            from app.pipelines.search.cascade.decision import RecognitionThresholds
+            from app.pipelines.search.cascade.pipeline import CascadeSearchPipeline
 
-                decision_engine = CascadeDecisionEngine(
-                    confidence_margin=settings.cascade_confidence_margin,
-                    min_confidence_score=settings.cascade_min_confidence_score,
-                    neighbor_window=settings.cascade_neighbor_score_window,
-                    max_neighbors=settings.cascade_max_neighbors,
-                )
-                pipeline_cascade = CascadeSearchPipeline(
-                    detector=detector,
-                    pipeline_v1=p1,
-                    pipeline_v4=p4,
-                    decision_engine=decision_engine,
-                    images=images,
-                    predict_threshold=settings.cascade_predict_threshold,
-                    target_size=settings.canonical_size_v4,
-                )
-                app.state.pipeline_cascade = pipeline_cascade
-                if p4 is not None:
-                    logger.info("Cascade search pipeline loaded (v1 Coarse + v4 Refinement)")
-                else:
-                    logger.warning("Cascade search pipeline loaded in fallback mode (v1 Coarse only, v4 unavailable)")
+            p4 = getattr(app.state, "pipeline_v4", None)
+            app.state.pipeline_cascade = CascadeSearchPipeline(
+                detector=detector,
+                v1_embeddings=embeddings,
+                v4_embeddings=p4.embeddings if p4 is not None else None,
+                query_prep=QueryPrepV3(detector=detector, segmenter=segmenter, target_size=settings.canonical_size_v4),
+                gpu_semaphore=asyncio.Semaphore(settings.gpu_concurrency),
+                thresholds=RecognitionThresholds(
+                    found_min_similarity=settings.cascade_found_min_similarity,
+                    found_min_margin=settings.cascade_found_min_margin,
+                    reject_below_similarity=settings.cascade_reject_below_similarity,
+                ),
+                candidate_pool=settings.cascade_candidate_pool,
+                v1_weight=settings.cascade_v1_weight,
+                predict_threshold=settings.cascade_predict_threshold,
+                target_size=settings.canonical_size_v4,
+            )
+            await asyncio.to_thread(app.state.pipeline_cascade.warm_up)
+            if p4 is not None:
+                logger.info("Cascade search pipeline loaded (DINOv2 candidates + SigLIP 2 fusion)")
             else:
-                app.state.pipeline_cascade = None
+                logger.warning("Cascade search pipeline loaded in fallback mode (DINOv2 only, SigLIP 2 unavailable)")
         except Exception:
+            app.state.pipeline_cascade = None
             logger.exception("Cascade pipeline failed to load")
 
-        ingestion = ProductIngestionService(images, detector, pipeline, settings.embedding_model_name)
+        p4 = getattr(app.state, "pipeline_v4", None)
+        ingestion = ProductIngestionService(images, detector, pipeline, settings.embedding_model_name, v4_embeddings=p4.embeddings if p4 is not None else None)
+        if p4 is None:
+            logger.warning("SigLIP 2 unavailable: new products get DINOv2 vectors only and the cascade answers «похоже» for them")
         app.state.ingestion = ingestion
         batch_import = BatchImportService(settings.import_staging_dir, settings.max_import_items, settings.max_upload_bytes, images, ingestion, session_factory)
         await batch_import.recover_interrupted()
