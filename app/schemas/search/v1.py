@@ -35,3 +35,5 @@ class SearchResponse(BaseModel):
 
 class PredictResponse(BaseModel):
     slug: str | None = None
+    confidence: float | None = None  # SigLIP 2 similarity of the cascade answer
+    latency_ms: float | None = None  # server-side recognition time

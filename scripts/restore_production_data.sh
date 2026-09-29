@@ -126,18 +126,26 @@ mkdir -p "$ROOT_DIR/media"
 tar -xzf "$MEDIA_ARCHIVE" -C "$ROOT_DIR/media"
 echo "✓ Кропы каталога распакованы в $ROOT_DIR/media"
 
-echo "=== [5/5] Перезапуск сервиса API и проверка работоспособности ==="
-docker compose restart api >/dev/null 2>&1 || docker compose up -d api
+echo "=== [5/5] Запуск сервиса API и проверка работоспособности ==="
+# `restart` ничего не делает, если контейнера API ещё нет (чистая установка), поэтому `up`:
+# при первом запуске он собирает образ (10–20 минут), при повторном — пересоздаёт контейнер при изменениях.
+docker compose up -d api
+docker compose restart api
 
-# Проверка ping
-echo "Проверка доступности API (порт 8030)..."
-for i in {1..20}; do
-  if curl -fsS http://127.0.0.1:8030/api/ping >/dev/null 2>&1; then
-    echo "✓ Сервис API успешно отвечает на запросы!"
+echo "Ожидание готовности API (порт 8030, загрузка моделей — около минуты)..."
+READY=false
+for i in {1..240}; do
+  if curl -fsS http://127.0.0.1:8030/api/ready 2>/dev/null | grep -q '"ready":true'; then
+    READY=true
     break
   fi
-  sleep 1
+  sleep 5
 done
+if [ "$READY" != true ]; then
+  echo "ОШИБКА: API не ответил готовностью за 20 минут. Логи: docker compose logs api" >&2
+  exit 1
+fi
+echo "✓ API готов: $(curl -fsS http://127.0.0.1:8030/api/ready)"
 
 echo ""
 echo "========================================================================"

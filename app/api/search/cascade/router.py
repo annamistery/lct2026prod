@@ -80,6 +80,7 @@ async def search_from_crop_cascade(
 
 
 @router.post("/predict", response_model=CascadePredictResponse)
+@router.post("/eval/predict", response_model=CascadePredictResponse)
 async def predict_cascade(
     image: Annotated[UploadFile, File()],
     threshold: Annotated[float | None, Form(ge=0.0, le=1.0)] = None,
