@@ -61,13 +61,6 @@ class Settings(BaseSettings):
     cascade_found_min_margin: float = Field(0.15, ge=0.0, le=4.0)
     cascade_reject_below_similarity: float = Field(0.55, ge=0.0, le=1.0)
     cascade_predict_threshold: float | None = Field(None, ge=0.0, le=1.0)
-    # Label check for «probable» answers: a local vision-language model (Ollama) reads the label and
-    # it is compared with the catalog cards of the nearest candidates (pipelines/search/cascade/label_check.py).
-    cascade_label_check: bool = False
-    cascade_label_ollama_url: str = "http://host.docker.internal:11434"
-    cascade_label_model: str = "qwen2.5vl:7b"
-    cascade_label_timeout_s: float = Field(20.0, gt=0.0, le=300.0)
-    cascade_label_top_k: int = Field(5, ge=1, le=30)
 
     @model_validator(mode="after")
     def check_cascade_zones(self) -> "Settings":

@@ -179,15 +179,6 @@ async def lifespan(app: FastAPI):
             from app.pipelines.search.cascade.pipeline import CascadeSearchPipeline
 
             p4 = getattr(app.state, "pipeline_v4", None)
-            label_reader, label_cards = None, {}
-            if settings.cascade_label_check:
-                from app.pipelines.search.cascade.label_check import load_catalog_cards
-                from app.services.label_reader import LabelReader
-
-                label_reader = LabelReader(settings.cascade_label_ollama_url, settings.cascade_label_model, settings.cascade_label_timeout_s)
-                label_cards = load_catalog_cards()
-                await asyncio.to_thread(label_reader.warm_up)
-                logger.info("Cascade label check enabled: %s via %s, %d catalog cards", settings.cascade_label_model, settings.cascade_label_ollama_url, len(label_cards))
             app.state.pipeline_cascade = CascadeSearchPipeline(
                 detector=detector,
                 v1_embeddings=embeddings,
@@ -203,9 +194,6 @@ async def lifespan(app: FastAPI):
                 v1_weight=settings.cascade_v1_weight,
                 predict_threshold=settings.cascade_predict_threshold,
                 target_size=settings.canonical_size_v4,
-                label_reader=label_reader,
-                label_cards=label_cards,
-                label_top_k=settings.cascade_label_top_k,
             )
             await asyncio.to_thread(app.state.pipeline_cascade.warm_up)
             if p4 is not None:

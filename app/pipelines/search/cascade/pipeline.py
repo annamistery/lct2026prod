@@ -9,10 +9,8 @@
 4. The SigLIP 2 similarity of the winner and the fusion gap to the runner-up decide the answer
    zone (found / probable / not_in_catalog), see decision.py.
 
-5. Optional label check (label_check.py): for «probable» answers a local vision-language model
-   reads the label and its producer / name / grapes / sweetness are compared with the catalog
-   cards of the nearest candidates: keep the answer, switch to a lower candidate or answer
-   «нет в каталоге». Plain OCR is not used: it did not improve accuracy (docs/RECOGNITION_QUALITY.md).
+OCR is intentionally not used: on the labelled test photos it did not improve top-1 accuracy
+and could not separate wines that are missing from the catalog (docs/RECOGNITION_QUALITY.md).
 """
 
 from __future__ import annotations
@@ -29,12 +27,10 @@ from PIL import Image
 
 from app.db.models.product import Product, ProductEmbedding, ProductEmbeddingV4
 from app.db.repositories.products import ProductRepository
-from app.pipelines.search.cascade.decision import MESSAGES, NOT_IN_CATALOG, PROBABLE, RecognitionThresholds, classify
-from app.pipelines.search.cascade.label_check import REJECT, SWITCH, CatalogCard, LabelReading, decide
+from app.pipelines.search.cascade.decision import MESSAGES, NOT_IN_CATALOG, RecognitionThresholds, classify
 from app.schemas.search.cascade import (
     CascadeCandidate,
     CascadeDecision,
-    CascadeLabelCheck,
     CascadePredictResponse,
     CascadeSearchResponse,
     CascadeTimings,
@@ -42,7 +38,6 @@ from app.schemas.search.cascade import (
 from app.schemas.search.v1 import SearchResult
 from app.services.detector import DetectorService
 from app.services.embeddings import EmbeddingService
-from app.services.label_reader import LabelReader
 from app.services.query_prep_v3 import QueryPrepV3, letterbox_pil
 from app.services.siglip_embeddings import SigLIP2EmbeddingService
 
@@ -59,9 +54,6 @@ class CascadeSearchPipeline:
     v1_weight: float = 0.3
     predict_threshold: float | None = None
     target_size: int = 518
-    label_reader: LabelReader | None = None
-    label_cards: dict[str, CatalogCard] = field(default_factory=dict)
-    label_top_k: int = 5
 
     async def run(
         self,
@@ -118,13 +110,6 @@ class CascadeSearchPipeline:
             status, reason = NOT_IN_CATALOG, "Каталог пуст: кандидатов нет"
         else:
             status, reason = classify(similarity, margin, self.thresholds)
-        label_check: CascadeLabelCheck | None = None
-        label_check_ms: float | None = None
-        if status == PROBABLE and self.label_reader is not None and best is not None:
-            label_started = time.perf_counter()
-            best, status, reason, label_check = await self._check_label(raw_crop, ranked, best, status, reason)
-            label_check_ms = self._elapsed(label_started)
-
         effective_threshold = threshold if threshold is not None else self.predict_threshold
         confidence = similarity if similarity is not None else (best.v1_similarity if best is not None else None)
         if status != NOT_IN_CATALOG and effective_threshold is not None and confidence is not None and confidence < effective_threshold:
@@ -151,14 +136,13 @@ class CascadeSearchPipeline:
             stage_reached="fusion" if v4_per_view is not None else "v1_only",
             winner=best if status != NOT_IN_CATALOG else None,
             final_results=ranked[:k],
-            decision=CascadeDecision(status=status, similarity=similarity, margin=margin, reason=reason, label_check=label_check),
+            decision=CascadeDecision(status=status, similarity=similarity, margin=margin, reason=reason),
             v1_results=v1_results,
             timings=CascadeTimings(
                 bbox_detect_ms=bbox_detect_ms,
                 query_prep_ms=query_prep_ms,
                 v1_total_ms=v1_total_ms,
                 v4_total_ms=v4_total_ms,
-                label_check_ms=label_check_ms,
                 total_ms=self._elapsed(started),
             ),
             bbox_crop=self._encode_image(raw_crop) if include_images else None,
@@ -180,23 +164,6 @@ class CascadeSearchPipeline:
             stage_reached=response.stage_reached,
             confidence=response.confidence,
         )
-
-    async def _check_label(
-        self, crop: Image.Image, ranked: list[CascadeCandidate], best: CascadeCandidate, status: str, reason: str
-    ) -> tuple[CascadeCandidate, str, str, CascadeLabelCheck]:
-        """Label text vs catalog cards of the nearest candidates; on any failure the image answer stays."""
-        reading = await self.label_reader.read(crop)
-        cards = [self.label_cards[c.slug] for c in ranked[: self.label_top_k] if c.slug in self.label_cards]
-        if reading is None or not cards or cards[0].slug != best.slug:
-            return best, status, reason, CascadeLabelCheck(action="skipped", reason="этикетку прочитать не удалось", reading=reading)
-        verdict = decide(LabelReading.from_dict(reading), cards, self.label_top_k)
-        check = CascadeLabelCheck(action=verdict.action, reason=verdict.reason, reading=reading)
-        if verdict.action == REJECT:
-            return best, NOT_IN_CATALOG, f"{reason}. Проверка этикетки: {verdict.reason}", check
-        if verdict.action == SWITCH:
-            chosen = next(c for c in ranked if c.slug == verdict.slug)
-            return chosen, status, f"{reason}. Проверка этикетки: {verdict.reason}", check
-        return best, status, reason, check
 
     def warm_up(self) -> None:
         """First GPU inference takes ~15 s (kernel selection): pay it at startup, not on the first user photo."""
