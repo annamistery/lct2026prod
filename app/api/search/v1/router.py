@@ -119,6 +119,8 @@ async def predict_eval(
     )
     return PredictResponse(
         slug=response.slug,
+        status=response.status,
+        stage_reached=response.stage_reached,
         confidence=response.confidence,
         latency_ms=round((time.perf_counter() - started) * 1000, 2),
     )

@@ -91,7 +91,8 @@ async def predict_cascade(
 ) -> CascadePredictResponse:
     """Benchmark prediction: top-1 wine slug, answer status and confidence.
 
-    ``slug`` is ``null`` when the wine is not in the catalog (``status`` = ``not_in_catalog``). The optional
+    ``status`` is ``found`` (``slug`` is the wine) or ``not_in_catalog`` (``slug`` is ``null``); the scanner's
+    «похоже» zone is reported as ``found``. The optional
     ``threshold`` (or the configured ``cascade_predict_threshold``) additionally rejects answers whose SigLIP 2
     similarity is below it.
     """

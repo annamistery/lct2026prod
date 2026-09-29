@@ -35,5 +35,7 @@ class SearchResponse(BaseModel):
 
 class PredictResponse(BaseModel):
     slug: str | None = None
+    status: str | None = None  # "found" | "not_in_catalog"
+    stage_reached: str | None = None  # "fusion" (DINOv2 + SigLIP 2) | "v1_only"
     confidence: float | None = None  # SigLIP 2 similarity of the cascade answer
     latency_ms: float | None = None  # server-side recognition time

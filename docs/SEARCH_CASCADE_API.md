@@ -69,15 +69,18 @@ curl -X POST http://localhost:8030/api/cascade/search -F "image=@bottle.jpg" -F 
 
 ### `POST /api/cascade/predict` — ответ для автоматической проверки
 
+Те же ответы дают `POST /api/cascade/eval/predict` и `POST /api/v1/eval/predict` (у последнего ещё `latency_ms`).
+
 ```bash
 curl -X POST http://localhost:8030/api/cascade/predict -F "image=@bottle.jpg"
 ```
 
 ```json
-{"slug": "alma-valley-risling-beloe-polusuhoe-125", "status": "probable", "stage_reached": "fusion", "confidence": 0.7831}
+{"slug": "alma-valley-risling-beloe-polusuhoe-125", "status": "found", "stage_reached": "fusion", "confidence": 0.7831}
+{"slug": null, "status": "not_in_catalog", "stage_reached": "fusion", "confidence": 0.2532}
 ```
 
-`slug` = `null`, когда вина нет в каталоге. Необязательное поле формы `threshold` (или настройка `CASCADE_PREDICT_THRESHOLD`) дополнительно отклоняет ответы со сходством SigLIP 2 ниже заданного.
+В ответе проверки два статуса: `found` (вино определено, `slug` — ответ) и `not_in_catalog` (`slug` = `null`). Зона «похоже» сканера здесь отдаётся как `found` с тем же `slug`; три зоны — только в `/api/cascade/search` и в интерфейсе. Необязательное поле формы `threshold` (или настройка `CASCADE_PREDICT_THRESHOLD`) дополнительно отклоняет ответы со сходством SigLIP 2 ниже заданного.
 
 ### `GET /api/cascade/thresholds` — пороги, с которыми работает сервер
 

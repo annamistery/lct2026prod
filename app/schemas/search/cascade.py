@@ -52,7 +52,7 @@ class CascadeSearchResponse(BaseModel):
 
 class CascadePredictResponse(BaseModel):
     slug: str | None = None
-    status: str
+    status: str  # "found" | "not_in_catalog" (the scanner's «probable» zone is reported as "found")
     stage_reached: str
     confidence: float | None = None
 

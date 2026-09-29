@@ -27,7 +27,7 @@ from PIL import Image
 
 from app.db.models.product import Product, ProductEmbedding, ProductEmbeddingV4
 from app.db.repositories.products import ProductRepository
-from app.pipelines.search.cascade.decision import MESSAGES, NOT_IN_CATALOG, RecognitionThresholds, classify
+from app.pipelines.search.cascade.decision import FOUND, MESSAGES, NOT_IN_CATALOG, RecognitionThresholds, classify
 from app.schemas.search.cascade import (
     CascadeCandidate,
     CascadeDecision,
@@ -156,11 +156,15 @@ class CascadeSearchPipeline:
         is_already_crop: bool = False,
         threshold: float | None = None,
     ) -> CascadePredictResponse:
-        """Fast prediction for benchmarks: slug of the winner, or null when the wine is not in the catalog."""
+        """Fast prediction for benchmarks: slug of the winner, or null when the wine is not in the catalog.
+
+        The API answer has two statuses only: ``found`` (a wine is returned — the «probable» zone of the scanner
+        counts as found here, its slug is the answer) or ``not_in_catalog``. The three zones stay in ``run``.
+        """
         response = await self.run(image, repository, k=1, is_already_crop=is_already_crop, threshold=threshold, include_images=False)
         return CascadePredictResponse(
             slug=response.winner.slug if response.winner else None,
-            status=response.status,
+            status=FOUND if response.winner else NOT_IN_CATALOG,
             stage_reached=response.stage_reached,
             confidence=response.confidence,
         )

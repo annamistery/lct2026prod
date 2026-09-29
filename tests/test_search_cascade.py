@@ -134,6 +134,14 @@ async def test_close_twin_is_probable_not_found():
 
 
 @pytest.mark.asyncio
+async def test_predict_reports_probable_as_found():
+    # the benchmark API has two statuses: the scanner's «похоже» answer is a found wine there
+    prediction = await make_pipeline().predict_top1(IMAGE, twins_repository(v4_rose_sira=0.92, v4_rose=0.91))
+    assert prediction.status == FOUND
+    assert prediction.slug == "rose-sira"
+
+
+@pytest.mark.asyncio
 async def test_low_similarity_means_not_in_catalog():
     pipeline = make_pipeline()
     repository = twins_repository(v4_rose_sira=0.40, v4_rose=0.35)
