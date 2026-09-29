@@ -31,7 +31,13 @@
 | Проверка «процесс жив» | http://localhost:8030/api/ping |
 | **Проверка готовности** | http://localhost:8030/api/ready |
 
-Основной эндпоинт для автоматической проверки: `POST http://localhost:8030/api/cascade/predict`. Изображение передаётся в multipart-поле `image`, ответ: `{"slug": "...", "status": "found" | "probable" | "not_in_catalog", "confidence": 0.93}`. Если вина нет в каталоге, `slug` = `null`. Подробнее — [`docs/SEARCH_CASCADE_API.md`](docs/SEARCH_CASCADE_API.md).
+Основной эндпоинт для автоматической проверки: `POST http://localhost:8030/api/cascade/predict`. Изображение передаётся в multipart-поле `image` (необязательно `query_id`), ответ — в формате строки `predictions.jsonl` золотого набора плюс поле `slug` для скрипта проверки:
+
+```json
+{"query_id":"q-000001","image_path":"26ddb066.jpg","image_sha256":"26ddb066cb40c88571ccd0703e892a0fd86eef140b215f91e3adbe0179e55107","predicted_slug":"agora-muskat-chernyj","latency_ms":312.5,"slug":"agora-muskat-chernyj","status":"found","stage_reached":"fusion","confidence":0.865}
+```
+
+`status`: `found` или `not_in_catalog`. Если вина нет в каталоге, `slug` и `predicted_slug` = `null`. Подробнее — [`docs/SEARCH_CASCADE_API.md`](docs/SEARCH_CASCADE_API.md).
 
 Камера в мобильных сканерах работает только по `https://` или на `localhost`. Чтобы открыть сканер с телефона по IP-адресу, опубликуйте сервис через HTTPS, например через Apache или nginx с сертификатом.
 

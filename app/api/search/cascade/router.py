@@ -1,4 +1,6 @@
 import asyncio
+import hashlib
+import time
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -84,6 +86,7 @@ async def search_from_crop_cascade(
 async def predict_cascade(
     image: Annotated[UploadFile, File()],
     threshold: Annotated[float | None, Form(ge=0.0, le=1.0)] = None,
+    query_id: Annotated[str | None, Form(max_length=64)] = None,
     session: AsyncSession = Depends(get_session),
     images: ImageService = Depends(get_images),
     pipeline: CascadeSearchPipeline = Depends(get_pipeline_cascade),
@@ -96,6 +99,18 @@ async def predict_cascade(
     ``threshold`` (or the configured ``cascade_predict_threshold``) additionally rejects answers whose SigLIP 2
     similarity is below it.
     """
-    source = await _decode_upload(image, images, settings)
+    contents = await image.read(settings.max_upload_bytes + 1)
+    try:
+        source = await asyncio.to_thread(images.decode, contents)
+    except InvalidImage as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     effective_threshold = threshold if threshold is not None else settings.cascade_predict_threshold
-    return await pipeline.predict_top1(source, ProductRepository(session), is_already_crop=False, threshold=effective_threshold)
+    started = time.perf_counter()
+    response = await pipeline.predict_top1(source, ProductRepository(session), is_already_crop=False, threshold=effective_threshold)
+    return response.model_copy(update={
+        "query_id": query_id,
+        "image_path": image.filename,
+        "image_sha256": hashlib.sha256(contents).hexdigest(),
+        "predicted_slug": response.slug,
+        "latency_ms": round((time.perf_counter() - started) * 1000, 2),
+    })

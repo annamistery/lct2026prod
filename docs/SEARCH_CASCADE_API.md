@@ -69,15 +69,17 @@ curl -X POST http://localhost:8030/api/cascade/search -F "image=@bottle.jpg" -F 
 
 ### `POST /api/cascade/predict` — ответ для автоматической проверки
 
-Те же ответы дают `POST /api/cascade/eval/predict` и `POST /api/v1/eval/predict` (у последнего ещё `latency_ms`).
+Тот же ответ даёт `POST /api/cascade/eval/predict`; `POST /api/v1/eval/predict` возвращает тот же `slug`.
 
 ```bash
-curl -X POST http://localhost:8030/api/cascade/predict -F "image=@bottle.jpg"
+curl -X POST http://localhost:8030/api/cascade/predict -F "image=@26ddb066.jpg" -F "query_id=q-000001"
 ```
 
+Ответ содержит поля строки `predictions.jsonl` из золотого набора (`query_id` — из необязательного поля формы, `image_path` — имя загруженного файла) и поле `slug`, которое читает `participant_test.sh`:
+
 ```json
-{"slug": "alma-valley-risling-beloe-polusuhoe-125", "status": "found", "stage_reached": "fusion", "confidence": 0.7831}
-{"slug": null, "status": "not_in_catalog", "stage_reached": "fusion", "confidence": 0.2532}
+{"query_id": "q-000001", "image_path": "26ddb066.jpg", "image_sha256": "26ddb066cb40c88571ccd0703e892a0fd86eef140b215f91e3adbe0179e55107", "predicted_slug": "agora-muskat-chernyj", "latency_ms": 312.5, "slug": "agora-muskat-chernyj", "status": "found", "stage_reached": "fusion", "confidence": 0.865}
+{"query_id": null, "image_path": "bottle.webp", "image_sha256": "367a651c…", "predicted_slug": null, "latency_ms": 628.4, "slug": null, "status": "not_in_catalog", "stage_reached": "fusion", "confidence": 0.2532}
 ```
 
 В ответе проверки два статуса: `found` (вино определено, `slug` — ответ) и `not_in_catalog` (`slug` = `null`). Зона «похоже» сканера здесь отдаётся как `found` с тем же `slug`; три зоны — только в `/api/cascade/search` и в интерфейсе. Необязательное поле формы `threshold` (или настройка `CASCADE_PREDICT_THRESHOLD`) дополнительно отклоняет ответы со сходством SigLIP 2 ниже заданного.

@@ -51,7 +51,13 @@ class CascadeSearchResponse(BaseModel):
 
 
 class CascadePredictResponse(BaseModel):
-    slug: str | None = None
+    # Golden predictions.jsonl fields (query_id is echoed from the optional form field)
+    query_id: str | None = None
+    image_path: str | None = None
+    image_sha256: str | None = None
+    predicted_slug: str | None = None
+    latency_ms: float | None = None
+    slug: str | None = None  # read by participant_test.sh
     status: str  # "found" | "not_in_catalog" (the scanner's «probable» zone is reported as "found")
     stage_reached: str
     confidence: float | None = None
