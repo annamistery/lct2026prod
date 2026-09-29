@@ -29,6 +29,10 @@ services:
     build: .
     user: "${APP_UID:-1000}:${APP_GID:-1000}"
     env_file: .env
+    environment:
+      # The base SigLIP 2 weights (1.5 GB) are not in Git: on the first start they are downloaded from
+      # Hugging Face. The API user has no writable home, so the cache lives in the media bind mount.
+      HF_HOME: /media/.cache/huggingface
     ports:
       - "8030:8030"
     volumes:

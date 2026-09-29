@@ -147,6 +147,17 @@ if [ "$READY" != true ]; then
 fi
 echo "✓ API готов: $(curl -fsS http://127.0.0.1:8030/api/ready)"
 
+# Каскад без SigLIP 2 работает, но заметно менее точно (только DINOv2): это нужно увидеть сразу.
+STAGE=$(curl -fsS http://127.0.0.1:8030/api/cascade/thresholds | grep -o '"stage":"[a-z0-9_]*"' || true)
+if [ "$STAGE" = '"stage":"fusion"' ]; then
+  echo "✓ Каскад работает полностью: DINOv2 + SigLIP 2"
+else
+  echo "ОШИБКА: каскад работает без SigLIP 2 ($STAGE). Базовая модель google/siglip2-base-patch16-512" >&2
+  echo "не загрузилась: нужен доступ к huggingface.co при первом запуске или файл" >&2
+  echo "models/siglip2-base-patch16-512/model.safetensors. Подробности: docker compose logs api" >&2
+  exit 1
+fi
+
 echo ""
 echo "========================================================================"
 echo " Данные успешно восстановлены! Система полностью готова к работе."
