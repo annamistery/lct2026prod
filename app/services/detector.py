@@ -21,5 +21,13 @@ class DetectorService:
                 detections.append((*coordinates, float(box.conf[0])))
         if not detections:
             return None
-        best = max(detections, key=lambda item: item[4])
+        # The label the user aims at is the one closest to the image centre, not the most confident one.
+        center_x, center_y = image.width / 2, image.height / 2
+
+        def centrality(item: tuple[float, float, float, float, float]) -> tuple[float, float]:
+            box_x = (item[0] + item[2]) / 2
+            box_y = (item[1] + item[3]) / 2
+            return (box_x - center_x) ** 2 + (box_y - center_y) ** 2, -item[4]
+
+        best = min(detections, key=centrality)
         return best[0], best[1], best[2], best[3]
