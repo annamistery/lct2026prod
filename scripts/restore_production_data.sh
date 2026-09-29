@@ -13,6 +13,7 @@ DATA_DIR="$ROOT_DIR/data"
 MEDIA_ARCHIVE="$DATA_DIR/media_catalog.tar.gz"
 
 DUMP_PRODUCTS="$DATA_DIR/dump_products.sql.gz"
+SCHEMA_EMBEDDINGS="$DATA_DIR/schema_embeddings.sql"
 LEGACY_DUMP="$DATA_DIR/catalog_dump.sql.gz"
 
 echo "=== [1/5] Проверка наличия исходных файлов данных ==="
@@ -27,6 +28,11 @@ else
   echo "ОШИБКА: Файлы дампа базы не найдены в $DATA_DIR!" >&2
   echo "Ожидались: $DUMP_PRODUCTS или $LEGACY_DUMP" >&2
   echo "Убедитесь, что репозиторий склонирован с поддержкой Git LFS (git lfs pull)." >&2
+  exit 1
+fi
+
+if [ "$HAS_MODULAR" = true ] && [ ! -f "$SCHEMA_EMBEDDINGS" ]; then
+  echo "ОШИБКА: Схема таблиц векторов не найдена: $SCHEMA_EMBEDDINGS" >&2
   exit 1
 fi
 
@@ -67,28 +73,39 @@ for i in {1..30}; do
   sleep 1
 done
 
+PSQL=(docker compose exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -q -v ON_ERROR_STOP=1)
+
 echo "=== [3/5] Восстановление базы данных из дампа ==="
 if [ "$HAS_MODULAR" = true ]; then
+  # Дампы векторов содержат только данные: таблицы и расширение pgvector создаёт schema_embeddings.sql.
+  # Старые таблицы векторов удаляются, чтобы повторный запуск не давал дублей и ошибок внешних ключей
+  # при пересоздании products.
+  echo "0. Сброс таблиц векторов перед загрузкой..."
+  "${PSQL[@]}" -c "DROP TABLE IF EXISTS product_embeddings, product_embeddings_v2, product_embeddings_v3, product_embeddings_v4;"
+
   echo "1. Загрузка схемы и каталога товаров ($DUMP_PRODUCTS)..."
-  gunzip -c "$DUMP_PRODUCTS" | docker compose exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -q
+  gunzip -c "$DUMP_PRODUCTS" | "${PSQL[@]}"
+
+  echo "   Создание расширения pgvector и таблиц векторов ($SCHEMA_EMBEDDINGS)..."
+  "${PSQL[@]}" < "$SCHEMA_EMBEDDINGS"
 
   # Загрузка векторов v4 (боевой SOTA)
   if [ -f "$DATA_DIR/dump_embeddings_v4.sql.gz" ]; then
     echo "2. Загрузка векторов v4 (SigLIP 2, dump_embeddings_v4.sql.gz)..."
-    gunzip -c "$DATA_DIR/dump_embeddings_v4.sql.gz" | docker compose exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -q
+    gunzip -c "$DATA_DIR/dump_embeddings_v4.sql.gz" | "${PSQL[@]}"
   fi
 
   # Загрузка векторов v1 (baseline)
   if [ -f "$DATA_DIR/dump_embeddings_v1.sql.gz" ]; then
     echo "3. Загрузка векторов v1 (DINOv2, dump_embeddings_v1.sql.gz)..."
-    gunzip -c "$DATA_DIR/dump_embeddings_v1.sql.gz" | docker compose exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -q
+    gunzip -c "$DATA_DIR/dump_embeddings_v1.sql.gz" | "${PSQL[@]}"
   fi
 
   # Загрузка других версий при их наличии
   for other_emb in "$DATA_DIR"/dump_embeddings_*.sql.gz; do
     if [ -f "$other_emb" ] && [ "$other_emb" != "$DATA_DIR/dump_embeddings_v1.sql.gz" ] && [ "$other_emb" != "$DATA_DIR/dump_embeddings_v4.sql.gz" ]; then
       echo "Загрузка дополнительных векторов: $(basename "$other_emb")..."
-      gunzip -c "$other_emb" | docker compose exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -q
+      gunzip -c "$other_emb" | "${PSQL[@]}"
     fi
   done
 else
@@ -126,5 +143,6 @@ echo ""
 echo "========================================================================"
 echo " Данные успешно восстановлены! Система полностью готова к работе."
 echo " Для запуска официального тестирования выполните:"
-echo "   ./md/participant_test.sh --images-dir ./queries --manifest ./queries.tsv"
+echo "   ./md/participant_test.sh --images-dir ./queries --manifest ./queries.tsv \\"
+echo "       --endpoint http://127.0.0.1:8030/api/cascade/predict --output predictions.jsonl"
 echo "========================================================================"
