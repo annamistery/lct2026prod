@@ -68,8 +68,11 @@
 | GPU | NVIDIA + драйвер + NVIDIA Container Toolkit | NVIDIA + свежий драйвер (GPU доступен в Docker Desktop через WSL 2) |
 | Прочее | `git`, `git-lfs`, `curl` | Git for Windows (Git Bash, включает Git LFS) |
 | Диск | ≈ 15 ГБ: образ ≈ 10 ГБ + данные ≈ 3 ГБ | то же |
+| Проверка этикеток (необязательно) | [Ollama](https://ollama.com) + модель `qwen2.5vl:7b` ≈ 6 ГБ на диске; видеопамять ≈ 8 ГБ сверх API | то же |
 
 Порт `8030` должен быть свободен.
+
+Проверка этикеток уточняет ответы «похоже»: локальная модель читает этикетку и сверяет её с каталогом. Без неё приложение работает полностью, но на контрольных фото точность ниже (100 верных ответов из 118 против 107). Установка — шаг 4.7.
 
 ---
 
@@ -166,6 +169,66 @@ curl -X POST http://127.0.0.1:8030/api/cascade/predict -F "image=@путь/к/ф
 ```
 
 Затем откройте в браузере **http://localhost:8030/search-cascade** и загрузите фото этикетки.
+
+### 4.7 Проверка этикеток (необязательно, повышает точность)
+
+Для ответов «похоже» локальная визуально-языковая модель читает на этикетке производителя, название, сорт и сладость и сверяет их с карточками ближайших вин каталога. Ответ остаётся, меняется на другое вино той же винодельни или становится «нет в каталоге». Ответы «найдено» не меняются. Модель работает на этом же компьютере, интернет и оплата не нужны. Модель не хранится в репозитории: её скачивает Ollama.
+
+**1. Установить Ollama и скачать модель**
+
+Linux (Ubuntu):
+
+```bash
+curl -fsSL https://ollama.com/install.sh | sh
+sudo systemctl edit ollama
+```
+
+В открывшемся редакторе добавьте строки и сохраните:
+
+```
+[Service]
+Environment="OLLAMA_HOST=0.0.0.0"
+```
+
+Без этой настройки Ollama доступна только самому компьютеру, и контейнер API до неё не достучится. Порт `11434` не открывайте в интернет: закройте его снаружи брандмауэром (например, `sudo ufw deny in on <внешний интерфейс> to any port 11434`).
+
+```bash
+sudo systemctl restart ollama
+ollama pull qwen2.5vl:7b
+```
+
+Windows: установите Ollama с [ollama.com/download](https://ollama.com/download), затем в Git Bash:
+
+```bash
+ollama pull qwen2.5vl:7b
+```
+
+На Windows `OLLAMA_HOST` настраивать не нужно: Docker Desktop сам пропускает контейнер к Ollama.
+
+**2. Включить проверку в `.env`**
+
+```
+CASCADE_LABEL_CHECK=true
+```
+
+Остальные настройки (`CASCADE_LABEL_OLLAMA_URL`, `CASCADE_LABEL_MODEL`, `CASCADE_LABEL_TIMEOUT_S`, `CASCADE_LABEL_TOP_K`) уже заданы в `.env.example`, менять их не нужно.
+
+**3. Перезапустить API и убедиться, что проверка включена**
+
+```bash
+docker compose up -d api
+docker compose logs api | grep "label check"
+```
+
+Должна быть строка `Cascade label check enabled: qwen2.5vl:7b via http://host.docker.internal:11434, 2103 catalog cards`. Проверка из контейнера, что Ollama доступна:
+
+```bash
+docker compose exec api python -c "import urllib.request;print(urllib.request.urlopen('http://host.docker.internal:11434/api/version').read())"
+```
+
+В ответе `POST /api/cascade/search` для ответов «похоже» появляется поле `decision.label_check`: что прочитано на этикетке (`reading`), решение (`action`: `keep` / `switch` / `reject` / `skipped`) и причина (`reason`). Время проверки — `timings.label_check_ms`, обычно 3–5 с.
+
+Отключить проверку: `CASCADE_LABEL_CHECK=false` и `docker compose up -d api`.
 
 ---
 
@@ -276,6 +339,17 @@ docker compose up -d
 **Не хватает видеопамяти (CUDA out of memory)**
 
 Закройте другие программы, которые используют GPU, в том числе вторую копию проекта. Проверьте, что в `.env` стоит `GPU_CONCURRENCY=1`, и выполните `docker compose restart api`.
+
+**Проверка этикеток: в логе нет `Cascade label check enabled` или в ответах `label_check.action = "skipped"`**
+
+- В `.env` нет `CASCADE_LABEL_CHECK=true` — добавьте и выполните `docker compose up -d api`.
+- Ollama не запущена или модель не скачана: `ollama list` должна показывать `qwen2.5vl:7b`; иначе `ollama pull qwen2.5vl:7b`.
+- Контейнер не видит Ollama (команда проверки из шага 4.7 выдаёт ошибку). На Linux проверьте `OLLAMA_HOST=0.0.0.0` (`systemctl show ollama | grep OLLAMA_HOST`) и что `compose.yaml` содержит `extra_hosts: host.docker.internal:host-gateway`, затем `docker compose up -d api`.
+- При любой из этих ошибок приложение продолжает работать и отвечает по изображению, как без проверки.
+
+**Ответы «похоже» идут 10 с и дольше**
+
+Модели не хватило видеопамяти, и Ollama считает часть на процессоре. Посмотрите `ollama ps`: в колонке `PROCESSOR` должно быть `100% GPU`. Закройте другие программы на видеокарте и выгрузите модель командой `ollama stop qwen2.5vl:7b` — при следующем запросе она загрузится заново. Если проверка не укладывается в `CASCADE_LABEL_TIMEOUT_S` (20 с), она пропускается и ответ остаётся по изображению.
 
 ---
 
