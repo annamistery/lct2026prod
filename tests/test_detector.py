@@ -1,4 +1,4 @@
-"""The detector must crop the label closest to the image centre, not the most confident one."""
+"""The detector must crop the label of the bottle on the vertical line through the image centre."""
 
 from __future__ import annotations
 
@@ -34,3 +34,35 @@ def test_best_box_breaks_ties_by_confidence():
 
 def test_best_box_returns_none_without_detections():
     assert make_detector([]).best_box(Image.new("RGB", (800, 600))) is None
+
+
+def test_label_below_the_centre_on_the_central_bottle_beats_a_side_label_nearer_by_distance():
+    # a bottle held in the hand: its label is low under the centre; a background label is diagonally closer
+    held = (380, 420, 470, 580, 0.6)
+    background = (250, 200, 360, 290, 0.9)
+    detector = make_detector([background, held])
+
+    assert detector.best_box(Image.new("RGB", (800, 600))) == held[:4]
+
+
+def test_among_boxes_on_the_centre_line_the_vertically_nearest_wins():
+    top = (350, 0, 450, 100, 0.9)
+    middle = (350, 250, 450, 350, 0.5)
+    detector = make_detector([top, middle])
+
+    assert detector.best_box(Image.new("RGB", (800, 600))) == middle[:4]
+
+
+def test_centre_between_two_bottles_takes_the_nearest_edge():
+    left = (250, 200, 395, 400, 0.9)
+    right = (410, 200, 560, 400, 0.9)
+    detector = make_detector([left, right])
+
+    assert detector.best_box(Image.new("RGB", (800, 600))) == left[:4]
+
+
+def test_only_side_labels_found_means_no_box():
+    # the central label was not detected: a side bottle would be a wrong wine, the caller uses the whole frame
+    detector = make_detector([(0, 200, 150, 400, 0.9), (650, 200, 800, 400, 0.9)])
+
+    assert detector.best_box(Image.new("RGB", (800, 600))) is None
