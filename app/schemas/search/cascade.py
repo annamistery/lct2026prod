@@ -21,11 +21,18 @@ class CascadeCandidate(BaseModel):
     final_score: float
 
 
+class CascadeLabelCheck(BaseModel):
+    action: str  # "keep" | "switch" | "reject" | "skipped"
+    reason: str
+    reading: dict | None = None  # what the vision-language model read on the label
+
+
 class CascadeDecision(BaseModel):
     status: str  # "found" | "probable" | "not_in_catalog"
     similarity: float | None = None  # SigLIP 2 similarity of the best candidate
     margin: float | None = None  # fusion score gap between the first and the second candidate
     reason: str
+    label_check: CascadeLabelCheck | None = None  # only for «probable» answers when the label check is enabled
 
 
 class CascadeTimings(BaseModel):
@@ -33,6 +40,7 @@ class CascadeTimings(BaseModel):
     query_prep_ms: float
     v1_total_ms: float
     v4_total_ms: float | None = None
+    label_check_ms: float | None = None
     total_ms: float
 
 

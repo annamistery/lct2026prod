@@ -20,12 +20,21 @@
               │
               ▼
    similarity = SigLIP 2 лучшего кандидата, margin = отрыв его оценки от второго
-   similarity < 0,485                         → not_in_catalog  «Данного вина нет в каталоге»
+   similarity < 0,55                          → not_in_catalog  «Данного вина нет в каталоге»
    similarity ≥ 0,83 и margin ≥ 0,15          → found           «Вино найдено в каталоге»
    иначе                                      → probable        «Похоже на это вино — сверьте название, год и цвет»
+              │  (только probable, если CASCADE_LABEL_CHECK=true)
+              ▼
+   проверка этикетки: локальная VLM (Ollama, qwen2.5vl:7b) читает производителя, название, сорт, сладость
+   и сравнивает их с карточками 5 ближайших кандидатов (app/pipelines/search/cascade/label_check.py)
+   противоречий нет                           → ответ остаётся
+   на этикетке отличительные слова другого кандидата того же производителя → ответ меняется на него
+   другой сорт / сладость / название, которого нет ни у одного кандидата   → not_in_catalog
 ```
 
-OCR в каскаде не используется: на размеченных фото он не повышал точность и не отличал вина не из каталога.
+Простой OCR в каскаде не используется: на размеченных фото он не повышал точность. Проверку этикетки
+выполняет визуально-языковая модель; ответ «найдено» она не трогает. Если Ollama недоступна или ответ не
+разобран, остаётся ответ по изображению (`decision.label_check.action = "skipped"`).
 
 Если SigLIP 2 не загрузился, каскад работает только на DINOv2 (`stage_reached = "v1_only"`), и все ответы получают статус `probable`.
 
@@ -82,7 +91,7 @@ curl -X POST http://localhost:8030/api/cascade/predict -F "image=@bottle.jpg"
 ### `GET /api/cascade/thresholds` — пороги, с которыми работает сервер
 
 ```json
-{"found_min_similarity": 0.83, "found_min_margin": 0.15, "reject_below_similarity": 0.485,
+{"found_min_similarity": 0.83, "found_min_margin": 0.15, "reject_below_similarity": 0.55,
  "predict_threshold": null, "candidate_pool": 30, "v1_weight": 0.3, "stage": "fusion"}
 ```
 
@@ -101,8 +110,13 @@ curl -X POST http://localhost:8030/api/cascade/predict -F "image=@bottle.jpg"
 | `CASCADE_V1_WEIGHT` | 0.3 | вес DINOv2 в итоговой оценке |
 | `CASCADE_FOUND_MIN_SIMILARITY` | 0.83 | минимальное сходство SigLIP 2 для ответа «найдено» |
 | `CASCADE_FOUND_MIN_MARGIN` | 0.15 | минимальный отрыв от второго кандидата для «найдено» |
-| `CASCADE_REJECT_BELOW_SIMILARITY` | 0.485 | ниже этого сходства — «нет в каталоге» |
+| `CASCADE_REJECT_BELOW_SIMILARITY` | 0.55 | ниже этого сходства — «нет в каталоге» |
 | `CASCADE_PREDICT_THRESHOLD` | не задан | дополнительный порог отказа для `/predict` |
+| `CASCADE_LABEL_CHECK` | false | проверка этикетки для ответов «похоже» (нужен Ollama с моделью) |
+| `CASCADE_LABEL_OLLAMA_URL` | http://host.docker.internal:11434 | адрес Ollama; на Linux Ollama должен слушать `0.0.0.0` (`OLLAMA_HOST=0.0.0.0`) |
+| `CASCADE_LABEL_MODEL` | qwen2.5vl:7b | модель чтения этикетки (`ollama pull qwen2.5vl:7b`) |
+| `CASCADE_LABEL_TIMEOUT_S` | 20 | предел ожидания; по истечении остаётся ответ по изображению |
+| `CASCADE_LABEL_TOP_K` | 5 | со сколькими ближайшими кандидатами сравнивается этикетка |
 
 Вина, добавленные формой `/add`, `POST /api/products` или пакетом `POST /api/imports` (в манифесте можно указать `slug`), получают те же эталоны, что и основной каталог: YOLO-кроп → letterbox 518 → 116 аугментаций → векторы DINOv2 и SigLIP 2. Поэтому они сразу распознаются с этими порогами.
 

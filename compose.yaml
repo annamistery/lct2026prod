@@ -31,6 +31,9 @@ services:
     env_file: .env
     ports:
       - "8030:8030"
+    # Ollama on the host (label check, CASCADE_LABEL_CHECK); Docker Desktop resolves it without this line
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./models:/models:ro
       - ./media:/media

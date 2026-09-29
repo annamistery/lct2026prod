@@ -34,7 +34,7 @@ def main() -> None:
     parser.add_argument("research_dir", type=Path)
     parser.add_argument("--v1-weight", type=float, default=0.3)
     parser.add_argument("--pool", type=int, default=30)
-    parser.add_argument("--reject-below", type=float, default=0.485)
+    parser.add_argument("--reject-below", type=float, default=0.55)
     parser.add_argument("--found-similarity", type=float, default=0.83)
     parser.add_argument("--found-margin", type=float, default=0.15)
     parser.add_argument("--safety", type=float, default=0.02, help="margin added to recommended thresholds")
