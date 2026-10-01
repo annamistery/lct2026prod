@@ -370,7 +370,7 @@ python scripts/calibrate_cascade.py media/research
 bash md/participant_test.sh --images-dir queries --manifest queries.tsv \
     --endpoint http://127.0.0.1:8030/api/cascade/predict --output predictions.jsonl
 
-# сравнение пайплайнов
+# сравнение пайплайнов: v1, cascade/eval/predict, cascade/predict, v2, v3 (--skip-v2 / --skip-v3)
 python scripts/run_benchmark.py --host http://127.0.0.1:8030
 ```
 

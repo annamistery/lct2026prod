@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unified benchmark runner: evaluates v1 vs v2 vs v3 across all test packs.
+"""Unified benchmark runner: evaluates v1, cascade, v2 and v3 endpoints across all test packs.
 
 Writes predictions and reports to a writable media directory (/media/benchmark),
 preventing read-only filesystem errors in Docker.
@@ -145,148 +145,96 @@ def evaluate_pack(mapping_file: Path, preds_file: Path) -> dict:
     }
 
 
+# Benchmarked endpoints: (key for file names, column label, path). v1 is the baseline of the diffs.
+ENDPOINTS = [
+    ("v1", "v1 (каскад)", "/api/v1/eval/predict"),
+    ("cascade_eval", "cascade/eval/predict", "/api/cascade/eval/predict"),
+    ("cascade", "cascade/predict", "/api/cascade/predict"),
+    ("v2", "v2", "/api/v2/eval/predict"),
+    ("v3", "v3 (base 768d)", "/api/v3/eval/predict"),
+]
+
+PACKS = [
+    ("1", "Пакет 1 (set48 / каталог)"),
+    ("2", "Пакет 2 (vina / полевые)"),
+]
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Run complete v1 vs v2 vs v3 evaluation benchmark")
+    parser = argparse.ArgumentParser(description="Run the evaluation benchmark: v1, cascade, v2 and v3 endpoints")
     parser.add_argument("--host", default="http://127.0.0.1:8030", help="Base URL of backend (default: http://127.0.0.1:8030)")
     parser.add_argument("--out-dir", type=Path, default=None, help="Directory for output predictions (defaults to /media/benchmark)")
     parser.add_argument("--skip-run", action="store_true", help="Skip running participant_test.sh, analyze existing predictions")
+    parser.add_argument("--skip-v2", action="store_true", help="Skip v2 tests")
     parser.add_argument("--skip-v3", action="store_true", help="Skip v3 tests (useful if v3 model is not yet loaded)")
     args = parser.parse_args()
 
-    pack1 = find_pack_dir("1")
-    pack2 = find_pack_dir("2")
+    packs = []
+    for pack_name, pack_label in PACKS:
+        pack_dir = find_pack_dir(pack_name)
+        if not pack_dir:
+            print(f"ОШИБКА: Не найдена директория с тестовым пакетом tmp/{pack_name}!", file=sys.stderr)
+            sys.exit(1)
+        packs.append((pack_name, pack_label, pack_dir))
 
-    if not pack1 or not pack2:
-        print("ОШИБКА: Не найдены директории с тестовыми пакетами tmp/1 или tmp/2!", file=sys.stderr)
-        sys.exit(1)
+    skipped = {key for key, flag in (("v2", args.skip_v2), ("v3", args.skip_v3)) if flag}
+    endpoints = [ep for ep in ENDPOINTS if ep[0] not in skipped]
 
     out_dir = get_writable_dir(args.out_dir)
     print(f"Директория для сохранения результатов бенчмарка: {out_dir}")
 
-    p1_v1_out = out_dir / "p1_predictions_v1.jsonl"
-    p1_v2_out = out_dir / "p1_predictions_v2.jsonl"
-    p1_v3_out = out_dir / "p1_predictions_v3.jsonl"
-    p2_v1_out = out_dir / "p2_predictions_v1.jsonl"
-    p2_v2_out = out_dir / "p2_predictions_v2.jsonl"
-    p2_v3_out = out_dir / "p2_predictions_v3.jsonl"
+    def out_file(pack_name: str, key: str) -> Path:
+        return out_dir / f"p{pack_name}_predictions_{key}.jsonl"
 
-    endpoint_v1 = f"{args.host.rstrip('/')}/api/v1/eval/predict"
-    endpoint_v2 = f"{args.host.rstrip('/')}/api/v2/eval/predict"
-    endpoint_v3 = f"{args.host.rstrip('/')}/api/v3/eval/predict"
-
-    run_v3 = not args.skip_v3
-    total_steps = 6 if run_v3 else 4
+    host = args.host.rstrip("/")
+    labels = ", ".join(label for _, label, _ in endpoints)
 
     if not args.skip_run:
         print("\n" + "=" * 80)
-        print(f" ЗАПУСК ЕДИНОГО ТЕСТИРОВАНИЯ (v1 vs v2 vs v3) — хост {args.host}")
+        print(f" ЗАПУСК ЕДИНОГО ТЕСТИРОВАНИЯ ({labels}) — хост {host}")
         print("=" * 80)
 
-        step = 1
-        print(f"\n[{step}/{total_steps}] Пакет 1 (set48 / 27 каталожных фото) -> Версия v1 (чистый DINOv2 без реранка)...")
-        run_participant_test(pack1, endpoint_v1, p1_v1_out, cwd=out_dir)
+        total_steps = len(packs) * len(endpoints)
+        step = 0
+        for pack_name, pack_label, pack_dir in packs:
+            for key, label, path in endpoints:
+                step += 1
+                print(f"\n[{step}/{total_steps}] {pack_label} -> {label}...")
+                run_participant_test(pack_dir, f"{host}{path}", out_file(pack_name, key), cwd=out_dir)
 
-        step += 1
-        print(f"\n[{step}/{total_steps}] Пакет 1 (set48 / 27 каталожных фото) -> Версия v2 (каскад + матрицы)...")
-        run_participant_test(pack1, endpoint_v2, p1_v2_out, cwd=out_dir)
+    # Evaluate results: results[key][pack_name]
+    results = {key: {pack_name: evaluate_pack(pack_dir / "mapping.json", out_file(pack_name, key)) for pack_name, _, pack_dir in packs} for key, _, _ in endpoints}
 
-        step += 1
-        print(f"\n[{step}/{total_steps}] Пакет 2 (vina / 25 полевых фото) -> Версия v1 (чистый DINOv2 без реранка)...")
-        run_participant_test(pack2, endpoint_v1, p2_v1_out, cwd=out_dir)
-
-        step += 1
-        print(f"\n[{step}/{total_steps}] Пакет 2 (vina / 25 полевых фото) -> Версия v2 (каскад + матрицы)...")
-        run_participant_test(pack2, endpoint_v2, p2_v2_out, cwd=out_dir)
-
-        if run_v3:
-            step += 1
-            print(f"\n[{step}/{total_steps}] Пакет 1 (set48 / 27 каталожных фото) -> Версия v3 (DINOv2-base 768d + Seg 518)...")
-            run_participant_test(pack1, endpoint_v3, p1_v3_out, cwd=out_dir)
-
-            step += 1
-            print(f"\n[{step}/{total_steps}] Пакет 2 (vina / 25 полевых фото) -> Версия v3 (DINOv2-base 768d + Seg 518)...")
-            run_participant_test(pack2, endpoint_v3, p2_v3_out, cwd=out_dir)
-
-    # Evaluate results
-    p1_v1 = evaluate_pack(pack1 / "mapping.json", p1_v1_out)
-    p1_v2 = evaluate_pack(pack1 / "mapping.json", p1_v2_out)
-    p2_v1 = evaluate_pack(pack2 / "mapping.json", p2_v1_out)
-    p2_v2 = evaluate_pack(pack2 / "mapping.json", p2_v2_out)
-
-    p1_v3 = evaluate_pack(pack1 / "mapping.json", p1_v3_out) if run_v3 else {"total": 0, "correct": 0, "pct": 0.0, "avg_lat": 0.0, "details": {}}
-    p2_v3 = evaluate_pack(pack2 / "mapping.json", p2_v3_out) if run_v3 else {"total": 0, "correct": 0, "pct": 0.0, "avg_lat": 0.0, "details": {}}
-
-    def totals(p1, p2):
-        c = p1["correct"] + p2["correct"]
-        t = p1["total"] + p2["total"]
+    def totals(per_pack: dict) -> dict:
+        c = sum(r["correct"] for r in per_pack.values())
+        t = sum(r["total"] for r in per_pack.values())
         pct = (c / t * 100.0) if t else 0.0
-        lat = ((p1["avg_lat"] * p1["total"] + p2["avg_lat"] * p2["total"]) / t) if t else 0.0
-        return c, t, pct, lat
-
-    tot_v1_correct, tot_v1_total, tot_v1_pct, tot_v1_lat = totals(p1_v1, p2_v1)
-    tot_v2_correct, tot_v2_total, tot_v2_pct, tot_v2_lat = totals(p1_v2, p2_v2)
-    tot_v3_correct, tot_v3_total, tot_v3_pct, tot_v3_lat = totals(p1_v3, p2_v3)
-
-    # Print summary table
-    col_w = 120 if run_v3 else 92
-    print("\n" + "=" * col_w)
-    title = " СВОДНЫЙ ОТЧЁТ: v1 vs v2 vs v3" if run_v3 else " СВОДНЫЙ ОТЧЁТ: v1 vs v2"
-    print(title)
-    print("=" * col_w)
+        lat = (sum(r["avg_lat"] * r["total"] for r in per_pack.values()) / t) if t else 0.0
+        return {"correct": c, "total": t, "pct": pct, "avg_lat": lat}
 
     def fmt(r):
         return f"{r['correct']}/{r['total']} ({r['pct']:.1f}%) [{r['avg_lat']:.0f}мс]"
 
-    if run_v3:
-        header = f"{'Тестовый набор':<28} | {'v1 (DINO)':<24} | {'v2 (каскад)':<24} | {'v3 (base 768d)':<24} | {'d(v3-v1)':<8}"
-        print(header)
-        print("-" * col_w)
-
-        def row3(label, r1, r2, r3):
-            delta = r3["pct"] - r1["pct"]
-            sign = "+" if delta > 0 else ""
-            return f"{label:<28} | {fmt(r1):<24} | {fmt(r2):<24} | {fmt(r3):<24} | {sign}{delta:.1f}%"
-
-        print(row3("Пакет 1 (set48 / каталог)", p1_v1, p1_v2, p1_v3))
-        print(row3("Пакет 2 (vina / полевые)", p2_v1, p2_v2, p2_v3))
-        print("-" * col_w)
-        s1 = f"{tot_v1_correct}/{tot_v1_total} ({tot_v1_pct:.1f}%) [{tot_v1_lat:.0f}мс]"
-        s2 = f"{tot_v2_correct}/{tot_v2_total} ({tot_v2_pct:.1f}%) [{tot_v2_lat:.0f}мс]"
-        s3 = f"{tot_v3_correct}/{tot_v3_total} ({tot_v3_pct:.1f}%) [{tot_v3_lat:.0f}мс]"
-        d = tot_v3_pct - tot_v1_pct
-        ds = "+" if d > 0 else ""
-        print(f"{'ИТОГО (52 запроса)':<28} | {s1:<24} | {s2:<24} | {s3:<24} | {ds}{d:.1f}%")
-    else:
-        header = f"{'Тестовый набор':<28} | {'v1 (DINO)':<24} | {'v2 (каскад)':<24} | {'d(v2-v1)':<10}"
-        print(header)
-        print("-" * col_w)
-
-        def row2(label, r1, r2):
-            delta = r2["pct"] - r1["pct"]
-            sign = "+" if delta > 0 else ""
-            return f"{label:<28} | {fmt(r1):<24} | {fmt(r2):<24} | {sign}{delta:.1f}%"
-
-        print(row2("Пакет 1 (set48 / каталог)", p1_v1, p1_v2))
-        print(row2("Пакет 2 (vina / полевые)", p2_v1, p2_v2))
-        print("-" * col_w)
-        s1 = f"{tot_v1_correct}/{tot_v1_total} ({tot_v1_pct:.1f}%) [{tot_v1_lat:.0f}мс]"
-        s2 = f"{tot_v2_correct}/{tot_v2_total} ({tot_v2_pct:.1f}%) [{tot_v2_lat:.0f}мс]"
-        d = tot_v2_pct - tot_v1_pct
-        ds = "+" if d > 0 else ""
-        print(f"{'ИТОГО (52 запроса)':<28} | {s1:<24} | {s2:<24} | {ds}{d:.1f}%")
-
+    # Print summary table
+    col_w = 28 + 27 * len(endpoints)
+    print("\n" + "=" * col_w)
+    print(f" СВОДНЫЙ ОТЧЁТ: {labels}")
+    print("=" * col_w)
+    print(f"{'Тестовый набор':<28}" + "".join(f" | {label:<24}" for _, label, _ in endpoints))
+    print("-" * col_w)
+    for pack_name, pack_label, _ in packs:
+        print(f"{pack_label:<28}" + "".join(f" | {fmt(results[key][pack_name]):<24}" for key, _, _ in endpoints))
+    print("-" * col_w)
+    query_count = totals(results[endpoints[0][0]])["total"]
+    print(f"{f'ИТОГО (запросов: {query_count})':<28}" + "".join(f" | {fmt(totals(results[key])):<24}" for key, _, _ in endpoints))
     print("=" * col_w)
 
-    # Detailed differential analysis: v1 vs v2
-    for pack_name, r1, r2 in [("Пакет 1 (каталог)", p1_v1, p1_v2), ("Пакет 2 (полевые фото)", p2_v1, p2_v2)]:
-        print(f"\n--- Детальная динамика v1->v2: {pack_name} ---")
-        _print_diff(r1, r2, "v1", "v2")
-
-    # Detailed differential analysis: v1 vs v3
-    if run_v3:
-        for pack_name, r1, r3 in [("Пакет 1 (каталог)", p1_v1, p1_v3), ("Пакет 2 (полевые фото)", p2_v1, p2_v3)]:
-            print(f"\n--- Детальная динамика v1->v3: {pack_name} ---")
-            _print_diff(r1, r3, "v1", "v3")
+    # Detailed differential analysis: v1 vs every other endpoint
+    base_key, base_label, _ = endpoints[0]
+    for key, label, _ in endpoints[1:]:
+        for pack_name, pack_label, _ in packs:
+            print(f"\n--- Детальная динамика {base_label} -> {label}: {pack_label} ---")
+            _print_diff(results[base_key][pack_name], results[key][pack_name], base_label, label)
 
     print("\n" + "=" * col_w + "\n")
 
