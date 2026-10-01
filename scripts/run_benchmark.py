@@ -8,6 +8,7 @@ preventing read-only filesystem errors in Docker.
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -66,8 +67,9 @@ def run_participant_test(pack_dir: Path, endpoint: str, output_file: Path, cwd: 
 
     output_file.unlink(missing_ok=True)
 
+    # PATH lookup: on Windows a bare "bash" resolves to System32\bash.exe (WSL) before Git Bash.
     cmd = [
-        "bash",
+        shutil.which("bash") or "bash",
         str(script),
         "--images-dir",
         str(images),
