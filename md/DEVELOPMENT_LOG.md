@@ -8,7 +8,7 @@
 
 ### Принятые архитектурные решения
 
-- Backend: FastAPI, порт `8030`.
+- Backend: FastAPI, порт `8080`.
 - Все внешние backend-маршруты находятся под `/api/`, поскольку Apache проксирует только этот prefix.
 - Версионируются только поисковые pipeline: текущая версия — `/api/v1/*`.
 - Общие health, products, imports, media, core, ORM и ML services не версионируются.

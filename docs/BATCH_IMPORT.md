@@ -56,7 +56,7 @@ imports/staging/customer-001/
 Для JSON:
 
 ```bash
-curl -fsS -X POST http://127.0.0.1:8030/api/imports \
+curl -fsS -X POST http://127.0.0.1:8080/api/imports \
   -H 'Content-Type: application/json' \
   -d '{"batch_id":"customer-001","manifest_name":"manifest.json"}'
 ```
@@ -66,7 +66,7 @@ curl -fsS -X POST http://127.0.0.1:8030/api/imports \
 ## Статус
 
 ```bash
-curl -fsS http://127.0.0.1:8030/api/imports/<job_id>
+curl -fsS http://127.0.0.1:8080/api/imports/<job_id>
 ```
 
 Поля `total_items`, `completed_items`, `failed_items` показывают прогресс. `items` содержит последние 100 результатов и ошибки. Полный импорт может содержать успешные и ошибочные строки; итоговый статус `completed` означает, что весь manifest обработан.

@@ -61,9 +61,9 @@ docker compose logs --tail=200 api
 ## 5. Проверить приложение
 
 ```bash
-curl -fsS http://127.0.0.1:8030/api/ping; echo
-curl -fsS http://127.0.0.1:8030/api/ready; echo
-curl -fsS http://127.0.0.1:8030/api/products; echo
+curl -fsS http://127.0.0.1:8080/api/ping; echo
+curl -fsS http://127.0.0.1:8080/api/ready; echo
+curl -fsS http://127.0.0.1:8080/api/products; echo
 docker compose run --rm migrate alembic current
 ```
 
@@ -80,7 +80,7 @@ docker compose run --rm migrate alembic current
 собирается из своего CSV при старте API и уже готов:
 
 ```bash
-curl -fsS -X POST http://127.0.0.1:8030/api/sommelier/ask -H 'Content-Type: application/json' -d '{"message": "стейк рибай"}'
+curl -fsS -X POST http://127.0.0.1:8080/api/sommelier/ask -H 'Content-Type: application/json' -d '{"message": "стейк рибай"}'
 ```
 
 Подробности API и точка интеграции с распознаванием этикеток: `docs/SOMMELIER.md`.
@@ -90,13 +90,13 @@ curl -fsS -X POST http://127.0.0.1:8030/api/sommelier/ask -H 'Content-Type: appl
 ```bash
 cp /путь/customer.zip imports/inbox/
 ./scripts/prepare_dataset_import.sh imports/inbox/customer.zip customer-001
-curl -fsS -X POST http://127.0.0.1:8030/api/imports -H 'Content-Type: application/json' -d '{"batch_id":"customer-001","manifest_name":"manifest.json"}'
+curl -fsS -X POST http://127.0.0.1:8080/api/imports -H 'Content-Type: application/json' -d '{"batch_id":"customer-001","manifest_name":"manifest.json"}'
 ```
 
 API вернёт `job_id`. Проверка прогресса:
 
 ```bash
-curl -fsS http://127.0.0.1:8030/api/imports/<job_id>
+curl -fsS http://127.0.0.1:8080/api/imports/<job_id>
 ```
 
 Форматы JSON/CSV и структура архива: `docs/BATCH_IMPORT.md`.

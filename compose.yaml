@@ -34,7 +34,7 @@ services:
       # Hugging Face. The API user has no writable home, so the cache lives in the media bind mount.
       HF_HOME: /media/.cache/huggingface
     ports:
-      - "8030:8030"
+      - "8080:8080"
     volumes:
       - ./models:/models:ro
       - ./media:/media

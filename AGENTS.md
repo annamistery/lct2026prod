@@ -1,6 +1,6 @@
 # LCT2026 production rules
 
-- Apache proxies only `/api/` to FastAPI on port 8030. Every externally reachable backend endpoint must start with `/api/`.
+- Apache proxies only `/api/` to FastAPI on port 8080. Every externally reachable backend endpoint must start with `/api/`.
 - Only search pipelines are versioned: `/api/v1/search` and `/api/v1/search-from-crop`. Health, products, and media routes are unversioned.
 - Routes are declared in their feature section and included through `app/api/router.py`.
 - Shared core, database models, repositories, and ML services are not versioned.

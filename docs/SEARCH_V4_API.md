@@ -48,7 +48,7 @@
 
 ## 2. API Эндпоинты
 
-Все эндпоинты бэкенда доступны по префиксу `/api/` (через Apache Reverse Proxy или напрямую на порту 8030).
+Все эндпоинты бэкенда доступны по префиксу `/api/` (через Apache Reverse Proxy или напрямую на порту 8080).
 
 ### 2.1. Поиск по полному фото бутылки
 
@@ -63,7 +63,7 @@
 
 **Пример запроса (cURL):**
 ```bash
-curl -fsS -X POST http://localhost:8030/api/v4/search \
+curl -fsS -X POST http://localhost:8080/api/v4/search \
   -F "image=@/path/to/bottle_photo.jpg" \
   -F "k=5"
 ```
@@ -74,7 +74,7 @@ import requests
 
 with open("bottle.jpg", "rb") as f:
     response = requests.post(
-        "http://localhost:8030/api/v4/search",
+        "http://localhost:8080/api/v4/search",
         files={"image": ("bottle.jpg", f, "image/jpeg")},
         data={"k": 5}
     )
@@ -97,7 +97,7 @@ print("Top-1 Winner:", data["winner"]["title"], f"({data['winner']['final_score'
 
 **Пример запроса (cURL):**
 ```bash
-curl -fsS -X POST http://localhost:8030/api/v4/search-from-crop \
+curl -fsS -X POST http://localhost:8080/api/v4/search-from-crop \
   -F "crop=@/path/to/crop.webp" \
   -F "k=5"
 ```
@@ -116,7 +116,7 @@ curl -fsS -X POST http://localhost:8030/api/v4/search-from-crop \
 
 **Пример запроса (cURL):**
 ```bash
-curl -fsS -X POST http://localhost:8030/api/v4/eval/predict \
+curl -fsS -X POST http://localhost:8080/api/v4/eval/predict \
   -F "image=@/path/to/test.jpg"
 ```
 
@@ -132,7 +132,7 @@ curl -fsS -X POST http://localhost:8030/api/v4/eval/predict \
 ### 2.4. Интерактивный веб-интерфейс
 
 В браузере доступна страница визуального тестирования:
-* **URL:** `http://<server-ip>:8030/search-v4`
+* **URL:** `http://<server-ip>:8080/search-v4`
 * Позволяет загружать фото через drag-and-drop или выбирать из тестовых наборов (`tmp1`, `tmp2`, `imports`, `catalog`).
 * Наглядно отображает 4 карточки цепочки:
   1. **Оригинал** (фото пользователя)
@@ -257,7 +257,7 @@ docker compose run --rm migrate
 docker compose up -d api
 
 # 4. Проверить статус
-curl http://localhost:8030/api/ping
-curl http://localhost:8030/api/ready
+curl http://localhost:8080/api/ping
+curl http://localhost:8080/api/ready
 ```
-Откройте в браузере `http://localhost:8030/search-v4` и протестируйте поиск.
+Откройте в браузере `http://localhost:8080/search-v4` и протестируйте поиск.

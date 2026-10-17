@@ -2,7 +2,7 @@
 
 Сервис распознаёт вино по фотографии этикетки и находит его в каталоге. К найденному вину AI-сомелье подбирает блюда, а к блюду — вина.
 
-- **Backend:** FastAPI, один процесс на порту `8030`: API, веб-страницы и Swagger.
+- **Backend:** FastAPI, один процесс на порту `8080`: API, веб-страницы и Swagger.
 - **База данных:** PostgreSQL 16 + pgvector. В ней лежит каталог (2017 вин) и векторы изображений: v1 DINOv2 и v4 SigLIP 2.
 - **Поиск:** каскад. DINOv2 отбирает 30 кандидатов, SigLIP 2 и DINOv2 вместе выбирают вино; ответ — «найдено», «похоже» или «Данного вина нет в каталоге». Точность top-1 на 128 размеченных фото — 95,3 %, ответ «нет в каталоге» ни разу не был ошибочным ([`docs/RECOGNITION_QUALITY.md`](docs/RECOGNITION_QUALITY.md)).
 - **AI-сомелье:** к распознанному вину — справка «с чем подать» и похожие вина-альтернативы из каталога.
@@ -14,24 +14,24 @@
 
 ## 1. Ссылки приложения
 
-После запуска все ссылки открываются по адресу `http://<адрес-сервера>:8030`. На том же компьютере это `http://localhost:8030`.
+После запуска все ссылки открываются по адресу `http://<адрес-сервера>:8080`. На том же компьютере это `http://localhost:8080`.
 
 | Что | Ссылка |
 |---|---|
-| **Сканер этикеток (основной, каскад)** | http://localhost:8030/search-cascade |
-| Мобильный сканер каскада (камера телефона) | http://localhost:8030/mobi-cascade |
-| Автономный мобильный сканер | http://localhost:8030/export/mobitest_cascade.html |
-| Мобильный сканер «Своё Вино» (каскад, сомелье, оценка) | http://localhost:8030/mobi/ |
-| Каталог вин | http://localhost:8030/products |
-| Добавление вина в каталог | http://localhost:8030/add |
-| Пакетный импорт каталога | http://localhost:8030/import |
-| Похожие этикетки («двойники») | http://localhost:8030/twins |
-| Сканер v4 (SigLIP 2, диагностика) | http://localhost:8030/search-v4 |
-| **Swagger — документация и проверка API** | http://localhost:8030/api/docs |
-| Проверка «процесс жив» | http://localhost:8030/api/ping |
-| **Проверка готовности** | http://localhost:8030/api/ready |
+| **Сканер этикеток (основной, каскад)** | http://localhost:8080/search-cascade |
+| Мобильный сканер каскада (камера телефона) | http://localhost:8080/mobi-cascade |
+| Автономный мобильный сканер | http://localhost:8080/export/mobitest_cascade.html |
+| Мобильный сканер «Своё Вино» (каскад, сомелье, оценка) | http://localhost:8080/mobi/ |
+| Каталог вин | http://localhost:8080/products |
+| Добавление вина в каталог | http://localhost:8080/add |
+| Пакетный импорт каталога | http://localhost:8080/import |
+| Похожие этикетки («двойники») | http://localhost:8080/twins |
+| Сканер v4 (SigLIP 2, диагностика) | http://localhost:8080/search-v4 |
+| **Swagger — документация и проверка API** | http://localhost:8080/api/docs |
+| Проверка «процесс жив» | http://localhost:8080/api/ping |
+| **Проверка готовности** | http://localhost:8080/api/ready |
 
-Основной эндпоинт для автоматической проверки: `POST http://localhost:8030/api/cascade/predict`. Изображение передаётся в multipart-поле `image` (необязательно `query_id`), ответ — в формате строки `predictions.jsonl` золотого набора плюс поле `slug` для скрипта проверки:
+Основной эндпоинт для автоматической проверки: `POST http://localhost:8080/api/cascade/predict`. Изображение передаётся в multipart-поле `image` (необязательно `query_id`), ответ — в формате строки `predictions.jsonl` золотого набора плюс поле `slug` для скрипта проверки:
 
 ```json
 {"query_id":"q-000001","image_path":"26ddb066.jpg","image_sha256":"26ddb066cb40c88571ccd0703e892a0fd86eef140b215f91e3adbe0179e55107","predicted_slug":"agora-muskat-chernyj","latency_ms":312.5,"slug":"agora-muskat-chernyj","status":"found","stage_reached":"fusion","confidence":0.865}
@@ -75,7 +75,7 @@
 | Прочее | `git`, `git-lfs`, `curl` | Git for Windows (Git Bash, включает Git LFS) |
 | Диск | ≈ 15 ГБ: образ ≈ 10 ГБ + данные ≈ 3 ГБ | то же |
 
-Порт `8030` должен быть свободен. При первом запуске API нужен доступ к `huggingface.co`: оттуда один раз скачивается базовая модель SigLIP 2 (`google/siglip2-base-patch16-512`, 1,5 ГБ, её нет в Git) и сохраняется в `media/.cache/huggingface`. Без интернета положите файл `model.safetensors` этой модели в `models/siglip2-base-patch16-512/`.
+Порт `8080` должен быть свободен. При первом запуске API нужен доступ к `huggingface.co`: оттуда один раз скачивается базовая модель SigLIP 2 (`google/siglip2-base-patch16-512`, 1,5 ГБ, её нет в Git) и сохраняется в `media/.cache/huggingface`. Без интернета положите файл `model.safetensors` этой модели в `models/siglip2-base-patch16-512/`.
 
 ---
 
@@ -149,13 +149,13 @@ docker compose up -d --build
 docker compose ps
 ```
 
-В выводе `docker compose ps` у `db` и `api` должно быть состояние `running`, а `migrate` должен завершиться с кодом `0`. Первая загрузка моделей занимает около минуты, а самый первый запуск — ещё 1–3 минуты на скачивание SigLIP 2. Проверка, что каскад работает полностью: `curl http://127.0.0.1:8030/api/cascade/thresholds` должен вернуть `"stage":"fusion"` (`"v1_only"` значит, что SigLIP 2 не загрузилась).
+В выводе `docker compose ps` у `db` и `api` должно быть состояние `running`, а `migrate` должен завершиться с кодом `0`. Первая загрузка моделей занимает около минуты, а самый первый запуск — ещё 1–3 минуты на скачивание SigLIP 2. Проверка, что каскад работает полностью: `curl http://127.0.0.1:8080/api/cascade/thresholds` должен вернуть `"stage":"fusion"` (`"v1_only"` значит, что SigLIP 2 не загрузилась).
 
 ### 4.6 Проверить
 
 ```bash
-curl http://127.0.0.1:8030/api/ping
-curl http://127.0.0.1:8030/api/ready
+curl http://127.0.0.1:8080/api/ping
+curl http://127.0.0.1:8080/api/ready
 ```
 
 Ожидаемый ответ:
@@ -168,10 +168,10 @@ curl http://127.0.0.1:8030/api/ready
 Проверка распознавания на одном фото:
 
 ```bash
-curl -X POST http://127.0.0.1:8030/api/cascade/predict -F "image=@путь/к/фото.jpg"
+curl -X POST http://127.0.0.1:8080/api/cascade/predict -F "image=@путь/к/фото.jpg"
 ```
 
-Затем откройте в браузере **http://localhost:8030/search-cascade** и загрузите фото этикетки.
+Затем откройте в браузере **http://localhost:8080/search-cascade** и загрузите фото этикетки.
 
 ---
 
@@ -196,18 +196,20 @@ docker compose restart api            # перезапуск API (наприме
 
 ```bash
 ./md/participant_test.sh --images-dir ./queries --manifest ./queries.tsv \
-    --endpoint http://127.0.0.1:8030/api/cascade/predict --output predictions.jsonl
+    --endpoint http://127.0.0.1:8080/api/cascade/predict --output predictions.jsonl
 ```
+
+API слушает тот же порт 8080, что стоит по умолчанию в скрипте организаторов, но все пути бэкенда начинаются с `/api/`, поэтому `--endpoint` указывается всегда: адрес по умолчанию `http://127.0.0.1:8080/v1/eval/predict` вернёт 404.
 
 Для скрипта нужны `curl` и `jq`. На Windows `jq` устанавливается командой `winget install jqlang.jq`. Подробнее — в [`md/ИНСТРУКЦИЯ_ПРОВЕРКИ.md`](md/ИНСТРУКЦИЯ_ПРОВЕРКИ.md).
 
 Если у набора есть правильные ответы, точность и зоны ответа (найдено / похоже / нет в каталоге) считает скрипт:
 
 ```bash
-python scripts/eval_recognition.py --api http://127.0.0.1:8030 --sets tmp1=tmp/1 tmp2=tmp/2 "мои=путь/к/папке"
+python scripts/eval_recognition.py --api http://127.0.0.1:8080 --sets tmp1=tmp/1 tmp2=tmp/2 "мои=путь/к/папке"
 ```
 
-Разметка — `mapping.json` (формат тестовых пакетов) или `labels.tsv` с колонками `image_path`, `expected_slug`, `status` (`in_catalog` / `not_in_catalog` / `unsure`), `alt_slugs`. То же можно сделать в браузере: http://localhost:8030/search-cascade → «Мой набор» → папка с фото и `labels.tsv` → «Проверить все по списку».
+Разметка — `mapping.json` (формат тестовых пакетов) или `labels.tsv` с колонками `image_path`, `expected_slug`, `status` (`in_catalog` / `not_in_catalog` / `unsure`), `alt_slugs`. То же можно сделать в браузере: http://localhost:8080/search-cascade → «Мой набор» → папка с фото и `labels.tsv` → «Проверить все по списку».
 
 Проверки кода для разработчика:
 
@@ -267,7 +269,7 @@ docker compose up -d
 
 Модели не скачаны из Git LFS или ещё загружаются. Выполните `git lfs pull`, проверьте `sha256sum --check models/MODEL_MANIFEST.sha256`, затем посмотрите `docker compose logs api`.
 
-**`Bind for 0.0.0.0:8030 failed: port is already allocated`**
+**`Bind for 0.0.0.0:8080 failed: port is already allocated`**
 
 Порт занят другим приложением или другой копией проекта. Найдите, кто его занимает (`docker ps`), и остановите: `docker compose stop api` в папке той копии.
 
@@ -294,7 +296,7 @@ docker compose --profile public up -d   # публичный вход (порт 
 bash scripts/public_url.sh              # текущие ссылки: сканер, каскадный поиск, API, Swagger
 ```
 
-- Публичный вход (`deploy/public/nginx.conf`) пропускает только сканер, распознавание, сомелье и просмотр каталога. Добавление и импорт вин (`/add`, `/import`, `POST /api/products`, `/api/imports`) по ссылке закрыты и доступны только на `http://localhost:8030`.
+- Публичный вход (`deploy/public/nginx.conf`) пропускает только сканер, распознавание, сомелье и просмотр каталога. Добавление и импорт вин (`/add`, `/import`, `POST /api/products`, `/api/imports`) по ссылке закрыты и доступны только на `http://localhost:8080`.
 - Адрес туннеля меняется после переподключения — запустите `scripts/public_url.sh` ещё раз и отправьте новую ссылку.
 - Альтернатива — Cloudflare Tunnel: `docker compose --profile cloudflare up -d` (в некоторых сетях заблокирован).
 - Остановить: `docker compose --profile public stop public tunnel`.

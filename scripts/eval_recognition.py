@@ -10,7 +10,7 @@ Metrics:
   not-in-catalog photos: how many got «нет в каталоге», «похоже» or a false «найдено»;
   latency.
 
-    python scripts/eval_recognition.py --api http://127.0.0.1:8030 --sets tmp1=tmp/1 tmp2=tmp/2 real="/data/Реальные фото"
+    python scripts/eval_recognition.py --api http://127.0.0.1:8080 --sets tmp1=tmp/1 tmp2=tmp/2 real="/data/Реальные фото"
 """
 
 from __future__ import annotations
@@ -77,7 +77,7 @@ def predict(api: str, path: Path) -> tuple[dict, float]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--api", default="http://127.0.0.1:8030")
+    parser.add_argument("--api", default="http://127.0.0.1:8080")
     parser.add_argument("--sets", nargs="+", required=True, help="name=folder")
     parser.add_argument("--out", type=Path, default=None, help="JSONL with every answer")
     args = parser.parse_args()

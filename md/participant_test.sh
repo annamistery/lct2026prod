@@ -7,7 +7,7 @@ set -uo pipefail
 
 images_dir=""
 manifest=""
-endpoint="http://127.0.0.1:8030/api/cascade/predict"
+endpoint="http://127.0.0.1:8080/api/cascade/predict"
 output="predictions.jsonl"
 
 usage() {

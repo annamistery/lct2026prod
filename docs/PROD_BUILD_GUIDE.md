@@ -4,7 +4,7 @@
 
 - Ubuntu с NVIDIA driver и NVIDIA Container Toolkit.
 - Docker Compose v2.
-- Apache обслуживает `web/` по HTTPS и проксирует только `/api/` на `http://192.168.153.43:8030/api/`.
+- Apache обслуживает `web/` по HTTPS и проксирует только `/api/` на `http://192.168.153.43:8080/api/`.
 - Локальные DINO base/adapter и YOLO веса находятся в `models/`; runtime mount read-only.
 
 ## Сборка
@@ -15,8 +15,8 @@ cp .env.example .env
 docker compose build
 docker compose up -d
 docker compose ps
-curl http://localhost:8030/api/ping
-curl http://localhost:8030/api/ready
+curl http://localhost:8080/api/ping
+curl http://localhost:8080/api/ready
 ```
 
 Сервис `migrate` выполняет `alembic upgrade head` после готовности PostgreSQL. API стартует только после успешной миграции.

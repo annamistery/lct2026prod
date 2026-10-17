@@ -1,10 +1,10 @@
 # Архитектура LCT2026 Production
 
-Сервис распознаёт винные этикетки по фотографии и находит вино в каталоге. В проект также входит AI-сомелье, который подбирает вина к блюду. Всё работает в одном процессе FastAPI на порту `8030`. Товары и векторы изображений хранятся в PostgreSQL 16 с расширением pgvector.
+Сервис распознаёт винные этикетки по фотографии и находит вино в каталоге. В проект также входит AI-сомелье, который подбирает вина к блюду. Всё работает в одном процессе FastAPI на порту `8080`. Товары и векторы изображений хранятся в PostgreSQL 16 с расширением pgvector.
 
 ```
 Клиент (браузер / мобильный сканер / participant_test.sh)
-        │  HTTP :8030  (в проде Apache проксирует только /api/)
+        │  HTTP :8080  (в проде Apache проксирует только /api/)
         ▼
 FastAPI (app/main.py)
   ├─ /api/*            JSON API: health, products, imports, search v1–v4, cascade, twins, sommelier
@@ -28,7 +28,7 @@ lct2026prod/
 ├── AGENTS.md                  # правила разработки и деплоя (обязательны для всех изменений)
 ├── README.md                  # обзор и быстрый запуск
 ├── Architecture.md            # этот документ
-├── Dockerfile                 # образ API: PyTorch 2.x + CUDA, uvicorn на :8030
+├── Dockerfile                 # образ API: PyTorch 2.x + CUDA, uvicorn на :8080
 ├── compose.yaml               # сервисы db (pgvector), migrate (alembic), api (GPU)
 ├── pyproject.toml             # зависимости, настройки pytest / ruff / mypy
 ├── alembic.ini                # конфигурация миграций
@@ -262,17 +262,17 @@ docker compose up -d --build               # db → migrate (alembic upgrade hea
 Проверка:
 
 ```bash
-curl -fsS http://127.0.0.1:8030/api/ping
-curl -fsS http://127.0.0.1:8030/api/ready
+curl -fsS http://127.0.0.1:8080/api/ping
+curl -fsS http://127.0.0.1:8080/api/ready
 # {"ready":true,"database":true,"models":true,"sommelier":true}
 ```
 
 Веб-интерфейсы:
 
-- `http://<host>:8030/search-cascade` — основной сканер;
-- `http://<host>:8030/mobi-cascade` и `http://<host>:8030/mobi/` — мобильные сканеры;
-- `http://<host>:8030/products` — каталог;
-- `http://<host>:8030/api/docs` — Swagger.
+- `http://<host>:8080/search-cascade` — основной сканер;
+- `http://<host>:8080/mobi-cascade` и `http://<host>:8080/mobi/` — мобильные сканеры;
+- `http://<host>:8080/products` — каталог;
+- `http://<host>:8080/api/docs` — Swagger.
 
 В проде Apache проксирует наружу только `/api/`.
 
@@ -288,10 +288,10 @@ docker compose up -d db                    # или свой PostgreSQL 16 + pgv
 #         MEDIA_DIR=media, пути моделей — models/... (или удалить строки: сработают значения по умолчанию)
 
 alembic upgrade head
-uvicorn app.main:app --host 127.0.0.1 --port 8030 --reload
+uvicorn app.main:app --host 127.0.0.1 --port 8080 --reload
 ```
 
-Откройте `http://localhost:8030/`. Без GPU модели работают на CPU, поиск будет медленнее. Если БД пустая, загрузите каталог (раздел 4.3) или восстановите дамп.
+Откройте `http://localhost:8080/`. Без GPU модели работают на CPU, поиск будет медленнее. Если БД пустая, загрузите каталог (раздел 4.3) или восстановите дамп.
 
 ### 4.3 Загрузка каталога
 
@@ -360,7 +360,7 @@ CI (`.github/workflows/ci.yml`) на каждый push запускает Postgr
 
 ```bash
 # точность и зоны ответа каскада (найдено / похоже / нет в каталоге) по разметке
-python scripts/eval_recognition.py --api http://127.0.0.1:8030 --sets tmp1=tmp/1 tmp2=tmp/2
+python scripts/eval_recognition.py --api http://127.0.0.1:8080 --sets tmp1=tmp/1 tmp2=tmp/2
 
 # пересчёт порогов после изменения каталога (см. docs/RECOGNITION_QUALITY.md)
 docker compose exec api python scripts/research_dump_features.py --sets tmp1=/srv/app/tmp/1 tmp2=/srv/app/tmp/2
@@ -368,17 +368,17 @@ python scripts/calibrate_cascade.py media/research
 
 # прогон контрольных изображений через HTTP (формат участника)
 bash md/participant_test.sh --images-dir queries --manifest queries.tsv \
-    --endpoint http://127.0.0.1:8030/api/cascade/predict --output predictions.jsonl
+    --endpoint http://127.0.0.1:8080/api/cascade/predict --output predictions.jsonl
 
 # сравнение пайплайнов: v1, cascade/eval/predict, cascade/predict, v2, v3 (--skip-v2 / --skip-v3)
-python scripts/run_benchmark.py --host http://127.0.0.1:8030
+python scripts/run_benchmark.py --host http://127.0.0.1:8080
 ```
 
 Подробная процедура — `md/ИНСТРУКЦИЯ_ПРОВЕРКИ.md`.
 
 ### 5.3 Ручная проверка
 
-- `curl http://127.0.0.1:8030/api/ready` должен вернуть 200 и `"ready": true`.
+- `curl http://127.0.0.1:8080/api/ready` должен вернуть 200 и `"ready": true`.
 - На `/search-cascade` загрузите фото этикетки: страница покажет все шаги каскада.
 - Для сомелье выполните `python scripts/sommelier_cli.py "стейк рибай, не люблю дуб"` или откройте `POST /api/sommelier/ask` в Swagger.
 

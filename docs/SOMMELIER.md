@@ -12,7 +12,7 @@
 ## Диалог: `POST /api/sommelier/ask`
 
 ```bash
-curl -fsS -X POST http://127.0.0.1:8030/api/sommelier/ask \
+curl -fsS -X POST http://127.0.0.1:8080/api/sommelier/ask \
   -H 'Content-Type: application/json' \
   -d '{"message": "стейк рибай, не люблю дуб"}'
 ```
@@ -43,7 +43,7 @@ curl -fsS -X POST http://127.0.0.1:8030/api/sommelier/ask \
 ## Новый диалог: `POST /api/sommelier/reset`
 
 ```bash
-curl -fsS -X POST http://127.0.0.1:8030/api/sommelier/reset \
+curl -fsS -X POST http://127.0.0.1:8080/api/sommelier/reset \
   -H 'Content-Type: application/json' -d '{"session_id": "3fae2a...c1"}'
 ```
 
@@ -55,8 +55,8 @@ curl -fsS -X POST http://127.0.0.1:8030/api/sommelier/reset \
 `wines_integrated.csv`, если товар из этого каталога). Разовый запрос без диалоговой сессии.
 
 ```bash
-curl -fsS "http://127.0.0.1:8030/api/sommelier/wine/fanagoriya-100-ottenkov-krasnogo-kaberne-kaberne-sovinon-krasnoe-suhoe-135"
-curl -fsS "http://127.0.0.1:8030/api/sommelier/wine/<slug>?dish=%D1%81%D1%82%D0%B5%D0%B9%D0%BA%20%D1%80%D0%B8%D0%B1%D0%B0%D0%B9"
+curl -fsS "http://127.0.0.1:8080/api/sommelier/wine/fanagoriya-100-ottenkov-krasnogo-kaberne-kaberne-sovinon-krasnoe-suhoe-135"
+curl -fsS "http://127.0.0.1:8080/api/sommelier/wine/<slug>?dish=%D1%81%D1%82%D0%B5%D0%B9%D0%BA%20%D1%80%D0%B8%D0%B1%D0%B0%D0%B9"
 ```
 
 Без `dish` — справка по вину из базы (стиль, сладость, ароматы, цитата из описания). С `dish` (текст блюда,
@@ -77,7 +77,7 @@ curl -fsS "http://127.0.0.1:8030/api/sommelier/wine/<slug>?dish=%D1%81%D1%82%D0%
 повторяются. Каждый довод взят из полей карточки, картинка — этикетка из каталога распознавания (если вино там есть).
 
 ```bash
-curl -fsS "http://127.0.0.1:8030/api/sommelier/wine/belbek-roze-sira-rozovoe-suhoe-125/alternatives?limit=3"
+curl -fsS "http://127.0.0.1:8080/api/sommelier/wine/belbek-roze-sira-rozovoe-suhoe-125/alternatives?limit=3"
 ```
 
 ```json

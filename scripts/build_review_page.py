@@ -5,10 +5,10 @@ The page shows every photo next to the top-3 candidates of the running cascade; 
 types another catalog wine, or marks «нет в каталоге» / «не уверен». The marks are exported as labels.tsv
 (image_path, expected_slug, status, alt_slugs) — the format of scripts/eval_recognition.py.
 
-    python scripts/build_review_page.py --api http://127.0.0.1:8030 --images-dir queries --manifest queries.tsv \
+    python scripts/build_review_page.py --api http://127.0.0.1:8080 --images-dir queries --manifest queries.tsv \
         --output tmp/review/review.html
     # open the page in a browser while the API is running, mark the photos, «Скачать labels.tsv» -> put it in queries/
-    python scripts/eval_recognition.py --api http://127.0.0.1:8030 --sets control=queries
+    python scripts/eval_recognition.py --api http://127.0.0.1:8080 --sets control=queries
 """
 
 from __future__ import annotations
@@ -49,7 +49,7 @@ def load_catalog() -> list[dict]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--api", default="http://127.0.0.1:8030")
+    parser.add_argument("--api", default="http://127.0.0.1:8080")
     parser.add_argument("--images-dir", type=Path, default=Path("queries"))
     parser.add_argument("--manifest", type=Path, default=Path("queries.tsv"), help="query_id<TAB>image_path; without it — all photos of the folder")
     parser.add_argument("--output", type=Path, default=Path("tmp/review/review.html"))

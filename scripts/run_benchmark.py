@@ -162,7 +162,7 @@ PACKS = [
 
 def main():
     parser = argparse.ArgumentParser(description="Run the evaluation benchmark: v1, cascade, v2 and v3 endpoints")
-    parser.add_argument("--host", default="http://127.0.0.1:8030", help="Base URL of backend (default: http://127.0.0.1:8030)")
+    parser.add_argument("--host", default="http://127.0.0.1:8080", help="Base URL of backend (default: http://127.0.0.1:8080)")
     parser.add_argument("--out-dir", type=Path, default=None, help="Directory for output predictions (defaults to /media/benchmark)")
     parser.add_argument("--skip-run", action="store_true", help="Skip running participant_test.sh, analyze existing predictions")
     parser.add_argument("--skip-v2", action="store_true", help="Skip v2 tests")

@@ -6,8 +6,8 @@
 docker compose ps
 docker compose logs -f api
 docker compose logs -f db
-curl http://localhost:8030/api/ping
-curl http://localhost:8030/api/ready
+curl http://localhost:8080/api/ping
+curl http://localhost:8080/api/ready
 ```
 
 `ping` проверяет процесс. `ready` (итоговый флаг) требует PostgreSQL/pgvector и загруженные YOLO/DINO; поле

@@ -36,7 +36,7 @@ OCR в каскаде не используется: на размеченных
 Поля формы: `image` (фото), `k` (число кандидатов в ответе, по умолчанию 5).
 
 ```bash
-curl -X POST http://localhost:8030/api/cascade/search -F "image=@bottle.jpg" -F k=5
+curl -X POST http://localhost:8080/api/cascade/search -F "image=@bottle.jpg" -F k=5
 ```
 
 ```json
@@ -72,7 +72,7 @@ curl -X POST http://localhost:8030/api/cascade/search -F "image=@bottle.jpg" -F 
 Тот же ответ даёт `POST /api/cascade/eval/predict`; `POST /api/v1/eval/predict` возвращает тот же `slug`.
 
 ```bash
-curl -X POST http://localhost:8030/api/cascade/predict -F "image=@26ddb066.jpg" -F "query_id=q-000001"
+curl -X POST http://localhost:8080/api/cascade/predict -F "image=@26ddb066.jpg" -F "query_id=q-000001"
 ```
 
 Ответ содержит поля строки `predictions.jsonl` из золотого набора (`query_id` — из необязательного поля формы, `image_path` — имя загруженного файла) и поле `slug`, которое читает `participant_test.sh`:
@@ -115,7 +115,7 @@ curl -X POST http://localhost:8030/api/cascade/predict -F "image=@26ddb066.jpg" 
 
 ## 4. Веб-интерфейс
 
-`http://<сервер>:8030/search-cascade`:
+`http://<сервер>:8080/search-cascade`:
 
 - цветной статус ответа (найдено / похоже / нет в каталоге) с причиной и таймингами;
 - оригинал → кроп → вино из каталога;

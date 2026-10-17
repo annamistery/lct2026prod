@@ -161,8 +161,8 @@ docker compose logs --tail=100 api
 ## 10. Проверить health endpoints
 
 ```bash
-curl -fsS http://127.0.0.1:8030/api/ping
-curl -fsS http://127.0.0.1:8030/api/ready
+curl -fsS http://127.0.0.1:8080/api/ping
+curl -fsS http://127.0.0.1:8080/api/ready
 ```
 
 Получаем:
@@ -176,7 +176,7 @@ curl -fsS http://127.0.0.1:8030/api/ready
 ## 11. Добавить тестовый товар
 
 ```bash
-curl -fsS -X POST http://127.0.0.1:8030/api/products \
+curl -fsS -X POST http://127.0.0.1:8080/api/products \
   -F 'title=Тестовый товар' \
   -F 'manufacturer=Тестовый производитель' \
   -F 'description=Проверка production API' \
@@ -188,7 +188,7 @@ curl -fsS -X POST http://127.0.0.1:8030/api/products \
 Затем:
 
 ```bash
-curl -fsS http://127.0.0.1:8030/api/products
+curl -fsS http://127.0.0.1:8080/api/products
 ```
 
 Получаем: созданный товар в каталоге.
@@ -196,7 +196,7 @@ curl -fsS http://127.0.0.1:8030/api/products
 ## 12. Проверить поиск полного кадра
 
 ```bash
-curl -fsS -X POST http://127.0.0.1:8030/api/v1/search \
+curl -fsS -X POST http://127.0.0.1:8080/api/v1/search \
   -F 'image=@/полный/путь/к/фото-бутылки.jpg' \
   -F 'k=5'
 ```
@@ -206,7 +206,7 @@ curl -fsS -X POST http://127.0.0.1:8030/api/v1/search \
 ## 13. Проверить поиск готового кропа
 
 ```bash
-curl -fsS -X POST http://127.0.0.1:8030/api/v1/search-from-crop \
+curl -fsS -X POST http://127.0.0.1:8080/api/v1/search-from-crop \
   -F 'image=@/полный/путь/к/кропу-этикетки.jpg' \
   -F 'k=5'
 ```
@@ -254,7 +254,7 @@ docker compose build
 docker compose run --rm migrate
 docker compose up -d api
 docker compose ps
-curl -fsS http://127.0.0.1:8030/api/ready
+curl -fsS http://127.0.0.1:8080/api/ready
 ```
 
 Проверяем: до `git pull` нет серверных изменений; миграции применены; API снова ready.
@@ -365,7 +365,7 @@ docker compose exec api python scripts/ingest_cascade_catalog.py \
 Точность каскада и зоны ответа (найдено / похоже / нет в каталоге) на размеченных наборах — через работающий API:
 
 ```bash
-python scripts/eval_recognition.py --api http://127.0.0.1:8030     --sets tmp1=tmp/1 tmp2=tmp/2 --out /tmp/eval.jsonl
+python scripts/eval_recognition.py --api http://127.0.0.1:8080     --sets tmp1=tmp/1 tmp2=tmp/2 --out /tmp/eval.jsonl
 ```
 
 Набор — папка с фото (или `queries/`) и разметкой `mapping.json` либо `labels.tsv`
@@ -388,5 +388,5 @@ docker compose exec api python scripts/audit_catalog.py
 
 ## 22. Мобильный сканер каскада
 
-- **Внутренний интерфейс (через FastAPI):** `http://<server-ip>:8030/mobi-cascade` (или `http://<server-ip>:8030/export/mobitest_cascade.html`).
-- **Автономный клиент (для внешнего веб-сервера / папки `export`):** скопируйте каталог `export/` на внешний сервер Nginx/Apache и укажите адрес бэкенда в `export/config.js` (`window.MOBI_API_BASE = "http://<server-ip>:8030"`).
+- **Внутренний интерфейс (через FastAPI):** `http://<server-ip>:8080/mobi-cascade` (или `http://<server-ip>:8080/export/mobitest_cascade.html`).
+- **Автономный клиент (для внешнего веб-сервера / папки `export`):** скопируйте каталог `export/` на внешний сервер Nginx/Apache и укажите адрес бэкенда в `export/config.js` (`window.MOBI_API_BASE = "http://<server-ip>:8080"`).

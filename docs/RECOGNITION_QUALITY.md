@@ -93,7 +93,7 @@ docker compose exec api python scripts/research_dump_features.py \
 python scripts/calibrate_cascade.py media/research
 
 # 3. Проверка живого сервиса по разметке (mapping.json / labels.tsv)
-python scripts/eval_recognition.py --api http://127.0.0.1:8030 \
+python scripts/eval_recognition.py --api http://127.0.0.1:8080 \
     --sets tmp1=tmp/1 tmp2=tmp/2 "real=/путь/к/Реальные фото"
 
 # 4. Аудит каталога: пары товаров с одинаковой этикеткой -> media/artifacts/catalog_audit.tsv

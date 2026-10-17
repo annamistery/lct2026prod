@@ -25,6 +25,6 @@ RUN python -m pip install --no-cache-dir --no-deps -e . && \
     groupadd --system app && useradd --system --gid app --home /srv/app app && mkdir -p /media /models && chown -R app:app /srv/app /media
 
 USER app
-EXPOSE 8030
-HEALTHCHECK --interval=20s --timeout=5s --start-period=90s --retries=5 CMD curl --fail http://localhost:8030/api/ping || exit 1
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8030", "--workers", "1", "--proxy-headers", "--forwarded-allow-ips", "127.0.0.1"]
+EXPOSE 8080
+HEALTHCHECK --interval=20s --timeout=5s --start-period=90s --retries=5 CMD curl --fail http://localhost:8080/api/ping || exit 1
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "1", "--proxy-headers", "--forwarded-allow-ips", "127.0.0.1"]

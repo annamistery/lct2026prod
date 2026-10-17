@@ -132,10 +132,10 @@ echo "=== [5/5] Запуск сервиса API и проверка работо
 docker compose up -d api
 docker compose restart api
 
-echo "Ожидание готовности API (порт 8030, загрузка моделей — около минуты)..."
+echo "Ожидание готовности API (порт 8080, загрузка моделей — около минуты)..."
 READY=false
 for i in {1..240}; do
-  if curl -fsS http://127.0.0.1:8030/api/ready 2>/dev/null | grep -q '"ready":true'; then
+  if curl -fsS http://127.0.0.1:8080/api/ready 2>/dev/null | grep -q '"ready":true'; then
     READY=true
     break
   fi
@@ -145,10 +145,10 @@ if [ "$READY" != true ]; then
   echo "ОШИБКА: API не ответил готовностью за 20 минут. Логи: docker compose logs api" >&2
   exit 1
 fi
-echo "✓ API готов: $(curl -fsS http://127.0.0.1:8030/api/ready)"
+echo "✓ API готов: $(curl -fsS http://127.0.0.1:8080/api/ready)"
 
 # Каскад без SigLIP 2 работает, но заметно менее точно (только DINOv2): это нужно увидеть сразу.
-STAGE=$(curl -fsS http://127.0.0.1:8030/api/cascade/thresholds | grep -o '"stage":"[a-z0-9_]*"' || true)
+STAGE=$(curl -fsS http://127.0.0.1:8080/api/cascade/thresholds | grep -o '"stage":"[a-z0-9_]*"' || true)
 if [ "$STAGE" = '"stage":"fusion"' ]; then
   echo "✓ Каскад работает полностью: DINOv2 + SigLIP 2"
 else
@@ -163,5 +163,5 @@ echo "========================================================================"
 echo " Данные успешно восстановлены! Система полностью готова к работе."
 echo " Для запуска официального тестирования выполните:"
 echo "   ./md/participant_test.sh --images-dir ./queries --manifest ./queries.tsv \\"
-echo "       --endpoint http://127.0.0.1:8030/api/cascade/predict --output predictions.jsonl"
+echo "       --endpoint http://127.0.0.1:8080/api/cascade/predict --output predictions.jsonl"
 echo "========================================================================"
