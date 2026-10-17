@@ -1033,3 +1033,89 @@ button:disabled { opacity: .5; cursor: default; }
     .wd-scales { grid-template-columns: 1fr; }
 }
 .wd-tech  { --wd-a: #e9eff7; --wd-b: #f3f6fa; --wd-accent: #3d5f8a; --wd-dot: linear-gradient(135deg, #3d5f8a, #8fb0d6); }
+
+/* ---------- Инфографика сочетания «вино + блюдо» ---------- */
+.pairing-graphic { display: flex; flex-direction: column; gap: 12px; white-space: normal; }
+.pr-hero {
+    --pr-color: #8a8a94; --pr-a: #f4f4f6; --pr-b: #fafafa;
+    display: flex; align-items: center; gap: 16px;
+    padding: 14px 16px; border-radius: 14px;
+    background: linear-gradient(135deg, var(--pr-a), var(--pr-b));
+}
+.level-great { --pr-color: #1f8a4c; --pr-a: #e3f4e9; --pr-b: #f3faf0; }
+.level-good  { --pr-color: #4d8f2a; --pr-a: #edf5e1; --pr-b: #f8fbef; }
+.level-ok    { --pr-color: #b7791f; --pr-a: #fbf1dd; --pr-b: #fffaf0; }
+.level-poor  { --pr-color: var(--primary); --pr-a: #f8e3e8; --pr-b: #fdf3f1; }
+
+.pr-ring { width: 76px; height: 76px; flex-shrink: 0; }
+.pr-ring-bg { fill: #fff; stroke: rgba(0,0,0,.08); stroke-width: 8; }
+.pr-ring-fg { fill: none; stroke: var(--pr-color); stroke-width: 8; stroke-linecap: round; }
+.pr-ring-text { font-size: 22px; font-weight: 800; fill: var(--text-main); }
+
+.pr-summary { min-width: 0; }
+.pr-verdict {
+    display: inline-block; padding: 3px 10px; border-radius: 999px;
+    font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+    color: #fff; background: var(--pr-color);
+}
+.pr-dish { margin-top: 6px; font-size: 16px; font-weight: 700; color: var(--text-main); overflow-wrap: anywhere; }
+.pr-summary .wd-chips { margin-top: 6px; }
+.wd-chip.trait   { color: #555; }
+.wd-chip.unknown { color: #7a6a3a; background: #fbf6e6; }
+
+.pr-rank { padding: 0 4px; }
+.pr-rank-label { font-size: 13px; font-weight: 600; color: var(--text-main); margin-bottom: 8px; }
+.pr-rank-track {
+    position: relative; height: 8px; margin: 0 8px; border-radius: 999px;
+    background: linear-gradient(90deg, #f1d6dc, #f4e2b0, #cfe8c6, #7fc493);
+}
+.pr-rank-marker {
+    position: absolute; top: 50%; width: 16px; height: 16px; border-radius: 50%;
+    transform: translate(-50%, -50%);
+    background: #fff; border: 3px solid var(--text-main); box-shadow: 0 1px 4px rgba(0,0,0,.25);
+}
+
+.pr-group, .pr-better { padding: 12px 14px; border-radius: 12px; background: #f8f8fa; border: 1px solid #efeff2; }
+.pr-plus  { background: linear-gradient(135deg, #eef7f0, #f8fbf4); border-color: #dcefe1; }
+.pr-minus { background: linear-gradient(135deg, #fbeef0, #fdf6f3); border-color: #f3dde2; }
+.pr-group-title { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #555; margin-bottom: 8px; }
+.pr-plus .pr-group-title  { color: #2f7a45; }
+.pr-minus .pr-group-title { color: var(--primary); }
+
+.pr-factor + .pr-factor { margin-top: 10px; padding-top: 10px; border-top: 1px dashed rgba(0,0,0,.08); }
+.pr-factor-head { display: flex; align-items: center; gap: 8px; }
+.pr-factor-icon {
+    width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 800; color: #fff; background: #3d9a5a;
+}
+.pr-factor.minus .pr-factor-icon { background: var(--primary); }
+.pr-factor-title { font-size: 13px; font-weight: 700; color: var(--text-main); flex: 1; min-width: 0; }
+.pr-meter { width: 64px; height: 6px; border-radius: 999px; background: rgba(0,0,0,.08); overflow: hidden; flex-shrink: 0; }
+.pr-meter-fill { display: block; height: 100%; border-radius: inherit; background: #3d9a5a; }
+.pr-factor.minus .pr-meter-fill { background: var(--primary); }
+.pr-factor-text { margin: 4px 0 0 28px; font-size: 13px; line-height: 1.45; color: #3a3a3a; }
+.pr-quote { margin: 4px 0 0 28px; font-size: 12px; line-height: 1.4; font-style: italic; color: var(--text-secondary); }
+
+.pr-unknown, .pr-card-foods { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 0 4px; }
+.pr-card-foods { margin-top: 10px; padding: 0; }
+.pr-unknown .wd-chips, .pr-card-foods .wd-chips { margin-top: 0; }
+.pr-unknown-label { font-size: 12px; color: var(--text-secondary); }
+
+.pr-better-list { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.pr-dish-btn {
+    display: flex; justify-content: space-between; align-items: center; gap: 8px;
+    padding: 8px 12px; border-radius: 10px; cursor: pointer;
+    font: inherit; font-size: 13px; font-weight: 600; color: var(--text-main); text-align: left;
+    background: #fff; border: 1px solid #e3e3e8; transition: .2s;
+}
+.pr-dish-btn b { font-size: 12px; color: #2f7a45; background: #e8f4ea; padding: 1px 7px; border-radius: 999px; }
+.pr-dish-btn:hover { border-color: var(--primary); color: var(--primary); }
+
+.pr-note { font-size: 12px; line-height: 1.45; color: var(--text-secondary); padding: 0 4px; }
+
+@media (max-width: 380px) {
+    .pr-hero { gap: 12px; padding: 12px; }
+    .pr-ring { width: 64px; height: 64px; }
+    .pr-better-list { grid-template-columns: 1fr; }
+}

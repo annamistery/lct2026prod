@@ -116,8 +116,10 @@ class Sommelier:
         m = difflib.get_close_matches(re.sub(r"[^\w\s]", "", t), list(names), n=1, cutoff=cutoff)
         return names[m[0]] if m else None
 
-    def about_wine(self, text_or_id, dish=None):
-        """Точка интеграции с распознаванием этикеток: получает slug/название, возвращает справку по вину."""
+    def about_wine(self, text_or_id, dish=None, dish_text=None):
+        """Точка интеграции с распознаванием этикеток: получает slug/название, возвращает справку по вину.
+
+        С блюдом добавляет `pairing` — оценку сочетания для инфографики (explain.pairing_profile)."""
         w = self.engine.by_id.get(text_or_id) or self._find_wine(text_or_id)
         if not w:
             return dict(kind="not_found", text="Такого вина в базе нет — ничего сказать о нём не могу.")
@@ -127,10 +129,14 @@ class Sommelier:
         L.append(f"Описание из базы: «{snippet(w['description'], 700)}»" if (w.get("description") or "").strip() else "Описания в базе пока нет.")
         if f["food_in_desc"]:
             L.append("Блюда, которые упоминает сама карточка: " + ", ".join(f["food_in_desc"]))
+        pairing = None
         if dish:
-            ctx = Context(dish=dish)
+            ctx = Context(dish=dish, dish_text=dish_text)
             s, comps, unk = self.engine.score(w, ctx)
-            from .explain import reason_line
+            from .dishes import main_names
+            from .explain import pairing_profile, reason_line
+            pairing = pairing_profile(w, ctx, s, comps, unk, self.engine.dish_rank(s, ctx),
+                                      self.engine.best_dishes(w, 4, exclude=main_names(dish)))
             pros = [reason_line(c, w, ctx, "novice") for c in comps if c["value"] > 0.15]
             cons = [reason_line(c, w, ctx, "novice") for c in comps if c["value"] < -0.15]
             L.append(f"К этому блюду: оценка по правилам {s}/100.")
@@ -144,7 +150,7 @@ class Sommelier:
         card = dict(name=w["name"], winery=w.get("winery") or "", category=w.get("category") or "",
                     color=w.get("color") or "", region=w.get("region") or "", grape=w.get("grape") or "")
         from .explain import wine_profile
-        return dict(kind="wine_info", id=w["id"], text="\n".join(L), card=card, profile=wine_profile(w))
+        return dict(kind="wine_info", id=w["id"], text="\n".join(L), card=card, profile=wine_profile(w), pairing=pairing)
 
     def alternatives(self, slug, k=5):
         """Точка интеграции с распознаванием: вина каталога, похожие по стилю на распознанное (slug)."""

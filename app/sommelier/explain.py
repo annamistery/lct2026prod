@@ -1,6 +1,7 @@
 """Слой 5: объяснение на уровне гостя. Каждая фраза выводится из вкладов правил и цитат из описания вина."""
 import re
 
+from . import guardrails
 from .dishes import describe_axes
 from .engine import acid_words, body_words, tannin_words
 from .features import SWEET_LABEL, norm
@@ -103,6 +104,57 @@ def wine_facts(w, level):
         if f["acidity"] is not None:
             extra.append(f"кислотность: {acid_words(f['acidity'])}")
     return line + ("; " + "; ".join(extra) if extra else "")
+
+
+# ---- оценка «вино + блюдо» для инфографики сканера ------------------------------------------------------
+RULE_TITLES = dict(weight="Вес и насыщенность", fat_acid="Кислотность и жир", sweet="Сладость", tannin="Танины",
+                   region="Регион", aroma="Ароматы", occasion="Повод", prefs="Ваши пожелания")
+# Вердикт — по месту вина среди всего каталога к этому блюду: абсолютный балл у разных блюд несопоставим
+# (к стейку лучшее вино набирает 84, к утке с соусом — 76).
+VERDICTS = ((0.9, "great", "Отличная пара"), (0.7, "good", "Хорошая пара"), (0.4, "ok", "Допустимо"),
+            (0.0, "poor", "Не лучший выбор"))
+_QUOTE = re.compile(r"\s*(?:;\s*в описании:\s*|\((?:в описании:\s*)?)«([^»]+)»\)?$")
+
+
+def _split_quote(line):
+    """«довод (в описании: «цитата»)» -> (довод, цитата); цитата из карточки показывается отдельно."""
+    m = _QUOTE.search(line)
+    return (line[:m.start()].rstrip(" ;"), m.group(1)) if m else (line, None)
+
+
+def _trait(t):
+    """«интенсивность насыщенное» -> «насыщенное»; «среднее» без оси непонятно — «средней насыщенности»."""
+    t = t.removeprefix("интенсивность ")
+    return "средней насыщенности" if t == "среднее" else t
+
+
+def pairing_profile(w, ctx, score, comps, unknown, rank, better):
+    """Структура для инфографики сочетания: вердикт, вклад правил «за/против», профиль блюда, лучшие блюда к вину.
+
+    Всё выводится из тех же вкладов правил, что и текстовый ответ; новых фактов о вине нет.
+    """
+    level, title = next((lv, t) for lim, lv, t in VERDICTS if rank["beats"] >= lim)
+    if any(c["rule"] == "sweet" and c["value"] <= -0.6 for c in comps):   # вино заметно суше блюда — главный конфликт
+        level, title = VERDICTS[-1][1:]
+    dish = ctx.dish
+    factors = []
+    for c in sorted(comps, key=lambda c: -abs(c["value"] * c["weight"])):
+        text, quote = _split_quote(reason_line(c, w, ctx, "novice"))
+        sign = "plus" if c["value"] > 0.15 else "minus" if c["value"] < -0.15 else "neutral"
+        rule_title = "Карточка называет это блюдо" if c["rule"] == "aroma" and c.get("foods") else RULE_TITLES.get(c["rule"], c["rule"])
+        factors.append(dict(rule=c["rule"], title=rule_title, sign=sign,
+                            value=round(c["value"], 2), weight=c["weight"], text=text[:1].upper() + text[1:], quote=quote))
+    return dict(
+        dish=dict(text=ctx.dish_text or ", ".join(sorted({m.split(" («")[0] for m in dish["matched_main"]})),
+                  traits=[_trait(t) for t in describe_axes(dish).split(", ")]),
+        score=score, beats=rank["beats"], best=rank["best"],
+        verdict=dict(level=level, title=title),
+        factors=factors,
+        unknown=list(unknown),
+        better_dishes=better,
+        card_foods=list(w["features"]["food_in_desc"]),
+        note=guardrails.NEUTRAL_FOOTER,
+    )
 
 
 def render_recommendation(rec, ctx, type_rows, level):

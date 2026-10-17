@@ -137,6 +137,7 @@ function renderResult(data, id, originalUrl) {
     $('wine-block').classList.toggle('hidden', !winner);
     $('about-answer').classList.add('hidden');
     $('pairing-answer').textContent = '';
+    $('pairing-answer').classList.remove('pairing-graphic');
     document.querySelectorAll('.btn-pairing').forEach(btn => btn.classList.remove('selected'));
     if (winner) renderWine(winner, data.status, id);
 
@@ -309,6 +310,7 @@ function renderProfile(node, profile) {
 // ---------- Сомелье ----------
 async function pairWith(dish) {
     const answer = $('pairing-answer');
+    answer.classList.remove('pairing-graphic');
     if (!current || !current.slug) {
         answer.textContent = 'Для этого вина нет карточки сомелье.';
         return;
@@ -322,11 +324,123 @@ async function pairWith(dish) {
             answer.textContent = result.text;
             return;
         }
+        if (result.pairing) {
+            renderPairing(answer, result.pairing);
+            return;
+        }
         const start = result.text.indexOf('К этому блюду');  // справка о вине доступна по кнопке «О вине»
         answer.textContent = start >= 0 ? result.text.slice(start) : result.text;
     } catch (error) {
         answer.textContent = `Сомелье недоступен: ${error.message}`;
     }
+}
+
+// Инфографика сочетания «вино + блюдо»: кольцо с баллом и вердиктом, место среди вин каталога,
+// доводы «работает / мешает» с силой вклада правила, блюда, к которым вино подходит лучше.
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+function scoreRing(score, level) {
+    const svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('viewBox', '0 0 80 80');
+    svg.setAttribute('class', `pr-ring level-${level}`);
+    const circle = (cls, extra) => {
+        const c = document.createElementNS(SVG_NS, 'circle');
+        Object.entries({ cx: 40, cy: 40, r: 34, class: cls, ...extra }).forEach(([k, v]) => c.setAttribute(k, v));
+        return c;
+    };
+    const length = 2 * Math.PI * 34;
+    svg.append(circle('pr-ring-bg'), circle('pr-ring-fg', {
+        'stroke-dasharray': `${(length * Math.max(0, Math.min(100, score)) / 100).toFixed(1)} ${length.toFixed(1)}`,
+        transform: 'rotate(-90 40 40)',
+    }));
+    const text = document.createElementNS(SVG_NS, 'text');
+    Object.entries({ x: 40, y: 46, 'text-anchor': 'middle', class: 'pr-ring-text' }).forEach(([k, v]) => text.setAttribute(k, v));
+    text.textContent = Math.round(score);
+    svg.append(text);
+    return svg;
+}
+
+function factorRow(f) {
+    const row = el('div', `pr-factor ${f.sign}`);
+    const head = el('div', 'pr-factor-head');
+    head.append(el('span', 'pr-factor-icon', f.sign === 'plus' ? '+' : '−'), el('span', 'pr-factor-title', f.title));
+    // сила довода: вклад правила (−1…+1) с учётом его веса; самый весомый — «Сладость», 3,5
+    const meter = el('span', 'pr-meter');
+    const fill = el('span', 'pr-meter-fill');
+    fill.style.width = `${Math.round(Math.min(1, Math.abs(f.value) * f.weight / 3.5) * 100)}%`;
+    meter.append(fill);
+    head.append(meter);
+    row.append(head, el('div', 'pr-factor-text', f.text));
+    if (f.quote) row.append(el('div', 'pr-quote', `«${f.quote}»`));
+    return row;
+}
+
+function renderPairing(node, p) {
+    const parts = [];
+
+    const hero = el('div', `pr-hero level-${p.verdict.level}`);
+    const summary = el('div', 'pr-summary');
+    summary.append(el('span', 'pr-verdict', p.verdict.title), el('div', 'pr-dish', p.dish.text));
+    if (p.dish.traits && p.dish.traits.length) summary.append(chips(p.dish.traits, 'trait'));
+    hero.append(scoreRing(p.score, p.verdict.level), summary);
+    parts.push(hero);
+
+    // место среди всех вин каталога к этому блюду
+    const rank = el('div', 'pr-rank');
+    rank.append(el('div', 'pr-rank-label', `Лучше, чем ${Math.round(p.beats * 100)} % вин каталога к этому блюду`));
+    const track = el('div', 'pr-rank-track');
+    const marker = el('span', 'pr-rank-marker');
+    marker.style.left = `${Math.round(p.beats * 100)}%`;
+    track.append(marker);
+    const ends = el('div', 'wd-scale-ends');
+    ends.append(el('span', '', 'хуже'), el('span', '', `лучшее в каталоге — ${Math.round(p.best)}`));
+    rank.append(track, ends);
+    parts.push(rank);
+
+    const groups = [['plus', 'Что работает'], ['minus', 'Что мешает']];
+    if (p.verdict.level === 'poor') groups.reverse();  // при плохой паре сначала причина
+    groups.forEach(([sign, title]) => {
+        const items = p.factors.filter(f => f.sign === sign);
+        if (!items.length) return;
+        const box = el('div', `pr-group pr-${sign}`);
+        box.append(el('div', 'pr-group-title', title), ...items.map(factorRow));
+        parts.push(box);
+    });
+
+    if (p.unknown && p.unknown.length) {
+        const box = el('div', 'pr-unknown');
+        box.append(el('span', 'pr-unknown-label', 'В базе не указано:'), chips(p.unknown, 'unknown'));
+        parts.push(box);
+    }
+
+    if (p.better_dishes && p.better_dishes.length) {
+        const box = el('div', 'pr-better');
+        box.append(el('div', 'pr-group-title', 'С чем это вино раскроется лучше'));
+        const list = el('div', 'pr-better-list');
+        p.better_dishes.forEach(d => {
+            const btn = el('button', 'pr-dish-btn');
+            btn.type = 'button';
+            btn.append(el('span', '', d.label), el('b', '', String(Math.round(d.score))));
+            btn.title = 'Оценить это сочетание';
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.btn-pairing').forEach(other => other.classList.remove('selected'));
+                $('dish-input').value = d.query;
+                pairWith(d.query);
+            });
+            list.append(btn);
+        });
+        box.append(list);
+        if (p.card_foods && p.card_foods.length) {
+            const card = el('div', 'pr-card-foods');
+            card.append(el('span', 'pr-unknown-label', 'Карточка вина советует:'), chips(p.card_foods, 'food'));
+            box.append(card);
+        }
+        parts.push(box);
+    }
+
+    if (p.note) parts.push(el('div', 'pr-note', p.note));
+    node.replaceChildren(...parts);
+    node.classList.add('pairing-graphic');
 }
 
 document.querySelectorAll('.btn-pairing').forEach(btn => btn.addEventListener('click', () => {

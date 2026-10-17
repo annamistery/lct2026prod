@@ -199,3 +199,24 @@ def test_wine_profile_splits_description_without_inventing_text():
     assert all(set(re.findall(r"\w+", b["text"].lower())) <= words for b in p["sections"])
     assert {s["key"] for s in p["scales"]} == {"sweetness", "body", "tannin", "acidity"}
     assert all(s["value"] is None or 0 <= s["value"] <= 1 for s in p["scales"])
+
+
+def test_pairing_infographic_matches_engine_score():
+    """`pairing` для инфографики сканера: тот же балл, что у движка, вердикт по месту в каталоге, лучшие блюда."""
+    from app.sommelier.dishes import parse_dish
+    from app.sommelier.engine import Context
+    slug = "abrau-dyurso-abrau-dyurso-pino-nuar-krasnoe-suhoe-13"
+    assert S.about_wine(slug)["pairing"] is None  # без блюда — только справка
+
+    dish = parse_dish("стейк рибай")
+    p = S.about_wine(slug, dish, "стейк рибай")["pairing"]
+    score, comps, _ = S.engine.score(S.engine.by_id[slug], Context(dish=dish))
+    assert p["score"] == score and p["dish"]["text"] == "стейк рибай"
+    assert 0 <= p["beats"] <= 1 and p["best"] >= score
+    assert len(p["factors"]) == len(comps) and all(f["sign"] in ("plus", "minus", "neutral") for f in p["factors"])
+    assert all(f["quote"] is None or "«" not in f["text"][-3:] for f in p["factors"])  # цитата вынесена из довода
+    assert p["better_dishes"] and all(d["label"] != "Стейк" for d in p["better_dishes"])  # текущее блюдо не предлагается
+    assert p["better_dishes"] == sorted(p["better_dishes"], key=lambda d: -d["score"])
+
+    # сухое вино к сладкому десерту — главный конфликт пары, вердикт не мягче «не лучший выбор»
+    assert S.about_wine(slug, parse_dish("тирамису"), "тирамису")["pairing"]["verdict"]["level"] == "poor"

@@ -312,6 +312,21 @@ class Engine:
             s += 0.15
         return s
 
+    # ---- оценка одного вина к блюду: место в каталоге и лучшие блюда ----------------------------------
+    def dish_rank(self, score, ctx):
+        """Место балла среди всех вин каталога к этому блюду: доля вин с меньшим баллом и лучший балл."""
+        scores = [self.score(w, ctx)[0] for w in self.wines]
+        return dict(beats=round(sum(1 for s in scores if s < score) / len(scores), 2), best=max(scores))
+
+    def best_dishes(self, wine, k=4, exclude=()):
+        """Типовые блюда (dishes.SUGGESTIONS), к которым у вина самый высокий балл. exclude — основы текущего блюда."""
+        from .dishes import main_names, parse_dish, SUGGESTIONS
+        if not hasattr(self, "_suggestions"):
+            self._suggestions = [(label, query, parse_dish(query)) for label, query in SUGGESTIONS]
+        rated = [dict(label=label, query=query, score=self.score(wine, Context(dish=d))[0])
+                 for label, query, d in self._suggestions if not main_names(d) & set(exclude)]
+        return sorted(rated, key=lambda x: -x["score"])[:k]
+
     # ---- альтернативы к конкретному вину -------------------------------------------------------------
     def similar(self, wine, k=5, max_per_winery=2):
         """Вина каталога, похожие на `wine` по стилю: тот же цвет и игристость, близкая сладость (жёстко),
