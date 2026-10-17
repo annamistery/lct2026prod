@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.concurrency import run_in_threadpool
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_session
@@ -18,6 +20,7 @@ from app.schemas.sommelier import (
 )
 from app.services.sommelier_service import SommelierService
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/sommelier", tags=["sommelier"])
 
 
@@ -29,7 +32,9 @@ def _service(request: Request) -> SommelierService:
 
 
 @router.post("/ask", response_model=SommelierAskResponse)
-async def ask(payload: SommelierAskRequest, request: Request) -> SommelierAskResponse:
+async def ask(
+    payload: SommelierAskRequest, request: Request, session: AsyncSession = Depends(get_session)
+) -> SommelierAskResponse:
     """Диалоговая точка входа: свободный текст -> рекомендация/справка/уточнение/отказ (guardrails).
 
     Первый вызов без `session_id` открывает новую сессию (её id возвращается в ответе и должен передаваться
@@ -38,14 +43,28 @@ async def ask(payload: SommelierAskRequest, request: Request) -> SommelierAskRes
     service = _service(request)
     session_id, sommelier = service.session(payload.session_id)
     result = await run_in_threadpool(sommelier.ask, payload.message)
+    picks = result.get("picks", [])
+    # фото бутылки — из каталога распознавания (там есть не все вина сомелье); без базы чат работает без фото
+    try:
+        products = await ProductRepository(session).get_by_slugs([pick["id"] for pick in picks])
+    except (SQLAlchemyError, OSError):
+        logger.warning("sommelier picks: bottle photos unavailable", exc_info=True)
+        products = {}
+    picks = [
+        {**pick, "image_url": f"/api/media/{products[pick['id']].source_image_path}" if pick["id"] in products else None}
+        for pick in picks
+    ]
     return SommelierAskResponse(
         session_id=session_id,
         kind=result["kind"],
         text=result["text"],
-        picks=result.get("picks", []),
+        picks=picks,
         types=result.get("types", []),
         pool=result.get("pool"),
+        total=result.get("total"),
         context=result.get("context"),
+        dish_traits=result.get("dish_traits", []),
+        note=result.get("note"),
     )
 
 

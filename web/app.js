@@ -471,6 +471,7 @@ $('chat-form').addEventListener('submit', async event => {
     const message = $('chat-input').value.trim();
     if (!message) return;
     const answer = $('chat-answer');
+    answer.classList.remove('pairing-graphic');
     answer.textContent = 'Сомелье думает…';
     try {
         const data = await getJson(api('/api/sommelier/ask'), {
@@ -479,11 +480,109 @@ $('chat-form').addEventListener('submit', async event => {
             body: JSON.stringify(sommelierSession ? { message, session_id: sommelierSession } : { message }),
         });
         sommelierSession = data.session_id;
-        answer.textContent = data.text;
+        if (data.kind === 'recommendation' && data.picks && data.picks.length) {
+            renderRecommendation(answer, data);
+        } else {
+            answer.classList.remove('pairing-graphic');
+            answer.textContent = data.text;
+        }
     } catch (error) {
+        answer.classList.remove('pairing-graphic');
         answer.textContent = `Ошибка: ${error.message}`;
     }
 });
+
+// Подбор вин в чате: карточки с фото бутылки, ролью варианта, совпадением и доводами; уместность типов — плашками.
+// Полный текст ответа (с LLM — живой пересказ) остаётся под «Пояснением сомелье».
+const ROLE_TONE = { 'Лучшее совпадение по правилам': 'best', 'Классический вариант': 'classic', 'Нестандартный выбор': 'rare' };
+const TYPE_VERDICTS = [['подходит', 'fit', 'Подходит'], ['допустимо, с оговорками', 'maybe', 'С оговорками'], ['лучше избегать', 'avoid', 'Лучше избегать']];
+
+function pickCard(pick, index) {
+    const card = el('article', `rc-card role-${ROLE_TONE[pick.role] || 'other'}`);
+    const tone = WINE_TONE[pick.category] || 'neutral';
+
+    const media = el('div', `rc-media tone-${tone}`);
+    const image = document.createElement('img');
+    image.alt = pick.name;
+    image.loading = 'lazy';
+    image.src = pick.image_url ? api(pick.image_url) : 'img/glass_filled_straight.png';
+    if (!pick.image_url) media.classList.add('placeholder');
+    image.onerror = () => { media.classList.add('placeholder'); image.onerror = null; image.src = 'img/glass_filled_straight.png'; };
+    media.append(image, el('span', 'rc-num', String(index + 1)));
+
+    const body = el('div', 'rc-body');
+    body.append(el('span', 'rc-role', pick.role), el('div', 'rc-name', pick.name));
+    if (pick.winery) body.append(el('div', 'rc-winery', pick.winery));
+    const type = [pick.category && pick.category.toLowerCase(), pick.sparkling ? 'игристое' : '', pick.sweetness].filter(Boolean).join(', ');
+    body.append(chips([type, pick.grape, pick.region].filter(Boolean), 'trait'));
+
+    const match = el('div', 'rc-match');
+    const meter = el('span', 'pr-meter');
+    const fill = el('span', 'pr-meter-fill');
+    fill.style.width = `${Math.max(0, Math.min(100, Math.round(pick.score)))}%`;
+    meter.append(fill);
+    match.append(el('span', 'rc-match-label', 'Совпадение'), meter, el('b', '', String(Math.round(pick.score))));
+    body.append(match);
+
+    const top = el('div', 'rc-top');
+    top.append(media, body);
+    card.append(top);
+
+    const reasons = el('div', 'rc-reasons');
+    (pick.pros || []).forEach(text => reasons.append(el('div', 'rc-reason plus', text)));
+    (pick.cons || []).forEach(text => reasons.append(el('div', 'rc-reason minus', text)));
+    if (reasons.children.length) card.append(reasons);
+    if (pick.unknown && pick.unknown.length) {
+        const box = el('div', 'pr-unknown');
+        box.append(el('span', 'pr-unknown-label', 'В базе не указано:'), chips(pick.unknown, 'unknown'));
+        card.append(box);
+    }
+    if (pick.quote) card.append(el('div', 'pr-quote rc-quote', `«${pick.quote}»`));
+    if (pick.url && /^https?:\/\//.test(pick.url)) {
+        const link = el('a', 'rc-link', 'Карточка вина на сайте →');
+        link.href = pick.url;
+        link.target = '_blank';
+        link.rel = 'noopener';
+        card.append(link);
+    }
+    return card;
+}
+
+function renderRecommendation(node, data) {
+    const parts = [];
+    const head = el('div', 'rc-head');
+    const dish = data.context && data.context.dish_text;
+    head.append(el('div', 'pr-group-title', dish ? 'Подбор к блюду' : 'Подбор вина'));
+    if (dish) head.append(el('div', 'pr-dish', dish));
+    if (data.dish_traits && data.dish_traits.length) head.append(chips(data.dish_traits, 'trait'));
+    if (data.total) head.append(el('div', 'rc-pool', data.pool === data.total
+        ? `Выбирал из всех ${data.total} вин каталога. Три варианта разных стилей:`
+        : `Из ${data.total} вин каталога под ваши условия подходят ${data.pool}. Три варианта разных стилей:`));
+    parts.push(head, ...data.picks.map(pickCard));
+
+    if (data.types && data.types.length) {
+        const box = el('div', 'pr-group rc-types');
+        box.append(el('div', 'pr-group-title', 'Какие типы вина уместны'));
+        TYPE_VERDICTS.forEach(([verdict, cls, title]) => {
+            const rows = data.types.slice(0, 8).filter(t => t.verdict === verdict);
+            if (!rows.length) return;
+            const line = el('div', `rc-type-row ${cls}`);
+            line.append(el('span', 'rc-type-verdict', title),
+                chips(rows.map(t => [t.cat.toLowerCase(), t.sparkling ? 'игристое' : '', t.sweet].filter(Boolean).join(' ')), `type-${cls}`));
+            box.append(line);
+        });
+        parts.push(box);
+    }
+
+    const details = document.createElement('details');
+    details.className = 'rc-details';
+    details.append(el('summary', '', 'Пояснение сомелье текстом'), el('div', 'somm-text', data.note ? data.text.replace(data.note, '').trim() : data.text));
+    parts.push(details);
+    if (data.note) parts.push(el('div', 'pr-note', data.note));
+
+    node.replaceChildren(...parts);
+    node.classList.add('pairing-graphic');
+}
 
 // ---------- Оценка бокалами (хранится на устройстве) ----------
 function initRating(key) {

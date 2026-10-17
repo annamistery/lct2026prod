@@ -21,6 +21,18 @@ class SommelierPick(BaseModel):
     role: str
     unknown: list[str] = Field(default_factory=list)
     reasons: list[dict[str, Any]] = Field(default_factory=list)
+    # display card (explain.pick_card): wine facts, reasons without quotes, one description quote, bottle photo
+    winery: str = ""
+    category: str = ""
+    grape: str = ""
+    region: str = ""
+    sweetness: str | None = None
+    sparkling: bool = False
+    url: str | None = None
+    pros: list[str] = Field(default_factory=list)
+    cons: list[str] = Field(default_factory=list)
+    quote: str | None = None
+    image_url: str | None = None  # bottle photo from the recognition catalog, when the wine is there
 
 
 class SommelierAskResponse(BaseModel):
@@ -30,7 +42,10 @@ class SommelierAskResponse(BaseModel):
     picks: list[SommelierPick] = Field(default_factory=list)
     types: list[dict[str, Any]] = Field(default_factory=list)
     pool: int | None = None
+    total: int | None = None
     context: dict[str, Any] | None = None
+    dish_traits: list[str] = Field(default_factory=list)
+    note: str | None = None  # neutral footer, shown separately by the scanner
 
 
 class SommelierWineCard(BaseModel):

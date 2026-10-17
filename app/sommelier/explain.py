@@ -157,6 +157,27 @@ def pairing_profile(w, ctx, score, comps, unknown, rank, better):
     )
 
 
+def pick_card(r, ctx, level):
+    """Поля карточки вина в выдаче чата: тип, сорт, регион, доводы без цитат, короткая цитата описания.
+
+    Те же доводы, что в текстовом ответе (explain_pick); цитата из описания идёт отдельно, одной на вино.
+    """
+    w, f = r["wine"], r["wine"]["features"]
+    pros, cons = explain_pick(r, ctx, level)
+    clean = lambda lines: [(t[:1].upper() + t[1:]) for t, _ in map(_split_quote, lines)]
+    return dict(
+        winery=w["winery"] or "", category=w["category"] or "", grape=w["grape"] or "", region=w["region"] or "",
+        sweetness=SWEET_LABEL.get(f["sweetness"]), sparkling=bool(f["sparkling"]), url=w["url"],
+        pros=clean(pros), cons=clean(cons),
+        quote=snippet(w["description"], 180) if (w.get("description") or "").strip() else None,
+    )
+
+
+def dish_traits(dish):
+    """Признаки блюда для чипов: «насыщенное», «жирное», «сладкое»…"""
+    return [_trait(t) for t in describe_axes(dish).split(", ")] if dish else []
+
+
 def render_recommendation(rec, ctx, type_rows, level):
     """Готовый текст ответа (без LLM). LLM-слой может переписать его, но опирается на те же факты."""
     L = []

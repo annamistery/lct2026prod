@@ -1119,3 +1119,83 @@ button:disabled { opacity: .5; cursor: default; }
     .pr-ring { width: 64px; height: 64px; }
     .pr-better-list { grid-template-columns: 1fr; }
 }
+
+/* ---------- Подбор вин в чате: карточки с фото бутылки ---------- */
+.rc-head .wd-chips { margin-top: 6px; }
+.rc-pool { margin-top: 8px; font-size: 13px; color: var(--text-secondary); line-height: 1.45; }
+
+.rc-card {
+    --rc-accent: #5d6270;
+    padding: 14px; border-radius: 14px; background: #fff;
+    border: 1px solid #ececf0; border-top: 4px solid var(--rc-accent);
+    box-shadow: 0 2px 10px rgba(0,0,0,.04);
+}
+.rc-card.role-best    { --rc-accent: var(--primary); }
+.rc-card.role-classic { --rc-accent: #3d5f8a; }
+.rc-card.role-rare    { --rc-accent: #6d45a8; }
+.rc-card.role-other   { --rc-accent: #2f7a45; }
+
+.rc-top { display: flex; gap: 14px; }
+.rc-media {
+    position: relative; flex-shrink: 0; width: 84px; height: 150px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 12px; background: linear-gradient(160deg, #f4f4f6, #fafafa); overflow: hidden;
+}
+.rc-media.tone-red    { background: linear-gradient(160deg, #f7e3e7, #fdf3f1); }
+.rc-media.tone-white  { background: linear-gradient(160deg, #fbf6dc, #fffdf2); }
+.rc-media.tone-rose   { background: linear-gradient(160deg, #fde7ee, #fff5f7); }
+.rc-media.tone-orange { background: linear-gradient(160deg, #fdeedd, #fff8ef); }
+.rc-media img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.rc-media.placeholder img { width: 44px; height: auto; opacity: .55; }
+.rc-num {
+    position: absolute; top: 6px; left: 6px; width: 22px; height: 22px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 800; color: #fff; background: var(--rc-accent);
+}
+
+.rc-body { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.rc-role {
+    align-self: flex-start; padding: 2px 9px; border-radius: 999px;
+    font-size: 11px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase;
+    color: var(--rc-accent); background: color-mix(in srgb, var(--rc-accent) 10%, #fff);
+}
+.rc-name { font-size: 16px; font-weight: 700; line-height: 1.3; color: var(--text-main); overflow-wrap: anywhere; }
+.rc-winery { font-size: 12px; color: var(--text-secondary); }
+.rc-body .wd-chips { margin-top: 2px; }
+.rc-match { display: flex; align-items: center; gap: 8px; margin-top: auto; padding-top: 6px; }
+.rc-match-label { font-size: 11px; color: var(--text-secondary); }
+.rc-match .pr-meter { flex: 1; width: auto; }
+.rc-match .pr-meter-fill { background: var(--rc-accent); }
+.rc-match b { font-size: 13px; color: var(--text-main); }
+
+.rc-reasons { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+.rc-reason { position: relative; padding-left: 26px; font-size: 13px; line-height: 1.45; color: #3a3a3a; }
+.rc-reason::before {
+    position: absolute; left: 0; top: 0; width: 18px; height: 18px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 800; color: #fff;
+}
+.rc-reason.plus::before  { content: "✓"; background: #3d9a5a; }
+.rc-reason.minus::before { content: "!"; background: #b7791f; }
+.rc-card .pr-unknown { margin-top: 10px; padding: 0; }
+.rc-quote { margin: 10px 0 0; padding-left: 10px; border-left: 3px solid #ececf0; }
+.rc-link { display: inline-block; margin-top: 10px; font-size: 13px; font-weight: 600; color: var(--primary); text-decoration: none; }
+.rc-link:hover { text-decoration: underline; }
+
+.rc-type-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.rc-type-row + .rc-type-row { margin-top: 8px; }
+.rc-type-verdict { width: 100%; font-size: 12px; font-weight: 700; }
+.rc-type-row.fit .rc-type-verdict   { color: #2f7a45; }
+.rc-type-row.maybe .rc-type-verdict { color: #b7791f; }
+.rc-type-row.avoid .rc-type-verdict { color: var(--primary); }
+.rc-type-row .wd-chips { margin-top: 0; }
+.wd-chip.type-fit   { color: #276a3b; background: #e8f4ea; }
+.wd-chip.type-maybe { color: #8a5a12; background: #fbf1dd; }
+.wd-chip.type-avoid { color: var(--primary); background: #f8e3e8; }
+
+.rc-details summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+.rc-details .somm-text { margin-top: 8px; font-size: 13px; }
+
+@media (max-width: 380px) {
+    .rc-media { width: 70px; height: 128px; }
+}

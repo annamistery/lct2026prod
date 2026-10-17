@@ -9,7 +9,7 @@ import time
 from . import catalog, guardrails
 from .context import Parser
 from .engine import Context, Engine
-from .explain import render_profile, render_profile_comparison, render_recommendation
+from .explain import dish_traits, pick_card, render_profile, render_profile_comparison, render_recommendation
 from .features import norm
 
 logger = logging.getLogger(__name__)
@@ -91,8 +91,10 @@ class Sommelier:
         assert not tone, tone
         out = dict(kind="recommendation", text=text_out, context=_ctx_dict(ctx),
                    picks=[dict(id=r["wine"]["id"], name=r["wine"]["name"], score=r["score"], role=r["role"],
-                               unknown=r["unknown"], reasons=[c for c in r["comps"]]) for r in rec["picks"]],
-                   types=types, pool=rec["pool_size"])
+                               unknown=r["unknown"], reasons=[c for c in r["comps"]], **pick_card(r, ctx, ctx.experience))
+                          for r in rec["picks"]],
+                   types=types, pool=rec["pool_size"], total=rec["total"], dish_traits=dish_traits(ctx.dish),
+                   note=guardrails.NEUTRAL_FOOTER)
         if self.llm is not None and out["picks"]:
             out["text"] = self.llm.polish(out, self.engine.by_id, ctx.experience)
         out["text"] += "\n\n" + guardrails.NEUTRAL_FOOTER

@@ -220,3 +220,14 @@ def test_pairing_infographic_matches_engine_score():
 
     # сухое вино к сладкому десерту — главный конфликт пары, вердикт не мягче «не лучший выбор»
     assert S.about_wine(slug, parse_dish("тирамису"), "тирамису")["pairing"]["verdict"]["level"] == "poor"
+
+
+def test_recommendation_picks_carry_display_card():
+    """Карточки вин в чате: факты карточки, доводы без цитат (те же, что в тексте), короткая цитата описания."""
+    r = picks("утка с вишнёвым соусом")
+    assert r["dish_traits"] and r["note"] == guardrails.NEUTRAL_FOOTER and r["total"] == len(S.wines)
+    for p in r["picks"]:
+        w = S.engine.by_id[p["id"]]
+        assert p["category"] == w["category"] and p["grape"] == (w["grape"] or "") and p["url"] == w["url"]
+        assert p["pros"] and all("«" not in line[-2:] for line in p["pros"] + p["cons"])
+        assert p["quote"] is None or p["quote"].split("…")[0][:40] in w["description"]
