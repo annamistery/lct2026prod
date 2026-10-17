@@ -950,3 +950,86 @@ button:disabled { opacity: .5; cursor: default; }
 .batch-row .st.not_in_catalog { background: var(--primary); }
 .batch-row .st.error { background: #555; }
 .batch-row .slug { font-family: monospace; font-size: 11px; color: var(--text-secondary); word-break: break-all; }
+
+/* ---------- Структурированное описание вина (блоки, градиенты, шкалы) ---------- */
+.wine-description.structured { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; color: inherit; }
+
+.wd-block {
+    --wd-a: #f4f4f6; --wd-b: #fafafa; --wd-accent: #8a8a94;
+    position: relative;
+    padding: 12px 14px 12px 16px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, var(--wd-a), var(--wd-b));
+    overflow: hidden;
+}
+.wd-block::before {
+    content: "";
+    position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
+    background: var(--wd-accent);
+}
+.wd-title {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+    color: var(--wd-accent); margin-bottom: 6px;
+}
+.wd-title::before {
+    content: ""; width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+    background: var(--wd-dot, var(--wd-accent));
+}
+.wd-text { font-size: 14px; line-height: 1.55; color: #3a3a3a; }
+
+/* Цвет: оттенок образца зависит от типа вина */
+.wd-color { --wd-a: #fbf1f3; --wd-b: #fff8f5; --wd-accent: #8f2a3c; }
+.wd-color.tone-red    { --wd-a: #f7e3e7; --wd-b: #fdf3f1; --wd-accent: #7a1630; --wd-dot: linear-gradient(135deg, #4a0716, #b0263f); }
+.wd-color.tone-white  { --wd-a: #fbf6dc; --wd-b: #fffdf2; --wd-accent: #9a7a12; --wd-dot: linear-gradient(135deg, #f3e39a, #d9b84a); }
+.wd-color.tone-rose   { --wd-a: #fde7ee; --wd-b: #fff5f7; --wd-accent: #c2416b; --wd-dot: linear-gradient(135deg, #f9b6c8, #e06688); }
+.wd-color.tone-orange { --wd-a: #fdeedd; --wd-b: #fff8ef; --wd-accent: #c06414; --wd-dot: linear-gradient(135deg, #f6c27d, #dd7a1f); }
+.wd-color .wd-title::before { width: 14px; height: 14px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); }
+
+.wd-aroma { --wd-a: #f1ebfb; --wd-b: #fbf0f6; --wd-accent: #6d45a8; --wd-dot: linear-gradient(135deg, #a77ee6, #e58bb7); }
+.wd-taste { --wd-a: #f8e6ea; --wd-b: #fdf1ec; --wd-accent: var(--primary); --wd-dot: linear-gradient(135deg, #800020, #e0754f); }
+.wd-food  { --wd-a: #e8f4ea; --wd-b: #f5f9e8; --wd-accent: #2f7a45; --wd-dot: linear-gradient(135deg, #3d9a5a, #b7cf4a); }
+.wd-other { --wd-a: #f1f2f5; --wd-b: #f8f8fa; --wd-accent: #5d6270; }
+
+.wd-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.wd-chip {
+    padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600;
+    background: rgba(255,255,255,.75); border: 1px solid rgba(0,0,0,.06);
+}
+.wd-chip.aroma { color: #5b3794; }
+.wd-chip.food  { color: #276a3b; }
+
+/* Шкалы вкуса: градиентная дорожка и маркер */
+.wd-scales {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px 24px;
+    padding: 14px; border-radius: 12px;
+    background: linear-gradient(160deg, #fbf7f8, #f5f1f6);
+    border: 1px solid #efe7ea;
+}
+.wd-scale-head { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; margin-bottom: 6px; }
+.wd-scale-label { font-size: 12px; font-weight: 700; color: #444; }
+.wd-scale-word { font-size: 12px; font-weight: 600; color: var(--primary); }
+.wd-track { position: relative; height: 8px; margin: 0 8px; border-radius: 999px; background: linear-gradient(90deg, #e6e6ea, #b9b9c2); }
+.scale-sweetness .wd-track { background: linear-gradient(90deg, #dff0f2, #f6dd8b, #ef9f6f); }
+.scale-body .wd-track      { background: linear-gradient(90deg, #f7e4e8, #c4566e, #5a0d22); }
+.scale-tannin .wd-track    { background: linear-gradient(90deg, #f1e7de, #b58660, #5e3b23); }
+.scale-acidity .wd-track   { background: linear-gradient(90deg, #eef5e0, #c8e06a, #f2d23c); }
+.wd-dot {
+    position: absolute; top: 50%; width: 16px; height: 16px; border-radius: 50%;
+    transform: translate(-50%, -50%);
+    background: #fff; border: 3px solid var(--primary); box-shadow: 0 1px 4px rgba(0,0,0,.25);
+}
+.wd-scale-ends { display: flex; justify-content: space-between; margin-top: 4px; font-size: 11px; color: var(--text-secondary); }
+
+.wd-facts { display: flex; flex-wrap: wrap; gap: 8px; }
+.wd-fact {
+    display: flex; flex-direction: column; gap: 2px;
+    padding: 8px 12px; border-radius: 10px; background: #f6f6f8; border: 1px solid #ececf0;
+}
+.wd-fact-label { font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .05em; }
+.wd-fact-value { font-size: 13px; font-weight: 600; color: var(--text-main); }
+
+@media (max-width: 380px) {
+    .wd-scales { grid-template-columns: 1fr; }
+}
+.wd-tech  { --wd-a: #e9eff7; --wd-b: #f3f6fa; --wd-accent: #3d5f8a; --wd-dot: linear-gradient(135deg, #3d5f8a, #8fb0d6); }

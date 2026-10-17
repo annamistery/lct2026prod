@@ -23,6 +23,7 @@ from app.services.rectification import RectificationService
 from app.services.segmenter import SegmenterService
 from app.services.siglip_embeddings import SigLIP2EmbeddingService
 from app.services.sommelier_service import SommelierService
+from app.sommelier.llm import GeminiLLM
 
 logger = logging.getLogger(__name__)
 
@@ -47,15 +48,20 @@ async def lifespan(app: FastAPI):
     app.state.import_tasks = set()
     app.state.sommelier = None
     try:
+        sommelier_llm = None
+        if settings.google_api_key and settings.google_api_key.get_secret_value():
+            sommelier_llm = GeminiLLM(settings.google_api_key.get_secret_value(), settings.sommelier_llm_model, settings.sommelier_llm_timeout_seconds)
         sommelier_service = await asyncio.to_thread(
             SommelierService,
             settings.resolved_sommelier_csv_path,
             settings.resolved_sommelier_feedback_path,
             settings.sommelier_max_sessions,
             settings.sommelier_session_ttl_seconds,
+            sommelier_llm,
         )
         app.state.sommelier = sommelier_service
-        logger.info("Sommelier catalog loaded: %d wines", len(sommelier_service.wines))
+        logger.info("Sommelier catalog loaded: %d wines; LLM layer: %s", len(sommelier_service.wines),
+                    settings.sommelier_llm_model if sommelier_llm else "off (templates only)")
     except Exception:
         logger.exception("Sommelier service failed to load")
     try:

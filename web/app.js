@@ -195,6 +195,7 @@ async function renderWine(winner, status, id) {
     $('wine-title').textContent = winner.title;
     $('wine-winery').textContent = winner.manufacturer || '';
     $('wine-description').textContent = winner.description || '';
+    $('wine-description').classList.remove('structured');
     $('wine-description').classList.toggle('hidden', !winner.description);
     ['wine-category', 'wine-color', 'wine-region'].forEach(key => setTag($(key), ''));
     $('wine-grape-row').classList.add('hidden');
@@ -227,12 +228,82 @@ async function renderWine(winner, status, id) {
             $('wine-grape').textContent = card.grape;
             $('wine-grape-row').classList.remove('hidden');
         }
+        if (info.value.profile) renderProfile($('wine-description'), info.value.profile);
     }
 
     const items = alts.status === 'fulfilled' ? alts.value.items : [];
     alternatives.replaceChildren(...(items.length
         ? items.map(item => listItem(item.image_url, item.name, item.winery, item.facts, item.reasons.join(' · ')))
         : [el('div', 'item-meta', 'Похожих вин в каталоге сомелье не нашёл.')]));
+}
+
+// Структурированное описание вина: блоки «Цвет / Аромат / Вкус / Гастрономия», шкалы вкуса, чипы ароматов и блюд.
+// Тексты блоков — фразы карточки из базы без изменений (сервер только раскладывает их по смыслу).
+const WINE_TONE = { 'Красное': 'red', 'Белое': 'white', 'Розовое': 'rose', 'Оранжевое': 'orange' };
+
+function chips(items, className) {
+    const box = el('div', 'wd-chips');
+    items.forEach(text => box.append(el('span', `wd-chip ${className}`, text)));
+    return box;
+}
+
+function renderProfile(node, profile) {
+    const sections = profile.sections || [];
+    const scales = (profile.scales || []).filter(s => s.value !== null && s.value !== undefined);
+    if (!sections.length && !scales.length) return;  // нечего структурировать — остаётся исходный текст
+    const tone = WINE_TONE[profile.category] || 'neutral';
+    const parts = [];
+
+    if (scales.length) {
+        const box = el('div', `wd-scales tone-${tone}`);
+        scales.forEach(s => {
+            const row = el('div', `wd-scale scale-${s.key}`);
+            const head = el('div', 'wd-scale-head');
+            head.append(el('span', 'wd-scale-label', s.label), el('span', 'wd-scale-word', s.word || ''));
+            const track = el('div', 'wd-track');
+            const dot = el('span', 'wd-dot');
+            dot.style.left = `${Math.round(s.value * 100)}%`;
+            track.append(dot);
+            const ends = el('div', 'wd-scale-ends');
+            ends.append(el('span', '', s.left), el('span', '', s.right));
+            row.append(head, track, ends);
+            box.append(row);
+        });
+        parts.push(box);
+    }
+
+    sections.forEach(section => {
+        const block = el('div', `wd-block wd-${section.key}${section.key === 'color' ? ` tone-${tone}` : ''}`);
+        block.append(el('div', 'wd-title', section.title), el('p', 'wd-text', section.text));
+        if (section.key === 'aroma' && profile.aromas && profile.aromas.length) block.append(chips(profile.aromas, 'aroma'));
+        if (section.key === 'food' && profile.foods && profile.foods.length) block.append(chips(profile.foods, 'food'));
+        parts.push(block);
+    });
+    // ароматы/блюда, распознанные в карточке, но без своего блока в тексте
+    if (profile.aromas && profile.aromas.length && !sections.some(s => s.key === 'aroma')) {
+        const block = el('div', 'wd-block wd-aroma');
+        block.append(el('div', 'wd-title', 'Ароматы'), chips(profile.aromas, 'aroma'));
+        parts.push(block);
+    }
+    if (profile.foods && profile.foods.length && !sections.some(s => s.key === 'food')) {
+        const block = el('div', 'wd-block wd-food');
+        block.append(el('div', 'wd-title', 'С чем сочетается по карточке'), chips(profile.foods, 'food'));
+        parts.push(block);
+    }
+
+    if (profile.facts && profile.facts.length) {
+        const facts = el('div', 'wd-facts');
+        profile.facts.forEach(f => {
+            const item = el('div', 'wd-fact');
+            item.append(el('span', 'wd-fact-label', f.label), el('span', 'wd-fact-value', f.value));
+            facts.append(item);
+        });
+        parts.push(facts);
+    }
+
+    node.replaceChildren(...parts);
+    node.classList.add('structured');
+    node.classList.remove('hidden');
 }
 
 // ---------- Сомелье ----------

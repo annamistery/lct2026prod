@@ -1,7 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field, model_validator
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -72,6 +72,10 @@ class Settings(BaseSettings):
     sommelier_csv_path: Path = Path("app/sommelier/data/wines_integrated.csv")
     sommelier_max_sessions: int = Field(500, ge=1, le=100_000)
     sommelier_session_ttl_seconds: int = Field(3600, ge=60, le=86_400)
+    # Необязательный LLM-слой сомелье (Google Gemini): без ключа ответы строятся по шаблонам движка
+    google_api_key: SecretStr | None = None
+    sommelier_llm_model: str = "gemini-flash-latest"
+    sommelier_llm_timeout_seconds: float = Field(20.0, gt=0, le=120)
 
     @property
     def allowed_origins(self) -> list[str]:

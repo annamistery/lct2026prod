@@ -47,6 +47,7 @@ class SommelierWineInfoResponse(BaseModel):
     id: str | None = None
     text: str
     card: SommelierWineCard | None = None  # structured wine facts for scanner cards
+    profile: dict[str, Any] | None = None  # description blocks, taste scales, aromas, foods (explain.wine_profile)
 
 
 class SommelierAlternative(BaseModel):

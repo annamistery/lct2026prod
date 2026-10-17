@@ -7,6 +7,7 @@ from pathlib import Path
 from threading import Lock
 
 from app.sommelier.catalog import build as build_catalog
+from app.sommelier.llm import GeminiLLM
 from app.sommelier.sommelier import Sommelier
 
 logger = logging.getLogger(__name__)
@@ -20,9 +21,10 @@ class SommelierService:
     без внешнего состояния; при перезапуске API все диалоги начинаются заново).
     """
 
-    def __init__(self, csv_path: Path, feedback_path: Path, max_sessions: int = 500, session_ttl_seconds: int = 3600):
+    def __init__(self, csv_path: Path, feedback_path: Path, max_sessions: int = 500, session_ttl_seconds: int = 3600, llm: GeminiLLM | None = None):
         self.csv_path = csv_path
         self.feedback_path = feedback_path
+        self.llm = llm
         self.wines: list[dict] = []
         if csv_path.is_file():
             self.wines = build_catalog(csv_path=str(csv_path), out=None)
@@ -49,7 +51,7 @@ class SommelierService:
                 del self._sessions[sid]
 
     def _new_sommelier(self) -> Sommelier:
-        return Sommelier(wines=self.wines, feedback_log=str(self.feedback_path))
+        return Sommelier(wines=self.wines, feedback_log=str(self.feedback_path), llm=self.llm)
 
     def session(self, session_id: str | None) -> tuple[str, Sommelier]:
         """Возвращает (session_id, Sommelier) для диалога: существующая сессия или новая с указанным/новым id."""
