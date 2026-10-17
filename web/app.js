@@ -457,9 +457,96 @@ $('dish-form').addEventListener('submit', event => {
 
 $('btn-about').addEventListener('click', () => {
     const box = $('about-answer');
-    box.textContent = current && current.info ? current.info.text : 'В карточках сомелье этого вина нет.';
     box.classList.toggle('hidden');
+    if (box.classList.contains('hidden')) return;
+    box.classList.remove('pairing-graphic');
+    if (!current || !current.info) box.textContent = 'В карточках сомелье этого вина нет.';
+    else if (current.info.profile) renderAbout(box, current.info);
+    else box.textContent = current.info.text;
 });
+
+// «О вине»: паспорт вина одним взглядом. Описание, шкалы и факты подачи уже показаны в карточке выше (renderProfile),
+// здесь — сводка плитками, вкус и ароматы плашками, с чем подать (по нажатию — оценка сочетания), чего нет в базе.
+function renderAbout(node, info) {
+    const card = info.card || {};
+    const profile = info.profile || {};
+    const scales = profile.scales || [];
+    const sweet = scales.find(s => s.key === 'sweetness');
+    const parts = [];
+
+    const hero = el('div', `ab-hero tone-${WINE_TONE[profile.category] || 'neutral'}`);
+    hero.append(el('div', 'pr-group-title', 'Паспорт вина'), el('div', 'pr-dish', card.name || ''));
+    if (card.winery) hero.append(el('div', 'rc-winery', card.winery));
+    parts.push(hero);
+
+    const type = [card.category && card.category.toLowerCase(), profile.sparkling ? 'игристое' : '', sweet && sweet.word].filter(Boolean).join(', ');
+    const tiles = [['Тип', type], ['Сорт', card.grape], ['Регион', card.region],
+        ...(profile.facts || []).map(f => [f.label, f.value])].filter(([, value]) => value);
+    if (tiles.length) {
+        const grid = el('div', 'ab-tiles');
+        tiles.forEach(([label, value]) => {
+            const tile = el('div', 'wd-fact');
+            tile.append(el('span', 'wd-fact-label', label), el('span', 'wd-fact-value', value));
+            grid.append(tile);
+        });
+        parts.push(grid);
+    }
+
+    const taste = scales.filter(s => s.key !== 'sweetness' && s.word && s.value !== null);
+    if (taste.length || (profile.aromas || []).length) {
+        const box = el('div', 'pr-group ab-taste');
+        box.append(el('div', 'pr-group-title', 'Вкус и аромат'));
+        if (taste.length) box.append(chips(taste.map(s => `${s.label}: ${s.word}`), 'trait'));
+        if ((profile.aromas || []).length) box.append(chips(profile.aromas, 'aroma'));
+        parts.push(box);
+    }
+
+    if ((info.best_dishes || []).length || (profile.foods || []).length) {
+        const box = el('div', 'pr-better');
+        box.append(el('div', 'pr-group-title', 'С чем подать'));
+        if ((profile.foods || []).length) {
+            const foods = el('div', 'pr-card-foods ab-foods');
+            foods.append(el('span', 'pr-unknown-label', 'Советует карточка вина:'), chips(profile.foods, 'food'));
+            box.append(foods);
+        }
+        if ((info.best_dishes || []).length) {
+            box.append(el('div', 'pr-unknown-label ab-hint', 'Лучше всего по правилам сомелье — нажмите, чтобы оценить сочетание:'));
+            const list = el('div', 'pr-better-list');
+            info.best_dishes.forEach(d => {
+                const btn = el('button', 'pr-dish-btn');
+                btn.type = 'button';
+                btn.append(el('span', '', d.label), el('b', '', String(Math.round(d.score))));
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.btn-pairing').forEach(other => other.classList.remove('selected'));
+                    $('dish-input').value = d.query;
+                    pairWith(d.query);
+                    $('pairing-answer').scrollIntoView({ behavior: 'smooth', block: 'start' });
+                });
+                list.append(btn);
+            });
+            box.append(list);
+        }
+        parts.push(box);
+    }
+
+    const missing = scales.filter(s => s.value === null || s.value === undefined).map(s => s.label.toLowerCase());
+    if (missing.length) {
+        const box = el('div', 'pr-unknown');
+        box.append(el('span', 'pr-unknown-label', 'В базе не указано:'), chips(missing, 'unknown'));
+        parts.push(box);
+    }
+    if (card.url && /^https?:\/\//.test(card.url)) {
+        const link = el('a', 'rc-link', 'Карточка вина на сайте →');
+        link.href = card.url;
+        link.target = '_blank';
+        link.rel = 'noopener';
+        parts.push(link);
+    }
+    if (info.note) parts.push(el('div', 'pr-note', info.note));
+
+    node.replaceChildren(...parts);
+    node.classList.add('pairing-graphic');
+}
 
 $('btn-chat').addEventListener('click', () => {
     $('chat-section').scrollIntoView({ behavior: 'smooth', block: 'start' });

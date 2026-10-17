@@ -55,6 +55,7 @@ class SommelierWineCard(BaseModel):
     color: str = ""
     region: str = ""
     grape: str = ""
+    url: str | None = None  # wine page on the catalog site
 
 
 class SommelierWineInfoResponse(BaseModel):
@@ -64,6 +65,8 @@ class SommelierWineInfoResponse(BaseModel):
     card: SommelierWineCard | None = None  # structured wine facts for scanner cards
     profile: dict[str, Any] | None = None  # description blocks, taste scales, aromas, foods (explain.wine_profile)
     pairing: dict[str, Any] | None = None  # with ?dish=: verdict, rule factors, dish traits, better dishes (explain.pairing_profile)
+    best_dishes: list[dict[str, Any]] = Field(default_factory=list)  # typical dishes with the highest score for this wine
+    note: str | None = None  # neutral footer, shown separately by the scanner
 
 
 class SommelierAlternative(BaseModel):

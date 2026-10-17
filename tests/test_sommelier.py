@@ -231,3 +231,11 @@ def test_recommendation_picks_carry_display_card():
         assert p["category"] == w["category"] and p["grape"] == (w["grape"] or "") and p["url"] == w["url"]
         assert p["pros"] and all("«" not in line[-2:] for line in p["pros"] + p["cons"])
         assert p["quote"] is None or p["quote"].split("…")[0][:40] in w["description"]
+
+
+def test_about_wine_passport_fields():
+    """«О вине»: ссылка на карточку, лучшие типовые блюда по убыванию балла, пометка-справка."""
+    slug = "abrau-dyurso-abrau-dyurso-pino-nuar-krasnoe-suhoe-13"
+    r = S.about_wine(slug)
+    assert r["card"]["url"] == S.engine.by_id[slug]["url"] and r["note"] == guardrails.INFO_FOOTER
+    assert len(r["best_dishes"]) == 4 and r["best_dishes"] == sorted(r["best_dishes"], key=lambda d: -d["score"])

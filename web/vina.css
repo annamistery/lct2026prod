@@ -1199,3 +1199,25 @@ button:disabled { opacity: .5; cursor: default; }
 @media (max-width: 380px) {
     .rc-media { width: 70px; height: 128px; }
 }
+
+/* ---------- «О вине»: паспорт вина ---------- */
+.ab-hero {
+    padding: 14px 16px; border-radius: 14px;
+    background: linear-gradient(135deg, #f4f4f6, #fafafa); border-left: 4px solid #8a8a94;
+}
+.ab-hero.tone-red    { background: linear-gradient(135deg, #f7e3e7, #fdf3f1); border-left-color: #7a1630; }
+.ab-hero.tone-white  { background: linear-gradient(135deg, #fbf6dc, #fffdf2); border-left-color: #d9b84a; }
+.ab-hero.tone-rose   { background: linear-gradient(135deg, #fde7ee, #fff5f7); border-left-color: #e06688; }
+.ab-hero.tone-orange { background: linear-gradient(135deg, #fdeedd, #fff8ef); border-left-color: #dd7a1f; }
+.ab-hero .pr-dish { margin-top: 2px; }
+.ab-hero .rc-winery { margin-top: 2px; }
+
+.ab-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ab-tiles .wd-fact { min-width: 0; }
+.ab-tiles .wd-fact-value { overflow-wrap: anywhere; }
+
+.ab-taste .wd-chips { margin-top: 0; }
+.ab-taste .wd-chips + .wd-chips { margin-top: 8px; }
+.ab-foods { margin: 0 0 10px; }
+.ab-hint { display: block; margin-bottom: 8px; }
+.ab-tiles .wd-fact:last-child:nth-child(odd) { grid-column: span 2; }

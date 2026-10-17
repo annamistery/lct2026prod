@@ -150,9 +150,10 @@ class Sommelier:
                 L.append(f"  в базе не указано: {', '.join(unk)}")
         L.append("\n" + guardrails.NEUTRAL_FOOTER)
         card = dict(name=w["name"], winery=w.get("winery") or "", category=w.get("category") or "",
-                    color=w.get("color") or "", region=w.get("region") or "", grape=w.get("grape") or "")
+                    color=w.get("color") or "", region=w.get("region") or "", grape=w.get("grape") or "", url=w.get("url"))
         from .explain import wine_profile
-        return dict(kind="wine_info", id=w["id"], text="\n".join(L), card=card, profile=wine_profile(w), pairing=pairing)
+        return dict(kind="wine_info", id=w["id"], text="\n".join(L), card=card, profile=wine_profile(w), pairing=pairing,
+                    best_dishes=self.engine.best_dishes(w, 4), note=guardrails.INFO_FOOTER)
 
     def alternatives(self, slug, k=5):
         """Точка интеграции с распознаванием: вина каталога, похожие по стилю на распознанное (slug)."""

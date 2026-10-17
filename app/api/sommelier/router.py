@@ -91,7 +91,8 @@ async def wine_info(slug: str, request: Request, dish: str | None = Query(None, 
         dish_parsed = await run_in_threadpool(parse_dish, dish)
     result = await run_in_threadpool(sommelier.about_wine, slug, dish_parsed, dish)
     return SommelierWineInfoResponse(kind=result["kind"], id=result.get("id"), text=result["text"], card=result.get("card"),
-                                     profile=result.get("profile"), pairing=result.get("pairing"))
+                                     profile=result.get("profile"), pairing=result.get("pairing"),
+                                     best_dishes=result.get("best_dishes", []), note=result.get("note"))
 
 
 @router.get("/wine/{slug}/alternatives", response_model=SommelierAlternativesResponse)
