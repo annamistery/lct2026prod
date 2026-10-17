@@ -43,3 +43,8 @@ uv.lock
 models/siglip2-base-patch16-512/*.safetensors
 models/siglip2-base-patch16-512/*.bin
 
+
+# macOS archive metadata
+__MACOSX/
+.DS_Store
+._*
